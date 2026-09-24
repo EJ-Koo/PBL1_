@@ -1,35 +1,64 @@
+import { useState } from 'react';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { useDiary } from '@/store/diary-context';
 
+function showNotice(title: string, message: string) {
+  // RN의 Alert.alert는 웹에서 아무 반응이 없어서, 웹에서는 window.alert로 대체
+  if (Platform.OS === 'web') {
+    // eslint-disable-next-line no-alert
+    window.alert(`${title}\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+}
+
 export default function LoginScreen() {
   const { login } = useDiary();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   const handleDummyLogin = () => {
     login();
     router.replace('/');
   };
 
+  const handleSignup = () => {
+    showNotice('회원가입', '회원가입 기능은 추후 구현 예정입니다.');
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>오늘의별일</Text>
-      <Text style={styles.subtitle}>기록할수록 커지는 나만의 기억 우주</Text>
+      <Text style={styles.subtitle}>기록할수록 커지는 나만의 우주</Text>
 
       <View style={styles.form}>
-        <View style={styles.inputBox}>
-          <Text style={styles.inputPlaceholder}>이메일 (목업 — 입력 불필요)</Text>
-        </View>
-        <View style={styles.inputBox}>
-          <Text style={styles.inputPlaceholder}>비밀번호 (목업 — 입력 불필요)</Text>
-        </View>
+        <TextInput
+          style={styles.input}
+          placeholder="이메일"
+          placeholderTextColor="#5F5F80"
+          autoCapitalize="none"
+          keyboardType="email-address"
+          value={email}
+          onChangeText={setEmail}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="비밀번호"
+          placeholderTextColor="#5F5F80"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+        />
+        <Text style={styles.note}>* 입력하신 내용은 저장되지 않습니다 (목업 단계)</Text>
       </View>
 
       <Pressable style={styles.loginButton} onPress={handleDummyLogin}>
         <Text style={styles.loginButtonText}>로그인</Text>
       </Pressable>
 
-      <Pressable onPress={handleDummyLogin}>
+      <Pressable onPress={handleSignup}>
         <Text style={styles.signupLink}>계정이 없으신가요? 회원가입</Text>
       </Pressable>
     </View>
@@ -60,7 +89,7 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 24,
   },
-  inputBox: {
+  input: {
     width: '100%',
     borderWidth: 1,
     borderColor: '#2A2A45',
@@ -68,10 +97,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     backgroundColor: '#14142A',
-  },
-  inputPlaceholder: {
-    color: '#5F5F80',
+    color: '#FFFFFF',
     fontSize: 14,
+  },
+  note: {
+    color: '#5F5F80',
+    fontSize: 12,
   },
   loginButton: {
     width: '100%',

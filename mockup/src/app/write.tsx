@@ -1,14 +1,36 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { useDiary } from '@/store/diary-context';
+import { goBackSafe } from '@/lib/navigation';
+import { useDiary, type Visibility } from '@/store/diary-context';
+
+const VISIBILITY_OPTIONS: { value: Visibility; label: string }[] = [
+  { value: 'public', label: '전체공개' },
+  { value: 'friends', label: '친구에게만 공개' },
+  { value: 'private', label: '공개안함' },
+];
 
 export default function WriteScreen() {
-  const { addEntry } = useDiary();
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const isEditMode = Boolean(id);
+  const { addEntry, updateEntry, getEntry } = useDiary();
+
   const [text, setText] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [visibility, setVisibility] = useState<Visibility>('public');
+
+  useEffect(() => {
+    if (!id) return;
+    const entry = getEntry(id);
+    if (entry) {
+      setText(entry.text);
+      setPhotoUri(entry.photoUri);
+      setVisibility(entry.visibility);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   const handlePickImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -26,13 +48,42 @@ export default function WriteScreen() {
 
   const handleSave = () => {
     if (!text.trim()) return;
-    addEntry(text.trim(), photoUri);
-    router.back();
+    if (isEditMode && id) {
+      updateEntry(id, text.trim(), photoUri, visibility);
+    } else {
+      addEntry(text.trim(), photoUri, visibility);
+    }
+    goBackSafe();
   };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>새 기록</Text>
+      <Text style={styles.title}>{isEditMode ? '기록 수정' : '별 생성'}</Text>
+
+      <View style={styles.visibilitySection}>
+        <Text style={styles.visibilityLabel}>공개 범위</Text>
+        <View style={styles.visibilityRow}>
+          {VISIBILITY_OPTIONS.map((option) => (
+            <Pressable
+              key={option.value}
+              style={[
+                styles.visibilityChip,
+                visibility === option.value && styles.visibilityChipActive,
+              ]}
+              onPress={() => setVisibility(option.value)}
+            >
+              <Text
+                style={[
+                  styles.visibilityChipText,
+                  visibility === option.value && styles.visibilityChipTextActive,
+                ]}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
 
       <Pressable style={styles.photoBox} onPress={handlePickImage}>
         {photoUri ? (
@@ -52,7 +103,7 @@ export default function WriteScreen() {
       />
 
       <View style={styles.buttonRow}>
-        <Pressable style={styles.cancelButton} onPress={() => router.back()}>
+        <Pressable style={styles.cancelButton} onPress={goBackSafe}>
           <Text style={styles.cancelButtonText}>취소</Text>
         </Pressable>
         <Pressable
@@ -114,6 +165,42 @@ const styles = StyleSheet.create({
     fontSize: 15,
     padding: 16,
     textAlignVertical: 'top',
+  },
+  visibilitySection: {
+    gap: 10,
+    alignItems: 'center',
+  },
+  visibilityLabel: {
+    color: '#9C9CC0',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  visibilityRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  visibilityChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#2A2A45',
+    backgroundColor: '#14142A',
+  },
+  visibilityChipActive: {
+    backgroundColor: '#7C6CF6',
+    borderColor: '#7C6CF6',
+  },
+  visibilityChipText: {
+    color: '#9C9CC0',
+    fontSize: 13,
+  },
+  visibilityChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   buttonRow: {
     flexDirection: 'row',
