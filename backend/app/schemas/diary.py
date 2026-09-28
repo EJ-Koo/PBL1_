@@ -2,10 +2,11 @@ from pydantic import BaseModel
 
 
 class DiaryCreate(BaseModel):
-    user_id: str
     content: str
 
 
-class Diary(DiaryCreate):
+class Diary(BaseModel):
     id: str
+    user_id: str
+    content: str
     created_at: str
