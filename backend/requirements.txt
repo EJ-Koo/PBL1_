@@ -5,3 +5,5 @@ pydantic-settings
 supabase
 python-dotenv
 email-validator
+bcrypt
+PyJWT

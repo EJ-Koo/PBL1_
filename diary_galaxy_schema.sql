@@ -119,3 +119,16 @@ begin
       check (visibility in ('public', 'friends', 'private'));
   end if;
 end $$;
+
+-- admins ----------------------------------------------------------------------
+-- 일반 유저(auth.users)와 완전히 분리된 관리자 계정. 회원가입 없이 서버 스크립트로만 생성.
+create table if not exists admins (
+  id uuid primary key default gen_random_uuid(),
+  username text not null unique,
+  password_hash text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table admins enable row level security;
+-- 의도적으로 정책을 추가하지 않음: PostgREST(anon/authenticated 롤)로는 아무도 접근 불가,
+-- 백엔드가 쓰는 서비스 롤 키만 RLS를 우회해 이 테이블을 다룰 수 있음.
