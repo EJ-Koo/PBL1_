@@ -30,7 +30,10 @@ create table if not exists diaries (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
   content text not null,
-  created_at timestamptz not null default now()
+  photo_url text,
+  visibility text not null default 'private' check (visibility in ('public', 'friends', 'private')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 alter table diaries enable row level security;
@@ -100,3 +103,19 @@ create policy "stars_delete_own" on stars
         and diaries.user_id = auth.uid()
     )
   );
+
+-- migration: 이미 생성된 diaries 테이블에 공개범위/사진/수정시각 컬럼 추가 ---------
+-- (신규로 위 create table을 실행하는 경우 이미 포함되어 있어 필요 없음)
+alter table diaries add column if not exists photo_url text;
+alter table diaries add column if not exists visibility text not null default 'private';
+alter table diaries add column if not exists updated_at timestamptz not null default now();
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'diaries_visibility_check'
+  ) then
+    alter table diaries add constraint diaries_visibility_check
+      check (visibility in ('public', 'friends', 'private'));
+  end if;
+end $$;
