@@ -4,3 +4,4 @@
 
 ## 구조
 - `backend/` — FastAPI + Supabase
+- `diary_galaxy_schema.sql` — 핵심 테이블(profiles, diaries, stars) 및 RLS 정책. Supabase SQL Editor에서 실행
