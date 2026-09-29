@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 
-import { apiLogin } from '@/lib/api';
+import { apiLogin, apiSignup } from '@/lib/api';
 
 export type Visibility = 'public' | 'friends' | 'private';
 
@@ -14,11 +14,15 @@ export type DiaryEntry = {
 };
 
 export type LoginResult = { ok: true } | { ok: false; error: string };
+export type SignupResult =
+  | { ok: true; emailConfirmationRequired: boolean }
+  | { ok: false; error: string };
 
 type DiaryContextValue = {
   isLoggedIn: boolean;
   accessToken: string | null;
   login: (email: string, password: string) => Promise<LoginResult>;
+  signup: (email: string, password: string) => Promise<SignupResult>;
   logout: () => void;
   entries: DiaryEntry[];
   addEntry: (text: string, photoUri: string | null, visibility: Visibility) => void;
@@ -60,6 +64,21 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           return {
             ok: false,
             error: err instanceof Error ? err.message : '로그인에 실패했습니다.',
+          };
+        }
+      },
+      signup: async (email: string, password: string): Promise<SignupResult> => {
+        try {
+          const result = await apiSignup(email, password);
+          if (result.access_token) {
+            setAccessToken(result.access_token);
+            setIsLoggedIn(true);
+          }
+          return { ok: true, emailConfirmationRequired: result.email_confirmation_required };
+        } catch (err) {
+          return {
+            ok: false,
+            error: err instanceof Error ? err.message : '회원가입에 실패했습니다.',
           };
         }
       },
