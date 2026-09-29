@@ -18,10 +18,23 @@ export default function LoginScreen() {
   const { login } = useDiary();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  const handleDummyLogin = () => {
-    login();
-    router.replace('/');
+  const handleLogin = async () => {
+    if (!email.trim() || !password) {
+      showNotice('로그인', '이메일과 비밀번호를 입력해주세요.');
+      return;
+    }
+
+    setIsLoggingIn(true);
+    const result = await login(email.trim(), password);
+    setIsLoggingIn(false);
+
+    if (result.ok) {
+      router.replace('/');
+    } else {
+      showNotice('로그인 실패', result.error);
+    }
   };
 
   const handleSignup = () => {
@@ -51,11 +64,16 @@ export default function LoginScreen() {
           value={password}
           onChangeText={setPassword}
         />
-        <Text style={styles.note}>* 입력하신 내용은 저장되지 않습니다 (목업 단계)</Text>
       </View>
 
-      <Pressable style={styles.loginButton} onPress={handleDummyLogin}>
-        <Text style={styles.loginButtonText}>로그인</Text>
+      <Pressable
+        style={[styles.loginButton, isLoggingIn && styles.loginButtonDisabled]}
+        onPress={handleLogin}
+        disabled={isLoggingIn}
+      >
+        <Text style={styles.loginButtonText}>
+          {isLoggingIn ? '로그인 중...' : '로그인'}
+        </Text>
       </Pressable>
 
       <Pressable onPress={handleSignup}>
@@ -100,16 +118,15 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
   },
-  note: {
-    color: '#5F5F80',
-    fontSize: 12,
-  },
   loginButton: {
     width: '100%',
     backgroundColor: '#7C6CF6',
     borderRadius: 10,
     paddingVertical: 16,
     alignItems: 'center',
+  },
+  loginButtonDisabled: {
+    opacity: 0.6,
   },
   loginButtonText: {
     color: '#FFFFFF',
