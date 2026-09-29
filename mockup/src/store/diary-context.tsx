@@ -1,5 +1,7 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 
+import { apiLogin } from '@/lib/api';
+
 export type Visibility = 'public' | 'friends' | 'private';
 
 export type DiaryEntry = {
@@ -11,9 +13,12 @@ export type DiaryEntry = {
   color: string;
 };
 
+export type LoginResult = { ok: true } | { ok: false; error: string };
+
 type DiaryContextValue = {
   isLoggedIn: boolean;
-  login: () => void;
+  accessToken: string | null;
+  login: (email: string, password: string) => Promise<LoginResult>;
   logout: () => void;
   entries: DiaryEntry[];
   addEntry: (text: string, photoUri: string | null, visibility: Visibility) => void;
@@ -38,13 +43,30 @@ const DiaryContext = createContext<DiaryContextValue | null>(null);
 
 export function DiaryProvider({ children }: { children: ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
 
   const value = useMemo<DiaryContextValue>(
     () => ({
       isLoggedIn,
-      login: () => setIsLoggedIn(true),
-      logout: () => setIsLoggedIn(false),
+      accessToken,
+      login: async (email: string, password: string): Promise<LoginResult> => {
+        try {
+          const result = await apiLogin(email, password);
+          setAccessToken(result.access_token);
+          setIsLoggedIn(true);
+          return { ok: true };
+        } catch (err) {
+          return {
+            ok: false,
+            error: err instanceof Error ? err.message : '로그인에 실패했습니다.',
+          };
+        }
+      },
+      logout: () => {
+        setAccessToken(null);
+        setIsLoggedIn(false);
+      },
       entries,
       addEntry: (text: string, photoUri: string | null, visibility: Visibility) => {
         const entry: DiaryEntry = {
@@ -68,7 +90,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
         return entry ? isSameDay(entry.createdAt) : false;
       },
     }),
-    [isLoggedIn, entries]
+    [isLoggedIn, accessToken, entries]
   );
 
   return <DiaryContext.Provider value={value}>{children}</DiaryContext.Provider>;
