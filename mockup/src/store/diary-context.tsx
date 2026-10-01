@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 
-import { apiLogin, apiSignup } from '@/lib/api';
+import { apiCreateDiary, apiListDiaries, apiLogin, apiSignup, apiUpdateDiary, type ApiDiary } from '@/lib/api';
 
 export type Visibility = 'public' | 'friends' | 'private';
 
@@ -17,6 +17,7 @@ export type LoginResult = { ok: true } | { ok: false; error: string };
 export type SignupResult =
   | { ok: true; emailConfirmationRequired: boolean }
   | { ok: false; error: string };
+export type SaveResult = { ok: true } | { ok: false; error: string };
 
 type DiaryContextValue = {
   isLoggedIn: boolean;
@@ -25,8 +26,13 @@ type DiaryContextValue = {
   signup: (email: string, password: string) => Promise<SignupResult>;
   logout: () => void;
   entries: DiaryEntry[];
-  addEntry: (text: string, photoUri: string | null, visibility: Visibility) => void;
-  updateEntry: (id: string, text: string, photoUri: string | null, visibility: Visibility) => void;
+  addEntry: (text: string, photoUri: string | null, visibility: Visibility) => Promise<SaveResult>;
+  updateEntry: (
+    id: string,
+    text: string,
+    photoUri: string | null,
+    visibility: Visibility
+  ) => Promise<SaveResult>;
   getEntry: (id: string) => DiaryEntry | undefined;
   isEditableToday: (id: string) => boolean;
 };
@@ -41,6 +47,17 @@ function isSameDay(timestamp: number) {
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate()
   );
+}
+
+function toEntry(diary: ApiDiary, colorIndex: number): DiaryEntry {
+  return {
+    id: diary.id,
+    text: diary.content,
+    photoUri: diary.photo_url,
+    visibility: diary.visibility,
+    createdAt: new Date(diary.created_at).getTime(),
+    color: PLANET_COLORS[colorIndex % PLANET_COLORS.length],
+  };
 }
 
 const DiaryContext = createContext<DiaryContextValue | null>(null);
@@ -59,6 +76,12 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           const result = await apiLogin(email, password);
           setAccessToken(result.access_token);
           setIsLoggedIn(true);
+          try {
+            const diaries = await apiListDiaries(result.access_token);
+            setEntries(diaries.map(toEntry));
+          } catch {
+            setEntries([]);
+          }
           return { ok: true };
         } catch (err) {
           return {
@@ -73,6 +96,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           if (result.access_token) {
             setAccessToken(result.access_token);
             setIsLoggedIn(true);
+            setEntries([]);
           }
           return { ok: true, emailConfirmationRequired: result.email_confirmation_required };
         } catch (err) {
@@ -85,23 +109,59 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
       logout: () => {
         setAccessToken(null);
         setIsLoggedIn(false);
+        setEntries([]);
       },
       entries,
-      addEntry: (text: string, photoUri: string | null, visibility: Visibility) => {
-        const entry: DiaryEntry = {
-          id: String(Date.now()),
-          text,
-          photoUri,
-          visibility,
-          createdAt: Date.now(),
-          color: PLANET_COLORS[entries.length % PLANET_COLORS.length],
-        };
-        setEntries((prev) => [entry, ...prev]);
+      addEntry: async (
+        text: string,
+        photoUri: string | null,
+        visibility: Visibility
+      ): Promise<SaveResult> => {
+        if (!accessToken) {
+          return { ok: false, error: '로그인이 필요합니다.' };
+        }
+        try {
+          const created = await apiCreateDiary(accessToken, {
+            content: text,
+            photo_url: null,
+            visibility,
+          });
+          const entry: DiaryEntry = {
+            ...toEntry(created, entries.length),
+            photoUri,
+          };
+          setEntries((prev) => [entry, ...prev]);
+          return { ok: true };
+        } catch (err) {
+          return {
+            ok: false,
+            error: err instanceof Error ? err.message : '일기 저장에 실패했습니다.',
+          };
+        }
       },
-      updateEntry: (id: string, text: string, photoUri: string | null, visibility: Visibility) => {
-        setEntries((prev) =>
-          prev.map((e) => (e.id === id ? { ...e, text, photoUri, visibility } : e))
-        );
+      updateEntry: async (
+        id: string,
+        text: string,
+        photoUri: string | null,
+        visibility: Visibility
+      ): Promise<SaveResult> => {
+        if (!accessToken) {
+          return { ok: false, error: '로그인이 필요합니다.' };
+        }
+        try {
+          const updated = await apiUpdateDiary(accessToken, id, { content: text, visibility });
+          setEntries((prev) =>
+            prev.map((e) =>
+              e.id === id ? { ...e, text: updated.content, photoUri, visibility: updated.visibility } : e
+            )
+          );
+          return { ok: true };
+        } catch (err) {
+          return {
+            ok: false,
+            error: err instanceof Error ? err.message : '일기 수정에 실패했습니다.',
+          };
+        }
       },
       getEntry: (id: string) => entries.find((e) => e.id === id),
       isEditableToday: (id: string) => {

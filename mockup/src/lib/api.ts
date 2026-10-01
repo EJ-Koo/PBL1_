@@ -1,4 +1,23 @@
-export const API_BASE_URL = 'https://diary-galaxy-backend-production.up.railway.app';
+export const API_BASE_URL = 'https://diary-galaxy-backend-production-b42c.up.railway.app';
+
+export type ApiVisibility = 'public' | 'friends' | 'private';
+
+export type ApiDiary = {
+  id: string;
+  user_id: string;
+  content: string;
+  photo_url: string | null;
+  visibility: ApiVisibility;
+  created_at: string;
+  updated_at: string;
+};
+
+function authHeaders(accessToken: string) {
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${accessToken}`,
+  };
+}
 
 export async function apiLogin(email: string, password: string) {
   const res = await fetch(`${API_BASE_URL}/auth/login`, {
@@ -29,4 +48,48 @@ export async function apiSignup(email: string, password: string) {
     refresh_token: string | null;
     email_confirmation_required: boolean;
   };
+}
+
+export async function apiListDiaries(accessToken: string) {
+  const res = await fetch(`${API_BASE_URL}/diaries`, {
+    headers: authHeaders(accessToken),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail ?? '일기 목록을 불러오지 못했습니다.');
+  }
+  return data as ApiDiary[];
+}
+
+export async function apiCreateDiary(
+  accessToken: string,
+  payload: { content: string; photo_url: string | null; visibility: ApiVisibility }
+) {
+  const res = await fetch(`${API_BASE_URL}/diaries`, {
+    method: 'POST',
+    headers: authHeaders(accessToken),
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail ?? '일기 저장에 실패했습니다.');
+  }
+  return data as ApiDiary;
+}
+
+export async function apiUpdateDiary(
+  accessToken: string,
+  id: string,
+  payload: Partial<{ content: string; photo_url: string | null; visibility: ApiVisibility }>
+) {
+  const res = await fetch(`${API_BASE_URL}/diaries/${id}`, {
+    method: 'PATCH',
+    headers: authHeaders(accessToken),
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail ?? '일기 수정에 실패했습니다.');
+  }
+  return data as ApiDiary;
 }
