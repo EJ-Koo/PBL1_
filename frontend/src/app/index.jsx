@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView} from 'react-native';
 import { Canvas, useFrame } from '@react-three/fiber/native';
 
 // ---------------------------------------------------------
@@ -103,9 +103,11 @@ export default function App() {
               <Text style={styles.whiteText}>☰</Text>
             </TouchableOpacity>
             
-            <View style={styles.statsPill}>
-              <Text style={styles.statsText}>★ 99   ⓟ 999   ✔️ 2</Text>
-            </View>
+                        {/* View를 TouchableOpacity로 바꾸고, 누르면 'shop'으로 이동하게 설정 */}
+            <TouchableOpacity style={styles.statsPill} onPress={() => setCurrentScreen('shop')}>
+              <Text style={styles.statsText}>★ 99   🪙 999   ✔️ 2</Text>
+            </TouchableOpacity>
+
 
             <TouchableOpacity style={styles.questButton} onPress={() => setQuestVisible(true)}>
               <Text style={styles.questText}>Quest</Text>
@@ -187,6 +189,168 @@ export default function App() {
         </TouchableOpacity>
       </Modal>
 
+                  {/* ==========================================
+          화면 3: 커뮤니티 화면 (인스타 스타일 적용!)
+      ========================================== */}
+      {currentScreen === 'community' && (
+        <View style={styles.communityContainer}>
+          {/* 상단 헤더 영역 (제목 + 자랑하기 버튼) */}
+          <View style={styles.communityHeader}>
+            <Text style={styles.communityHeaderTitle}>✨ 다른 우주 구경하기</Text>
+              <TouchableOpacity style={styles.bragButton} onPress={() => setCurrentScreen('write_post')}>
+              <Text style={styles.bragButtonText}>+ 자랑하기</Text>
+            </TouchableOpacity>
+
+          </View>
+          
+          <ScrollView style={styles.communityScroll} showsVerticalScrollIndicator={false}>
+            {/* 📸 인스타 스타일 카드 1 */}
+            <View style={styles.instaCard}>
+              <View style={styles.instaHeader}>
+                <View style={styles.profileCircleOuter}>
+                  <View style={styles.profileCircleInner} />
+                </View>
+                <Text style={styles.instaAuthor}>지구용사</Text>
+              </View>
+              
+              <View style={styles.instaImagePlaceholder}>
+                <Text style={styles.instaImageText}>own space capture{"\n"}picture</Text>
+              </View>
+              
+              <View style={styles.instaActions}>
+                <Text style={styles.actionIcon}>🤍 97</Text>
+                <Text style={styles.actionIcon}>💬 5</Text>
+              </View>
+              
+              <View style={styles.commentSection}>
+                <View style={styles.commentRow}>
+                  <Text style={styles.commentAuthor}>지우용사</Text>
+                  <Text style={styles.commentText}>우와 이뻐용</Text>
+                </View>
+                <View style={styles.commentRow}>
+                  <Text style={styles.commentAuthor}>지구용사_567</Text>
+                  <Text style={styles.commentText}>멋있어요 잘 보고 갑니다</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* 📸 인스타 스타일 카드 2 */}
+            <View style={styles.instaCard}>
+              <View style={styles.instaHeader}>
+                <View style={styles.profileCircleOuter}>
+                  <View style={styles.profileCircleInner} />
+                </View>
+                <Text style={styles.instaAuthor}>우주용사</Text>
+              </View>
+              
+              <View style={styles.instaImagePlaceholder} />
+              
+              <View style={styles.instaActions}>
+                <Text style={styles.actionIcon}>🤍 67</Text>
+                <Text style={styles.actionIcon}>💬 3</Text>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      )}
+
+      {/* ==========================================
+          화면 4: 자랑하기 (새 글 쓰기) 화면
+      ========================================== */}
+      {currentScreen === 'write_post' && (
+        <View style={styles.writeContainer}>
+          {/* 상단 취소/공유 헤더 */}
+          <View style={styles.writeHeader}>
+            <TouchableOpacity onPress={() => setCurrentScreen('community')}>
+              <Text style={styles.writeCancelText}>취소</Text>
+            </TouchableOpacity>
+            <Text style={styles.writeHeaderTitle}>새 게시물</Text>
+            <TouchableOpacity onPress={() => {
+              alert('성공적으로 우주에 공유되었습니다!');
+              setCurrentScreen('community'); // 글을 올리면 다시 피드로 돌아갑니다
+            }}>
+              <Text style={styles.writeShareText}>공유</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.writeScroll}>
+            {/* 사진 등록 영역 */}
+            <View style={styles.writeImagePlaceholder}>
+              <Text style={styles.writeImageText}>+ 캡처한 우주 사진 추가</Text>
+            </View>
+            {/* 글 작성 영역 */}
+            <TextInput
+              style={styles.writeInput}
+              multiline={true}
+              placeholder="나의 우주에 대해 자랑해보세요..."
+              placeholderTextColor="#555"
+            />
+          </ScrollView>
+        </View>
+      )}
+
+            {/* ==========================================
+          화면 5: 상점 화면
+      ========================================== */}
+      {currentScreen === 'shop' && (
+        <View style={styles.shopContainer}>
+          {/* 상점 헤더 */}
+          <View style={styles.shopHeader}>
+            <Text style={styles.shopTitle}>🛍️ 상점</Text>
+            <View style={styles.shopCoinPill}>
+              <Text style={styles.shopCoinText}>🪙 999</Text>
+            </View>
+          </View>
+
+          {/* 아이템 리스트 (스크롤) */}
+          <ScrollView style={styles.shopScroll} showsVerticalScrollIndicator={false}>
+            <View style={styles.shopGrid}>
+              
+              {/* 아이템 1 */}
+              <View style={styles.shopItemCard}>
+                <Text style={styles.shopItemIcon}>❄️</Text>
+                <Text style={styles.shopItemName}>프리즘</Text>
+                <Text style={styles.shopItemDesc}>연속 출석 멈춤을 1회 방어할 수 있다.</Text>
+                <Text style={styles.shopPriceText}>🪙 30</Text>
+              </View>
+
+              {/* 아이템 2 */}
+              <View style={styles.shopItemCard}>
+                <Text style={styles.shopItemIcon}>🌌</Text>
+                <Text style={styles.shopItemName}>배경 (blue)</Text>
+                <Text style={styles.shopItemDesc}>나의 우주 배경을 바꿀 수 있다.</Text>
+                <Text style={styles.shopPriceText}>🪙 50</Text>
+              </View>
+
+              {/* 아이템 3 */}
+              <View style={styles.shopItemCard}>
+                <Text style={styles.shopItemIcon}>☄️</Text>
+                <Text style={styles.shopItemName}>혜성</Text>
+                <Text style={styles.shopItemDesc}>5초마다 나의 우주에 혜성이 떨어진다.</Text>
+                <Text style={styles.shopPriceText}>🪙 30</Text>
+              </View>
+
+              {/* 아이템 4 */}
+              <View style={styles.shopItemCard}>
+                <Text style={styles.shopItemIcon}>🌃</Text>
+                <Text style={styles.shopItemName}>배경 (black)</Text>
+                <Text style={styles.shopItemDesc}>나의 우주 배경을 바꿀 수 있다.</Text>
+                <Text style={styles.shopPriceText}>🪙 50</Text>
+              </View>
+
+              {/* 커밍순 */}
+              <View style={styles.shopItemCard}>
+                <View style={styles.comingSoonContainer}>
+                  <Text style={styles.comingSoonText}>coming{"\n"}soon{"\n"}...</Text>
+                </View>
+              </View>
+
+            </View>
+          </ScrollView>
+        </View>
+      )}
+
+
       {/* ==========================================
           공통: 하단 네비게이션
       ========================================== */}
@@ -199,7 +363,12 @@ export default function App() {
           style={[styles.navPill, styles.navPillLong, currentScreen === 'home' && styles.activePill]} 
           onPress={() => setCurrentScreen('home')} 
         />
-        <TouchableOpacity style={styles.navPill} />
+                {/* 오른쪽: 커뮤니티 버튼 */}
+        <TouchableOpacity 
+          style={[styles.navPill, currentScreen === 'community' && styles.activePill]} 
+          onPress={() => setCurrentScreen('community')} 
+        />
+
       </View>
       
     </View>
@@ -268,5 +437,78 @@ const styles = StyleSheet.create({
   },
   navPill: { width: 45, height: 18, backgroundColor: '#636e72', borderRadius: 10 },
   navPillLong: { width: 90 },
-  activePill: { backgroundColor: '#dcdde1' } 
+  activePill: { backgroundColor: '#dcdde1' },
+      // 🔥 새로 추가된 인스타 스타일 커뮤니티 디자인
+  communityContainer: {
+    flex: 1, paddingTop: 60, paddingHorizontal: 15,
+    backgroundColor: '#000', // 배경을 완전 검정으로!
+  },
+  communityHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginBottom: 20, marginTop: 10,
+  },
+  communityHeaderTitle: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
+  bragButton: { backgroundColor: '#cfd8dc', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 5 },
+  bragButtonText: { color: '#000', fontWeight: 'bold', fontSize: 14 },
+  
+  communityScroll: { marginBottom: 80 },
+  instaCard: { 
+    backgroundColor: '#000', borderRadius: 15, padding: 15, marginBottom: 20,
+    borderWidth: 1, borderColor: '#333' // 하얀색 테두리 효과
+  },
+  instaHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
+  profileCircleOuter: { 
+    width: 32, height: 32, borderRadius: 16, 
+    borderWidth: 2, borderColor: '#fff', 
+    justifyContent: 'center', alignItems: 'center', marginRight: 10 
+  },
+  profileCircleInner: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#555' },
+  instaAuthor: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  
+  instaImagePlaceholder: { 
+    width: '100%', height: 250, backgroundColor: '#57606f', 
+    justifyContent: 'center', alignItems: 'center', marginBottom: 15 
+  },
+  instaImageText: { color: '#fff', textAlign: 'center', fontSize: 14 },
+  
+  instaActions: { flexDirection: 'row', gap: 20, marginBottom: 15 },
+  actionIcon: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  
+  commentSection: { marginTop: 5 },
+  commentRow: { flexDirection: 'row', marginBottom: 8 },
+  commentAuthor: { color: '#fff', fontWeight: 'bold', fontSize: 14, marginRight: 10, width: 90 },
+  commentText: { color: '#dcdde1', fontSize: 14, flex: 1 },
+
+    // 🔥 글쓰기 화면 디자인
+  writeContainer: { flex: 1, backgroundColor: '#000', paddingTop: 20 },
+  writeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 15, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: '#333' },
+  writeCancelText: { color: '#fff', fontSize: 16 },
+  writeHeaderTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', paddingTop: 60},
+  writeShareText: { color: '#3498db', fontSize: 16, fontWeight: 'bold' }, // 인스타 느낌의 파란색 텍스트
+  writeScroll: { flex: 1 },
+  writeImagePlaceholder: { width: '100%', height: 350, backgroundColor: '#1e1e24', justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
+  writeImageText: { color: '#888', fontSize: 16, fontWeight: 'bold' },
+  writeInput: { color: '#fff', fontSize: 16, paddingHorizontal: 15, height: 150, textAlignVertical: 'top' },
+
+    // 🔥 상점 화면 디자인
+  shopContainer: { flex: 1, backgroundColor: '#000', paddingTop: 60, paddingHorizontal: 20 },
+  shopHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
+  shopTitle: { color: '#fff', fontSize: 26, fontWeight: 'bold' },
+  shopCoinPill: { backgroundColor: '#7f8c8d', paddingHorizontal: 18, paddingVertical: 8, borderRadius: 10 },
+  shopCoinText: { color: '#000', fontWeight: 'bold', fontSize: 16 },
+  
+  shopScroll: { flex: 1, marginBottom: 80 }, // 하단바에 안 가려지게 여백
+  shopGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  shopItemCard: { 
+    backgroundColor: '#b2bec3', width: '48%', borderRadius: 10, padding: 15, 
+    alignItems: 'center', marginBottom: 15 
+  },
+  shopItemIcon: { fontSize: 50, marginBottom: 15 },
+  shopItemName: { fontSize: 16, fontWeight: 'bold', marginBottom: 8, color: '#000' },
+  shopItemDesc: { fontSize: 10, color: '#2d3436', textAlign: 'center', marginBottom: 20, minHeight: 30 },
+  shopPriceText: { fontWeight: 'bold', fontSize: 16, color: '#000' },
+  
+  comingSoonContainer: { flex: 1, justifyContent: 'center', alignItems: 'flex-start', width: '100%', minHeight: 140 },
+  comingSoonText: { fontSize: 12, color: '#2d3436', textAlign: 'left' },
+
 });
