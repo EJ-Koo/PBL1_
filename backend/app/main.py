@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import admin_auth, auth, diaries, profiles, stars
+from app.routers import admin_auth, auth, diaries, profiles, stars, uploads
 
 app = FastAPI(title="Diary Galaxy API")
 
@@ -20,6 +20,7 @@ app.include_router(admin_auth.router)
 app.include_router(profiles.router)
 app.include_router(diaries.router)
 app.include_router(stars.router)
+app.include_router(uploads.router)
 
 
 @app.get("/health")

@@ -1,6 +1,15 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 
-import { apiCreateDiary, apiListDiaries, apiLogin, apiSignup, apiUpdateDiary, type ApiDiary } from '@/lib/api';
+import {
+  apiCreateDiary,
+  apiListDiaries,
+  apiLogin,
+  apiSignup,
+  apiUpdateDiary,
+  apiUploadPhoto,
+  type ApiDiary,
+  type ApiVisibility,
+} from '@/lib/api';
 
 export type Visibility = 'public' | 'friends' | 'private';
 
@@ -121,15 +130,13 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           return { ok: false, error: '로그인이 필요합니다.' };
         }
         try {
+          const photo_url = photoUri ? (await apiUploadPhoto(accessToken, photoUri)).photo_path : null;
           const created = await apiCreateDiary(accessToken, {
             content: text,
-            photo_url: null,
+            photo_url,
             visibility,
           });
-          const entry: DiaryEntry = {
-            ...toEntry(created, entries.length),
-            photoUri,
-          };
+          const entry = toEntry(created, entries.length);
           setEntries((prev) => [entry, ...prev]);
           return { ok: true };
         } catch (err) {
@@ -149,10 +156,25 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           return { ok: false, error: '로그인이 필요합니다.' };
         }
         try {
-          const updated = await apiUpdateDiary(accessToken, id, { content: text, visibility });
+          const payload: { content: string; visibility: Visibility; photo_url?: string | null } = {
+            content: text,
+            visibility,
+          };
+          if (photoUri === null) {
+            payload.photo_url = null;
+          } else if (!/^https?:\/\//.test(photoUri)) {
+            payload.photo_url = (await apiUploadPhoto(accessToken, photoUri)).photo_path;
+          }
+          const updated = await apiUpdateDiary(accessToken, id, payload as Partial<{
+            content: string;
+            photo_url: string | null;
+            visibility: ApiVisibility;
+          }>);
           setEntries((prev) =>
             prev.map((e) =>
-              e.id === id ? { ...e, text: updated.content, photoUri, visibility: updated.visibility } : e
+              e.id === id
+                ? { ...e, text: updated.content, photoUri: updated.photo_url, visibility: updated.visibility }
+                : e
             )
           );
           return { ok: true };
