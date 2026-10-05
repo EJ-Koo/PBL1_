@@ -4,6 +4,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { goBackSafe } from '@/lib/navigation';
+import { showNotice } from '@/lib/notice';
 import { useDiary, type Visibility } from '@/store/diary-context';
 
 const VISIBILITY_OPTIONS: { value: Visibility; label: string }[] = [
@@ -20,6 +21,7 @@ export default function WriteScreen() {
   const [text, setText] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [visibility, setVisibility] = useState<Visibility>('public');
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -46,14 +48,21 @@ export default function WriteScreen() {
     }
   };
 
-  const handleSave = () => {
-    if (!text.trim()) return;
-    if (isEditMode && id) {
-      updateEntry(id, text.trim(), photoUri, visibility);
+  const handleSave = async () => {
+    if (!text.trim() || isSaving) return;
+
+    setIsSaving(true);
+    const result =
+      isEditMode && id
+        ? await updateEntry(id, text.trim(), photoUri, visibility)
+        : await addEntry(text.trim(), photoUri, visibility);
+    setIsSaving(false);
+
+    if (result.ok) {
+      goBackSafe();
     } else {
-      addEntry(text.trim(), photoUri, visibility);
+      showNotice('저장 실패', result.error);
     }
-    goBackSafe();
   };
 
   return (
@@ -107,11 +116,11 @@ export default function WriteScreen() {
           <Text style={styles.cancelButtonText}>취소</Text>
         </Pressable>
         <Pressable
-          style={[styles.saveButton, !text.trim() && styles.saveButtonDisabled]}
+          style={[styles.saveButton, (!text.trim() || isSaving) && styles.saveButtonDisabled]}
           onPress={handleSave}
-          disabled={!text.trim()}
+          disabled={!text.trim() || isSaving}
         >
-          <Text style={styles.saveButtonText}>저장</Text>
+          <Text style={styles.saveButtonText}>{isSaving ? '저장 중...' : '저장'}</Text>
         </Pressable>
       </View>
     </ScrollView>

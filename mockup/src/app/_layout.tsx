@@ -9,6 +9,7 @@ export default function RootLayout() {
       <StatusBar style="light" />
       <Stack initialRouteName="login" screenOptions={{ headerShown: false }}>
         <Stack.Screen name="login" />
+        <Stack.Screen name="signup" />
         <Stack.Screen name="index" />
         <Stack.Screen name="write" options={{ presentation: 'modal' }} />
         <Stack.Screen name="planet/[id]" />

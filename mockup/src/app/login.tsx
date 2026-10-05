@@ -1,24 +1,16 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { router } from 'expo-router';
-import { Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { showNotice } from '@/lib/notice';
 import { useDiary } from '@/store/diary-context';
-
-function showNotice(title: string, message: string) {
-  // RN의 Alert.alert는 웹에서 아무 반응이 없어서, 웹에서는 window.alert로 대체
-  if (Platform.OS === 'web') {
-    // eslint-disable-next-line no-alert
-    window.alert(`${title}\n${message}`);
-  } else {
-    Alert.alert(title, message);
-  }
-}
 
 export default function LoginScreen() {
   const { login } = useDiary();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const passwordRef = useRef<TextInput>(null);
 
   const handleLogin = async () => {
     if (!email.trim() || !password) {
@@ -38,7 +30,7 @@ export default function LoginScreen() {
   };
 
   const handleSignup = () => {
-    showNotice('회원가입', '회원가입 기능은 추후 구현 예정입니다.');
+    router.push('/signup');
   };
 
   return (
@@ -55,14 +47,20 @@ export default function LoginScreen() {
           keyboardType="email-address"
           value={email}
           onChangeText={setEmail}
+          returnKeyType="next"
+          onSubmitEditing={() => passwordRef.current?.focus()}
+          blurOnSubmit={false}
         />
         <TextInput
+          ref={passwordRef}
           style={styles.input}
           placeholder="비밀번호"
           placeholderTextColor="#5F5F80"
           secureTextEntry
           value={password}
           onChangeText={setPassword}
+          returnKeyType="done"
+          onSubmitEditing={handleLogin}
         />
       </View>
 
