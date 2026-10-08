@@ -1,8 +1,11 @@
+// [MODIFIED 2026-09-29] 원본: back_end_wodnjs 브랜치의 mockup/src/app/index.tsx (평면 그리드 형태).
+// 여기에 front 브랜치 frontend/index.jsx의 3D 우주 디자인을 이식함. 자세한 변경 내용은
+// mockup/CHANGES_FRONTEND.md 참고. 변경된 부분은 아래에 [MODIFIED] 주석으로 표시함.
 import { useEffect, useRef, useState } from 'react';
 import { router } from 'expo-router';
 import {
   Dimensions,
-  FlatList,
+  Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
@@ -10,13 +13,17 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 
-import { useDiary, type DiaryEntry } from '@/store/diary-context';
+import { CommunityScreen } from '@/components/community-screen';
+import { ShopScreen } from '@/components/shop-screen';
+import { UniverseCanvas } from '@/components/universe-scene';
+import { useDiary } from '@/store/diary-context';
 
 const { width, height } = Dimensions.get('window');
-const PAGE_LABELS = ['상점', '나의 우주', '퀘스트'];
+const PAGE_LABELS = ['상점', '나의 우주', '커뮤니티'];
 
 export default function HomeScreen() {
   const { isLoggedIn } = useDiary();
@@ -61,15 +68,25 @@ export default function HomeScreen() {
         onScrollEndDrag={handleScrollEnd}
       >
         <View style={{ width, height }}>
-          <PlaceholderPage label="상점" />
+          <ShopScreen />
         </View>
         <View style={{ width, height }}>
           <UniversePage />
         </View>
         <View style={{ width, height }}>
-          <PlaceholderPage label="퀘스트" />
+          <CommunityScreen />
         </View>
       </ScrollView>
+
+      {/* [MODIFIED] 스와이프 외에, 화면 오른쪽 끝을 탭하면 다음 페이지로 넘어가는 보조 동작 추가.
+          (요청: "스와이프 말고 오른쪽 화면으로 클릭을 하면 넘어가도록") */}
+      {pageIndex < PAGE_LABELS.length - 1 && (
+        <Pressable
+          style={styles.nextZone}
+          onPress={() => goToPage(pageIndex + 1)}
+          pointerEvents="box-only"
+        />
+      )}
 
       {/* PC 웹은 마우스로 좌우 스와이프가 안 되므로, 클릭으로도 이동 가능하게 보조 버튼 제공 */}
       <View style={styles.dotsRow} pointerEvents="box-none">
@@ -83,54 +100,72 @@ export default function HomeScreen() {
   );
 }
 
-function PlaceholderPage({ label }: { label: string }) {
-  return (
-    <View style={styles.placeholderContainer}>
-      <Text style={styles.placeholderLabel}>{label}</Text>
-    </View>
-  );
-}
-
+// [MODIFIED] 원본은 FlatList로 별을 3열 그리드에 평면 배치했음.
+// frontend/index.jsx의 3D 우주(react-three-fiber) 렌더링으로 통째로 교체.
 function UniversePage() {
   const { entries } = useDiary();
+  const [questVisible, setQuestVisible] = useState(false);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>나의 우주</Text>
-        <Text style={styles.headerSubtitle}>{entries.length}개의 행성</Text>
-      </View>
+    <View style={styles.universeContainer}>
+      <UniverseCanvas entries={entries} onStarPress={(id) => router.push(`/planet/${id}`)} />
 
-      {entries.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>아직 기록이 없어요.{'\n'}첫 행성을 만들어보세요.</Text>
+      {entries.length === 0 && (
+        <View style={styles.emptyState} pointerEvents="none">
+          <Text style={styles.emptyText}>아직 기록이 없어요.{'\n'}첫 별을 띄워보세요.</Text>
         </View>
-      ) : (
-        <FlatList
-          data={entries}
-          keyExtractor={(item) => item.id}
-          numColumns={3}
-          contentContainerStyle={styles.grid}
-          renderItem={({ item }) => <PlanetItem entry={item} />}
-        />
       )}
+
+      {/* 우주 위에 떠 있는 상단 바 */}
+      <View style={styles.topBar} pointerEvents="box-none">
+        <View style={styles.statsPill}>
+          <Text style={styles.statsText}>★ {entries.length}</Text>
+        </View>
+        <TouchableOpacity style={styles.questButton} onPress={() => setQuestVisible(true)}>
+          <Text style={styles.questText}>퀘스트</Text>
+        </TouchableOpacity>
+      </View>
 
       <Pressable style={styles.fab} onPress={() => router.push('/write')}>
         <Text style={styles.fabText}>+</Text>
       </Pressable>
+
+      {/* [MODIFIED] 원래 frontend/index.jsx의 퀘스트 패널(진행률 바 포함)을 그대로 복원함.
+          "커뮤니티"는 별도로 페이저의 세 번째 페이지(PlaceholderPage)로 옮김 — 이 버튼/모달은
+          그대로 "퀘스트"를 가리킴. 실제 커뮤니티 기능 내용/디자인은 아직 미정. */}
+      <Modal transparent visible={questVisible} animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setQuestVisible(false)}>
+          <View style={styles.questCard}>
+            <Text style={styles.questCardTitle}>퀘스트</Text>
+            <Text style={styles.questSectionTitle}>진행 중</Text>
+            <View style={styles.questItem}>
+              <Text style={styles.whiteText}>오늘의 별 띄우기</Text>
+              <Text style={styles.whiteText}>★ 5</Text>
+            </View>
+            <View style={styles.progressBar}>
+              <View style={[styles.progressFill, { width: '80%' }]} />
+            </View>
+
+            <View style={styles.questItem}>
+              <Text style={styles.whiteText}>운석 3개 치우기</Text>
+              <Text style={styles.whiteText}>★ 3</Text>
+            </View>
+            <View style={styles.progressBar}>
+              <View style={[styles.progressFill, { width: '40%' }]} />
+            </View>
+
+            <Text style={styles.questSectionTitle}>진행 완료</Text>
+            <View style={styles.questItem}>
+              <Text style={styles.grayText}>친구 우주에 편지 보내기</Text>
+              <Text style={styles.grayText}>★ 3</Text>
+            </View>
+            <View style={styles.progressBar}>
+              <View style={[styles.progressFill, { width: '100%', backgroundColor: '#80e03e' }]} />
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
-  );
-}
-
-function PlanetItem({ entry }: { entry: DiaryEntry }) {
-  const date = new Date(entry.createdAt);
-  const label = `${date.getMonth() + 1}/${date.getDate()}`;
-
-  return (
-    <Pressable style={styles.planetWrap} onPress={() => router.push(`/planet/${entry.id}`)}>
-      <View style={[styles.planet, { backgroundColor: entry.color }]} />
-      <Text style={styles.planetLabel}>{label}</Text>
-    </Pressable>
   );
 }
 
@@ -142,6 +177,15 @@ const styles = StyleSheet.create({
   pager: {
     flex: 1,
     backgroundColor: '#0B0B1A',
+  },
+  nextZone: {
+    // 상단 퀘스트 버튼(top:60~100 부근), 하단 FAB(bottom:40~96 부근)과 겹치지 않도록
+    // 화면 오른쪽 가장자리의 중간 구간만 탭 영역으로 사용
+    position: 'absolute',
+    top: 110,
+    bottom: 100,
+    right: 0,
+    width: 50,
   },
   dotsRow: {
     position: 'absolute',
@@ -170,33 +214,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#0B0B1A',
     paddingTop: 60,
   },
-  placeholderContainer: {
+  universeContainer: {
     flex: 1,
-    backgroundColor: '#0B0B1A',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  placeholderLabel: {
-    color: '#FFFFFF',
-    fontSize: 32,
-    fontWeight: '700',
-  },
-  header: {
-    paddingHorizontal: 24,
-    marginBottom: 24,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: '#9C9CC0',
-    marginTop: 4,
+    backgroundColor: '#05050A',
   },
   emptyState: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 40,
@@ -207,24 +234,83 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
   },
-  grid: {
-    paddingHorizontal: 16,
-    gap: 20,
-  },
-  planetWrap: {
-    flex: 1 / 3,
+  topBar: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
-    gap: 8,
   },
-  planet: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  statsPill: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
-  planetLabel: {
-    color: '#8888AA',
-    fontSize: 12,
+  statsText: {
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  questButton: {
+    backgroundColor: '#7C6CF6',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 15,
+  },
+  questText: {
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  whiteText: {
+    color: '#FFFFFF',
+  },
+  grayText: {
+    color: '#A4B0BE',
+  },
+  progressBar: {
+    height: 4,
+    backgroundColor: '#444',
+    borderRadius: 2,
+    marginBottom: 10,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#80e03e',
+    borderRadius: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  questCard: {
+    position: 'absolute',
+    top: 120,
+    right: 20,
+    width: 220,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 20,
+    padding: 20,
+  },
+  questCardTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  questSectionTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 15,
+    marginBottom: 10,
+  },
+  questItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
   fab: {
     position: 'absolute',
