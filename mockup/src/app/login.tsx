@@ -49,6 +49,11 @@ export default function LoginScreen() {
           onChangeText={setEmail}
           returnKeyType="next"
           onSubmitEditing={() => passwordRef.current?.focus()}
+          onKeyPress={({ nativeEvent }) => {
+            if (nativeEvent.key === 'Tab') {
+              passwordRef.current?.focus();
+            }
+          }}
           blurOnSubmit={false}
         />
         <TextInput
