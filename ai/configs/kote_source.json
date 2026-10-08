@@ -1,0 +1,46 @@
+{
+  "dataset": "KOTE (Korean Online That-gul Emotions)",
+  "license": "MIT",
+  "paper": {
+    "title": "User Guide for KOTE: Korean Online Comments Emotions Dataset",
+    "arxiv": "2205.05300",
+    "url": "https://arxiv.org/abs/2205.05300"
+  },
+  "github": {
+    "repo": "searle-j/KOTE",
+    "homepage": "https://github.com/searle-j/KOTE",
+    "revision": "cafd2c3f54a6f4b25ac74eaa02a2e76c3ef8c977",
+    "url_template": "https://raw.githubusercontent.com/searle-j/KOTE/{revision}/{filename}",
+    "splits": {
+      "train": "train.tsv",
+      "validation": "val.tsv",
+      "test": "test.tsv"
+    },
+    "tsv_fieldnames": ["ID", "text", "labels"]
+  },
+  "huggingface": {
+    "repo_id": "searle-j/kote",
+    "homepage": "https://huggingface.co/datasets/searle-j/kote",
+    "revision": "66f0eefe4b675a5d5411c7aa08e2c97fc9a9b17f",
+    "url_template": "https://huggingface.co/datasets/searle-j/kote/resolve/{revision}/{filename}",
+    "raw_annotations": {
+      "filename": "raw.json",
+      "expected_sha256": "eea14dd7e701c39b67ae90cfc897c3f3e77ef64112ca1cd63f779199f492339f"
+    },
+    "loader_script": "kote.py",
+    "parquet_convert": {
+      "revision": "81bf41393f7f1a2b62cf77eefd2f30b876c3b2bc",
+      "config": "dichotomized",
+      "splits": {
+        "train": "dichotomized/train/0000.parquet",
+        "validation": "dichotomized/validation/0000.parquet",
+        "test": "dichotomized/test/0000.parquet"
+      }
+    }
+  },
+  "notes": [
+    "kote.py(Hugging Face 로딩 스크립트)는 최신 datasets 라이브러리에서 실행이 지원되지 않으므로 실행하지 않고, 같은 스크립트가 참조하는 GitHub TSV를 직접 내려받는다.",
+    "kote.py는 라벨 목록 확인용 텍스트로만 저장하며 ast로 파싱한다(exec/import 금지).",
+    "Parquet 변환본(refs/convert/parquet)은 TSV 파싱 결과를 교차검증하는 용도로만 사용한다."
+  ]
+}

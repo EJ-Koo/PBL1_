@@ -1,0 +1,18 @@
+# 오늘의별일 AI — KOTE 데이터 분석 단계 직접 의존성
+# 검증 환경: Python 3.13.5 (Windows 11), CPU 전용. PyTorch/CUDA는 이 단계에서 필요하지 않다.
+# 모델 학습·서비스(FastAPI 등) 패키지는 해당 단계에서 추가한다.
+
+# 데이터 처리·시각화
+numpy==2.5.3
+pandas==3.0.6
+pyarrow==25.0.1
+matplotlib==3.11.2
+
+# Hugging Face: 토크나이저 파일 다운로드·로딩 (모델 가중치는 받지 않음)
+huggingface_hub==1.33.0
+transformers==5.19.0
+
+# Jupyter 커널·노트북 실행 (ai/scripts/run_notebook.py)
+ipykernel==7.4.0
+nbclient==0.11.0
+nbformat==5.11.1
