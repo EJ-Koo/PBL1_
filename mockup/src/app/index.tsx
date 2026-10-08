@@ -17,6 +17,8 @@ import {
   View,
 } from 'react-native';
 
+import { CommunityScreen } from '@/components/community-screen';
+import { ShopScreen } from '@/components/shop-screen';
 import { UniverseCanvas } from '@/components/universe-scene';
 import { useDiary } from '@/store/diary-context';
 
@@ -66,13 +68,13 @@ export default function HomeScreen() {
         onScrollEndDrag={handleScrollEnd}
       >
         <View style={{ width, height }}>
-          <PlaceholderPage label="상점" />
+          <ShopScreen />
         </View>
         <View style={{ width, height }}>
           <UniversePage />
         </View>
         <View style={{ width, height }}>
-          <PlaceholderPage label="커뮤니티" />
+          <CommunityScreen />
         </View>
       </ScrollView>
 
@@ -94,14 +96,6 @@ export default function HomeScreen() {
           </Pressable>
         ))}
       </View>
-    </View>
-  );
-}
-
-function PlaceholderPage({ label }: { label: string }) {
-  return (
-    <View style={styles.placeholderContainer}>
-      <Text style={styles.placeholderLabel}>{label}</Text>
     </View>
   );
 }
@@ -219,17 +213,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0B0B1A',
     paddingTop: 60,
-  },
-  placeholderContainer: {
-    flex: 1,
-    backgroundColor: '#0B0B1A',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  placeholderLabel: {
-    color: '#FFFFFF',
-    fontSize: 32,
-    fontWeight: '700',
   },
   universeContainer: {
     flex: 1,
