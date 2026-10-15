@@ -104,6 +104,79 @@ export async function apiUploadPhoto(accessToken: string, localUri: string) {
   return data as { photo_path: string };
 }
 
+export type ApiAdminUser = {
+  user_id: string;
+  email: string | null;
+  nickname: string | null;
+  created_at: string;
+};
+
+export type ApiAdminDiary = ApiDiary & { nickname: string | null };
+
+function adminAuthHeaders(adminToken: string) {
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${adminToken}`,
+  };
+}
+
+export async function apiAdminLogin(username: string, password: string) {
+  const res = await fetch(`${API_BASE_URL}/admin/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail ?? '로그인에 실패했습니다.');
+  }
+  return data as { access_token: string; admin_id: string; username: string };
+}
+
+export async function apiAdminListUsers(adminToken: string) {
+  const res = await fetch(`${API_BASE_URL}/admin/users`, {
+    headers: adminAuthHeaders(adminToken),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail ?? '유저 목록을 불러오지 못했습니다.');
+  }
+  return data as ApiAdminUser[];
+}
+
+export async function apiAdminDeleteUser(adminToken: string, userId: string) {
+  const res = await fetch(`${API_BASE_URL}/admin/users/${userId}`, {
+    method: 'DELETE',
+    headers: adminAuthHeaders(adminToken),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail ?? '유저 삭제에 실패했습니다.');
+  }
+}
+
+export async function apiAdminListDiaries(adminToken: string) {
+  const res = await fetch(`${API_BASE_URL}/admin/diaries`, {
+    headers: adminAuthHeaders(adminToken),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail ?? '일기 목록을 불러오지 못했습니다.');
+  }
+  return data as ApiAdminDiary[];
+}
+
+export async function apiAdminDeleteDiary(adminToken: string, diaryId: string) {
+  const res = await fetch(`${API_BASE_URL}/admin/diaries/${diaryId}`, {
+    method: 'DELETE',
+    headers: adminAuthHeaders(adminToken),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail ?? '일기 삭제에 실패했습니다.');
+  }
+}
+
 export async function apiUpdateDiary(
   accessToken: string,
   id: string,
