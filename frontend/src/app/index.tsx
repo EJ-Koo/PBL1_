@@ -62,6 +62,7 @@ export default function HomeScreen() {
         style={styles.pager}
         horizontal
         pagingEnabled
+        scrollEnabled={false}
         showsHorizontalScrollIndicator={false}
         contentOffset={{ x: width, y: 0 }}
         onMomentumScrollEnd={handleScrollEnd}
@@ -88,11 +89,18 @@ export default function HomeScreen() {
         />
       )}
 
-      {/* PC 웹은 마우스로 좌우 스와이프가 안 되므로, 클릭으로도 이동 가능하게 보조 버튼 제공 */}
-      <View style={styles.dotsRow} pointerEvents="box-none">
+      {/* 스와이프를 끄고(scrollEnabled=false) 이 버튼으로만 페이지를 넘기도록 함
+          — 우주 화면 안에서 별을 드래그로 둘러보는 동작과 좌우 스와이프가 겹치는 문제 때문 */}
+      <View style={styles.navRow} pointerEvents="box-none">
         {PAGE_LABELS.map((label, index) => (
-          <Pressable key={label} style={styles.dotButton} onPress={() => goToPage(index)}>
-            <View style={[styles.dot, pageIndex === index && styles.dotActive]} />
+          <Pressable
+            key={label}
+            style={[styles.navButton, pageIndex === index && styles.navButtonActive]}
+            onPress={() => goToPage(index)}
+          >
+            <Text style={[styles.navButtonText, pageIndex === index && styles.navButtonTextActive]}>
+              {label}
+            </Text>
           </Pressable>
         ))}
       </View>
@@ -187,27 +195,31 @@ const styles = StyleSheet.create({
     right: 0,
     width: 50,
   },
-  dotsRow: {
+  navRow: {
     position: 'absolute',
     bottom: 16,
-    left: 0,
-    right: 0,
+    left: 20,
+    right: 20,
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 6,
+    gap: 8,
   },
-  dotButton: {
-    padding: 8,
+  navButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
-  dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#3A3A5A',
-  },
-  dotActive: {
+  navButtonActive: {
     backgroundColor: '#7C6CF6',
-    width: 18,
+  },
+  navButtonText: {
+    color: '#9C9CC0',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  navButtonTextActive: {
+    color: '#FFFFFF',
   },
   container: {
     flex: 1,
