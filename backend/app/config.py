@@ -11,3 +11,6 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+if not settings.admin_jwt_secret:
+    raise RuntimeError("ADMIN_JWT_SECRET is not set")
