@@ -4,12 +4,83 @@
 // 이게 웹 브라우저 마우스 드래그를 못 받는 문제가 있어서, react-three-fiber 자체 포인터
 // 이벤트(DragPlane, 아래)로 교체함 — 모바일 터치/웹 마우스 둘 다 이 방식으로 통일해서 받음.
 // 자세한 이유는 mockup/CHANGES_FRONTEND.md 참고.
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber/native';
 import { View } from 'react-native';
-import type { Mesh } from 'three';
+import { DataTexture, LinearFilter, RGBAFormat, type Mesh, type Points } from 'three';
 
 import type { DiaryEntry } from '@/store/diary-context';
+
+// pointsMaterial은 텍스처가 없으면 각 점을 네모로 그린다. 중심은 불투명, 가장자리는
+// 투명한 작은 원형 텍스처를 입혀서 동그란 별점으로 보이게 한다.
+function createDotTexture() {
+  const size = 16;
+  const center = size / 2;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      const dist = Math.hypot(x - center + 0.5, y - center + 0.5) / center;
+      const alpha = Math.max(0, 1 - dist);
+      data[i] = 255;
+      data[i + 1] = 255;
+      data[i + 2] = 255;
+      data[i + 3] = Math.round(Math.pow(alpha, 1.5) * 255);
+    }
+  }
+  const texture = new DataTexture(data, size, size, RGBAFormat);
+  // DataTexture는 기본 필터가 NearestFilter라 확대하면 각지게 보인다. 부드럽게 보간되도록 바꾼다.
+  texture.magFilter = LinearFilter;
+  texture.minFilter = LinearFilter;
+  texture.generateMipmaps = false;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+const DOT_TEXTURE = createDotTexture();
+
+/** 별이 흩뿌려진 배경 하늘. 우주 그룹에 같이 속해서 드래그하면 별들과 함께 돈다. */
+function Starfield() {
+  const pointsRef = useRef<Points>(null);
+
+  const positions = useMemo(() => {
+    const count = 1200;
+    const arr = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      // 카메라를 완전히 감싸는 구 껍질 위에 별을 무작위로 뿌림
+      const radius = 18 + Math.random() * 32;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      arr[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+      arr[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+      arr[i * 3 + 2] = radius * Math.cos(phi);
+    }
+    return arr;
+  }, []);
+
+  useFrame((_, delta) => {
+    if (pointsRef.current) {
+      pointsRef.current.rotation.y += delta * 0.006;
+    }
+  });
+
+  return (
+    <points ref={pointsRef}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <pointsMaterial
+        map={DOT_TEXTURE}
+        alphaTest={0.3}
+        color="#ffffff"
+        size={0.22}
+        sizeAttenuation
+        transparent
+        opacity={1}
+      />
+    </points>
+  );
+}
 
 // 손가락으로 민 거리를 기억해서 우주 전체 회전 각도에 반영하는 값
 let targetRotX = 0;
@@ -120,6 +191,8 @@ export function UniverseScene({
       <group ref={groupRef}>
         <ambientLight intensity={0.5} />
         <pointLight position={[10, 10, 10]} intensity={1} />
+
+        <Starfield />
 
         {entries.map((entry, index) => (
           <FloatingStar

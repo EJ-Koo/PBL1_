@@ -1,9 +1,75 @@
-import { useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { showNotice } from '@/lib/notice';
 import { useDiary } from '@/store/diary-context';
+
+/** 깜빡이는 별 하나. opacity를 랜덤한 주기로 오갔다 갔다 시켜 반짝이는 느낌을 낸다. */
+function TwinklingStar({
+  left,
+  top,
+  size,
+  duration,
+  delay,
+}: {
+  left: number;
+  top: number;
+  size: number;
+  duration: number;
+  delay: number;
+}) {
+  const opacity = useRef(new Animated.Value(0.15)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 1, duration, delay, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.15, duration, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity, duration, delay]);
+
+  return (
+    <Animated.View
+      style={{
+        position: 'absolute',
+        left: `${left}%`,
+        top: `${top}%`,
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: '#FFFFFF',
+        opacity,
+      }}
+    />
+  );
+}
+
+/** 로그인 화면 배경에 깔리는 반짝이는 별 하늘. 터치는 그대로 통과시킨다. */
+function StarfieldBackground() {
+  const stars = useMemo(
+    () =>
+      Array.from({ length: 70 }, () => ({
+        left: Math.random() * 100,
+        top: Math.random() * 100,
+        size: Math.random() * 1.6 + 0.8,
+        duration: 1200 + Math.random() * 2400,
+        delay: Math.random() * 3000,
+      })),
+    []
+  );
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {stars.map((star, i) => (
+        <TwinklingStar key={i} {...star} />
+      ))}
+    </View>
+  );
+}
 
 export default function LoginScreen() {
   const { login } = useDiary();
@@ -35,6 +101,7 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
+      <StarfieldBackground />
       <Text style={styles.title}>오늘의별일</Text>
       <Text style={styles.subtitle}>기록할수록 커지는 나만의 우주</Text>
 
@@ -102,6 +169,7 @@ const styles = StyleSheet.create({
   },
   form: {
     width: '100%',
+    maxWidth: 360,
     gap: 12,
     marginBottom: 24,
   },
@@ -118,6 +186,7 @@ const styles = StyleSheet.create({
   },
   loginButton: {
     width: '100%',
+    maxWidth: 360,
     backgroundColor: '#7C6CF6',
     borderRadius: 10,
     paddingVertical: 16,
