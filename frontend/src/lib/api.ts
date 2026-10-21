@@ -52,6 +52,28 @@ export async function apiSignup(email: string, password: string) {
   };
 }
 
+export type ApiStar = {
+  id: string;
+  diary_id: string;
+  x: number;
+  y: number;
+  z: number;
+  color: string;
+  size: number;
+  brightness: number;
+};
+
+export async function apiListStars(accessToken: string) {
+  const res = await fetch(`${API_BASE_URL}/stars`, {
+    headers: authHeaders(accessToken),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail ?? '별 목록을 불러오지 못했습니다.');
+  }
+  return data as ApiStar[];
+}
+
 export async function apiListDiaries(accessToken: string) {
   const res = await fetch(`${API_BASE_URL}/diaries`, {
     headers: authHeaders(accessToken),

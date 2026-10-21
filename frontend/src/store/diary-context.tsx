@@ -3,11 +3,13 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from 're
 import {
   apiCreateDiary,
   apiListDiaries,
+  apiListStars,
   apiLogin,
   apiSignup,
   apiUpdateDiary,
   apiUploadPhoto,
   type ApiDiary,
+  type ApiStar,
   type ApiVisibility,
 } from '@/lib/api';
 
@@ -20,6 +22,7 @@ export type DiaryEntry = {
   visibility: Visibility;
   createdAt: number;
   color: string;
+  position: [number, number, number];
 };
 
 export type LoginResult = { ok: true } | { ok: false; error: string };
@@ -58,7 +61,18 @@ function isSameDay(timestamp: number) {
   );
 }
 
-function toEntry(diary: ApiDiary, colorIndex: number): DiaryEntry {
+// 서버에서 아직 별 데이터를 못 받아왔을 때만 쓰는 임시 배치 (기존 클라이언트 전용 로직과 동일)
+function fallbackPosition(index: number): [number, number, number] {
+  const angle = (index % 8) * (Math.PI / 4);
+  const ring = Math.floor(index / 8);
+  const radius = 1.5 + ring * 1.2;
+  const x = Math.cos(angle) * radius;
+  const y = Math.sin(angle * 1.3) * (radius * 0.6);
+  const z = -1.5 - ring * 1.2;
+  return [x, y, z];
+}
+
+function toEntry(diary: ApiDiary, colorIndex: number, star?: ApiStar): DiaryEntry {
   return {
     id: diary.id,
     text: diary.content,
@@ -66,6 +80,7 @@ function toEntry(diary: ApiDiary, colorIndex: number): DiaryEntry {
     visibility: diary.visibility,
     createdAt: new Date(diary.created_at).getTime(),
     color: PLANET_COLORS[colorIndex % PLANET_COLORS.length],
+    position: star ? [star.x, star.y, star.z] : fallbackPosition(colorIndex),
   };
 }
 
@@ -86,8 +101,12 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           setAccessToken(result.access_token);
           setIsLoggedIn(true);
           try {
-            const diaries = await apiListDiaries(result.access_token);
-            setEntries(diaries.map(toEntry));
+            const [diaryList, starList] = await Promise.all([
+              apiListDiaries(result.access_token),
+              apiListStars(result.access_token),
+            ]);
+            const starByDiaryId = new Map(starList.map((s) => [s.diary_id, s]));
+            setEntries(diaryList.map((d, i) => toEntry(d, i, starByDiaryId.get(d.id))));
           } catch {
             setEntries([]);
           }
@@ -136,7 +155,14 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
             photo_url,
             visibility,
           });
-          const entry = toEntry(created, entries.length);
+          let star: ApiStar | undefined;
+          try {
+            const starList = await apiListStars(accessToken);
+            star = starList.find((s) => s.diary_id === created.id);
+          } catch {
+            star = undefined;
+          }
+          const entry = toEntry(created, entries.length, star);
           setEntries((prev) => [entry, ...prev]);
           return { ok: true };
         } catch (err) {

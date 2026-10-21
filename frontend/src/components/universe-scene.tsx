@@ -144,17 +144,6 @@ function FloatingStar({
   );
 }
 
-// 일기 개수에 따라 별들이 흩어질 위치를 결정 (임시 배치 로직 — 서버의 stars.x/y/z 연동 전까지 사용)
-function starPosition(index: number): [number, number, number] {
-  const angle = (index % 8) * (Math.PI / 4);
-  const ring = Math.floor(index / 8);
-  const radius = 1.5 + ring * 1.2;
-  const x = Math.cos(angle) * radius;
-  const y = Math.sin(angle * 1.3) * (radius * 0.6);
-  const z = -1.5 - ring * 1.2;
-  return [x, y, z];
-}
-
 /**
  * 화면 전체를 덮는 투명 평면. 별이 없는 빈 공간을 드래그하면 여기서 잡아서
  * 우주 전체 회전에 반영한다. RN의 View/onPointerMove로 감싸는 방식은 웹에서
@@ -274,10 +263,10 @@ export function UniverseScene({
 
         <Starfield />
 
-        {entries.map((entry, index) => (
+        {entries.map((entry) => (
           <FloatingStar
             key={entry.id}
-            position={starPosition(index)}
+            position={entry.position}
             color={entry.color}
             size={0.35}
             onPress={() => onStarPress(entry.id)}

@@ -1,3 +1,5 @@
+import math
+import random
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -11,6 +13,41 @@ router = APIRouter(prefix="/diaries", tags=["diaries"])
 
 PHOTO_BUCKET = "diary-photos"
 PHOTO_URL_TTL = 3600
+
+# x/y/z는 AI 클러스터링(HDBSCAN)이 들어오기 전까지 구 껍질 위 무작위 배치로 대체.
+# size는 글자 길이에 비례 (스키마 주석에 명시된 규칙).
+STAR_RADIUS_RANGE = (3.0, 12.0)
+STAR_SIZE_RANGE = (0.25, 1.2)
+STAR_SIZE_CHARS_FOR_MAX = 400
+
+
+def _random_star_position() -> tuple[float, float, float]:
+    radius = random.uniform(*STAR_RADIUS_RANGE)
+    theta = random.uniform(0, 2 * math.pi)
+    phi = math.acos(2 * random.random() - 1)
+    x = radius * math.sin(phi) * math.cos(theta)
+    y = radius * math.sin(phi) * math.sin(theta)
+    z = radius * math.cos(phi)
+    return x, y, z
+
+
+def _star_size_for_content(content: str) -> float:
+    min_size, max_size = STAR_SIZE_RANGE
+    ratio = min(len(content) / STAR_SIZE_CHARS_FOR_MAX, 1.0)
+    return min_size + (max_size - min_size) * ratio
+
+
+def _create_star_for_diary(diary_id: str, content: str) -> None:
+    x, y, z = _random_star_position()
+    supabase.table("stars").insert(
+        {
+            "diary_id": diary_id,
+            "x": x,
+            "y": y,
+            "z": z,
+            "size": _star_size_for_content(content),
+        }
+    ).execute()
 
 
 def _with_signed_photo_url(diary: dict) -> dict:
@@ -75,7 +112,9 @@ def create_diary(diary: DiaryCreate, user_id: str = Depends(get_current_user_id)
         )
         .execute()
     )
-    return _with_signed_photo_url(result.data[0])
+    created = result.data[0]
+    _create_star_for_diary(created["id"], diary.content)
+    return _with_signed_photo_url(created)
 
 
 @router.patch("/{diary_id}", response_model=Diary)
@@ -101,6 +140,11 @@ def update_diary(
         .eq("user_id", user_id)
         .execute()
     )
+
+    if "content" in update_data:
+        supabase.table("stars").update(
+            {"size": _star_size_for_content(update_data["content"])}
+        ).eq("diary_id", str(diary_id)).execute()
 
     new_photo_path = update_data.get("photo_url", old_photo_path)
     if old_photo_path and old_photo_path != new_photo_path:
