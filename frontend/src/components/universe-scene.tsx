@@ -4,9 +4,9 @@
 // 이게 웹 브라우저 마우스 드래그를 못 받는 문제가 있어서, react-three-fiber 자체 포인터
 // 이벤트(DragPlane, 아래)로 교체함 — 모바일 터치/웹 마우스 둘 다 이 방식으로 통일해서 받음.
 // 자세한 이유는 mockup/CHANGES_FRONTEND.md 참고.
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber/native';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { DataTexture, LinearFilter, RGBAFormat, type Mesh, type Points } from 'three';
 
 import type { DiaryEntry } from '@/store/diary-context';
@@ -39,23 +39,46 @@ function createDotTexture() {
 
 const DOT_TEXTURE = createDotTexture();
 
+// pointsMaterial의 size는 점 전체에 하나의 값만 적용돼서 크기를 점마다 다르게 못 준다.
+// 그래서 점마다 다른 aSize 속성을 읽어 gl_PointSize를 정하는 셰이더로 대체한다.
+const STARFIELD_VERTEX_SHADER = `
+  attribute float aSize;
+  void main() {
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    gl_PointSize = aSize * (300.0 / -mvPosition.z);
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`;
+const STARFIELD_FRAGMENT_SHADER = `
+  uniform sampler2D map;
+  void main() {
+    vec4 tex = texture2D(map, gl_PointCoord);
+    if (tex.a < 0.3) discard;
+    gl_FragColor = vec4(vec3(1.0), tex.a);
+  }
+`;
+const STARFIELD_UNIFORMS = { map: { value: DOT_TEXTURE } };
+
 /** 별이 흩뿌려진 배경 하늘. 우주 그룹에 같이 속해서 드래그하면 별들과 함께 돈다. */
 function Starfield() {
   const pointsRef = useRef<Points>(null);
 
-  const positions = useMemo(() => {
+  const { positions, sizes } = useMemo(() => {
     const count = 1200;
-    const arr = new Float32Array(count * 3);
+    const pos = new Float32Array(count * 3);
+    const siz = new Float32Array(count);
     for (let i = 0; i < count; i++) {
       // 카메라를 완전히 감싸는 구 껍질 위에 별을 무작위로 뿌림
       const radius = 18 + Math.random() * 32;
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
-      arr[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
-      arr[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
-      arr[i * 3 + 2] = radius * Math.cos(phi);
+      pos[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+      pos[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+      pos[i * 3 + 2] = radius * Math.cos(phi);
+      // 별마다 크기를 무작위로. 너무 작으면 안 보이므로 최소 크기를 확보하고 고르게 분포시킴
+      siz[i] = 0.22 + Math.random() * 0.5;
     }
-    return arr;
+    return { positions: pos, sizes: siz };
   }, []);
 
   useFrame((_, delta) => {
@@ -68,15 +91,14 @@ function Starfield() {
     <points ref={pointsRef}>
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+        <bufferAttribute attach="attributes-aSize" args={[sizes, 1]} />
       </bufferGeometry>
-      <pointsMaterial
-        map={DOT_TEXTURE}
-        alphaTest={0.3}
-        color="#ffffff"
-        size={0.22}
-        sizeAttenuation
+      <shaderMaterial
+        uniforms={STARFIELD_UNIFORMS}
+        vertexShader={STARFIELD_VERTEX_SHADER}
+        fragmentShader={STARFIELD_FRAGMENT_SHADER}
         transparent
-        opacity={1}
+        depthWrite={false}
       />
     </points>
   );
@@ -85,6 +107,8 @@ function Starfield() {
 // 손가락으로 민 거리를 기억해서 우주 전체 회전 각도에 반영하는 값
 let targetRotX = 0;
 let targetRotY = 0;
+// 두 손가락 핀치(또는 웹 마우스 휠)로 조절하는 카메라 거리. 작을수록 확대, 클수록 축소.
+let targetCameraZ = 5;
 
 /** 일기 한 개 = 별 하나. entry.color를 그대로 별 색으로 사용한다. */
 function FloatingStar({
@@ -137,18 +161,48 @@ function starPosition(index: number): [number, number, number] {
  * react-three-fiber 캔버스와 조합했을 때 이벤트가 올라오지 않는 문제가 있어서,
  * r3f가 별 클릭(onClick)에 쓰는 것과 같은 자체 포인터 이벤트 시스템으로 통일함.
  */
+const ZOOM_MIN = 1.2;
+const ZOOM_MAX = 10;
+
+function pointerDistance(points: Map<number, { x: number; y: number }>) {
+  const [a, b] = Array.from(points.values());
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
 function DragPlane() {
   const dragging = useRef(false);
   const lastPoint = useRef({ x: 0, y: 0 });
+  // 동시에 눌려 있는 포인터(손가락/마우스)를 id별로 추적 — 2개가 되면 핀치 줌으로 전환
+  const activePointers = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const lastPinchDist = useRef<number | null>(null);
 
   return (
     <mesh
       position={[0, 0, -20]}
       onPointerDown={(e: ThreeEvent<PointerEvent>) => {
-        dragging.current = true;
-        lastPoint.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
+        activePointers.current.set(e.pointerId, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY });
+        if (activePointers.current.size >= 2) {
+          dragging.current = false;
+          lastPinchDist.current = pointerDistance(activePointers.current);
+        } else {
+          dragging.current = true;
+          lastPoint.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
+        }
       }}
       onPointerMove={(e: ThreeEvent<PointerEvent>) => {
+        if (!activePointers.current.has(e.pointerId)) return;
+        activePointers.current.set(e.pointerId, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY });
+
+        if (activePointers.current.size >= 2) {
+          const currentDist = pointerDistance(activePointers.current);
+          if (lastPinchDist.current !== null) {
+            const distDelta = currentDist - lastPinchDist.current;
+            targetCameraZ = Math.min(Math.max(targetCameraZ - distDelta * 0.015, ZOOM_MIN), ZOOM_MAX);
+          }
+          lastPinchDist.current = currentDist;
+          return;
+        }
+
         if (!dragging.current) return;
         const deltaX = e.nativeEvent.pageX - lastPoint.current.x;
         const deltaY = e.nativeEvent.pageY - lastPoint.current.y;
@@ -156,10 +210,20 @@ function DragPlane() {
         targetRotY += deltaY * 0.01;
         lastPoint.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
       }}
-      onPointerUp={() => {
-        dragging.current = false;
+      onPointerUp={(e: ThreeEvent<PointerEvent>) => {
+        activePointers.current.delete(e.pointerId);
+        lastPinchDist.current = null;
+        if (activePointers.current.size === 1) {
+          const [remaining] = Array.from(activePointers.current.values());
+          lastPoint.current = remaining;
+          dragging.current = true;
+        } else {
+          dragging.current = false;
+        }
       }}
-      onPointerOut={() => {
+      onPointerOut={(e: ThreeEvent<PointerEvent>) => {
+        activePointers.current.delete(e.pointerId);
+        lastPinchDist.current = null;
         dragging.current = false;
       }}
     >
@@ -167,6 +231,20 @@ function DragPlane() {
       <meshBasicMaterial transparent opacity={0} />
     </mesh>
   );
+}
+
+// @react-three/fiber/native의 포인터 이벤트는 터치/드래그는 잘 잡지만(DragPlane 참고),
+// 웹 마우스 휠(wheel) 이벤트는 전달하지 않는다 — RN용 이벤트 매니저라 DOM wheel을 안 다룸.
+// 그래서 캔버스에 기대지 않고 window에 직접 wheel 리스너를 붙여서 웹 줌을 구현한다.
+function useWheelZoom() {
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const handleWheel = (e: WheelEvent) => {
+      targetCameraZ = Math.min(Math.max(targetCameraZ + e.deltaY * 0.0015, ZOOM_MIN), ZOOM_MAX);
+    };
+    window.addEventListener('wheel', handleWheel, { passive: true });
+    return () => window.removeEventListener('wheel', handleWheel);
+  }, []);
 }
 
 export function UniverseScene({
@@ -177,12 +255,14 @@ export function UniverseScene({
   onStarPress: (id: string) => void;
 }) {
   const groupRef = useRef<import('three').Group>(null);
+  useWheelZoom();
 
-  useFrame(() => {
+  useFrame((state) => {
     if (groupRef.current) {
       groupRef.current.rotation.y += (targetRotX - groupRef.current.rotation.y) * 0.1;
       groupRef.current.rotation.x += (targetRotY - groupRef.current.rotation.x) * 0.1;
     }
+    state.camera.position.z += (targetCameraZ - state.camera.position.z) * 0.1;
   });
 
   return (
