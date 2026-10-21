@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView } from 'react-native';
 import { Canvas, useFrame } from '@react-three/fiber/native';
@@ -36,21 +37,17 @@ function UniverseScene({ stars }) {
   // 🔥 [핵심 기능] 매 프레임마다 한 손가락 회전 & 두 손가락 확대/축소를 부드럽게 적용해요!
   useFrame((state) => {
     if (groupRef.current) {
-       // 1) 한 손가락 드래그: 우주 회전
        groupRef.current.rotation.y += (targetRotX - groupRef.current.rotation.y) * 0.1;
        groupRef.current.rotation.x += (targetRotY - groupRef.current.rotation.x) * 0.1;
     }
-    // 2) 두 손가락 핀치: 카메라 앞뒤 이동 (확대/축소)
     state.camera.position.z += (targetCameraZ - state.camera.position.z) * 0.1;
   });
 
   return (
-    // 이 group 안에 있는 모든 별들이 하나로 묶여서 같이 돌아갑니다.
     <group ref={groupRef}>
       <ambientLight intensity={0.5} />
       <pointLight position={[10, 10, 10]} intensity={1} />
       
-      {/* 우리가 만든 일기 별들 */}
       {stars.map((star, index) => (
         <FloatingStar
           key={index}
@@ -63,46 +60,72 @@ function UniverseScene({ stars }) {
   );
 }
 
+// 🌌 배경에 깔리는 작은 은하수 먼지 별들 (시안 느낌 재현용)
+const BG_DOTS = Array.from({ length: 35 }).map((_, i) => ({
+  id: i,
+  top: `${(i * 29) % 100}%`,
+  left: `${(i * 47) % 100}%`,
+  size: (i % 3) + 1,
+  opacity: ((i % 5) + 2) * 0.12,
+}));
+
 // 📱 메인 앱 화면
 export default function App() {
+  // 화면 상태: 'diary'(왼쪽 일기작성), 'home'(가운데 홈), 'group'(오른쪽 그룹우주), 'shop'(상점), 'community'(커뮤니티)
   const [currentScreen, setCurrentScreen] = useState('home');
   const [questVisible, setQuestVisible] = useState(false);
 
   // 🌟 메인 우주(나의 우주)에 떠 있는 별 목록 상태
   const [myStars, setMyStars] = useState([
-    { position: [-1.5, 1, -2], color: '#ff6b6b', size: 0.3 },
-    { position: [1.5, 0.5, -1], color: '#48dbfb', size: 0.4 },
-    { position: [-0.8, -1.5, -1], color: '#feca57', size: 0.3 },
-    { position: [0, 0, -4], color: '#ffffff', size: 0.5 },
+    { position: [-0.8, 0.8, -2], color: '#ff5252', size: 0.32, previewX: '32%', previewY: '38%' },
+    { position: [1.2, 0.4, -1], color: '#536dfe', size: 0.35, previewX: '66%', previewY: '43%' },
+    { position: [1.4, -0.5, -1.5], color: '#536dfe', size: 0.32, previewX: '70%', previewY: '52%' },
+    { position: [-0.8, -1.2, -1], color: '#ffd740', size: 0.32, previewX: '30%', previewY: '57%' },
+    { position: [-0.1, -0.1, -3], color: '#ffffff', size: 0.42, previewX: '43%', previewY: '49%' },
   ]);
 
-  // 📝 일기 입력창 텍스트 상태
+  // 📝 일기 입력창 텍스트 & 공개 범위(그룹 선택) 상태
   const [diaryText, setDiaryText] = useState('');
+  const [selectedGroupIds, setSelectedGroupIds] = useState([]); // 비어있으면 '비공개(나만 보기)'
 
-  // ✨ 오른쪽 화면(모임 공유 우주)용 상태
-  const [inviteModalVisible, setInviteModalVisible] = useState(false);
-  const [friendNameInput, setFriendNameInput] = useState('');
-  const [groupMembers, setGroupMembers] = useState(['나', '지우용사', '지구용사']);
-  const [groupStars, setGroupStars] = useState([
-    { position: [-1.5, 1, -2], color: '#ff6b6b', size: 0.3, author: '나' },
-    { position: [1.5, 0.5, -1], color: '#48dbfb', size: 0.4, author: '지우용사' },
-    { position: [1.8, -0.4, -1.2], color: '#48dbfb', size: 0.35, author: '지우용사' },
-    { position: [-0.8, -1.5, -1], color: '#feca57', size: 0.3, author: '지구용사' },
-    { position: [0, 0, -4], color: '#ffffff', size: 0.5, author: '나' },
+  // 🪐 오른쪽 화면(우리의 우주 - 그룹 목록) 상태
+  const [groups, setGroups] = useState([
+    {
+      id: 'group-1',
+      name: '그룹1',
+      stars: [
+        { position: [-0.3, 0.8, -2], color: '#ffffff', size: 0.38, previewX: '42%', previewY: '22%' },
+        { position: [1.2, 0.3, -1.5], color: '#536dfe', size: 0.38, previewX: '78%', previewY: '38%' },
+        { position: [-0.9, -0.6, -1.5], color: '#ffd740', size: 0.38, previewX: '28%', previewY: '68%' },
+      ],
+    },
+    {
+      id: 'group-2',
+      name: '그룹2',
+      stars: [
+        { position: [-0.8, 0.9, -2], color: '#ff5252', size: 0.36, previewX: '31%', previewY: '15%' },
+        { position: [1.1, 0.3, -1.5], color: '#536dfe', size: 0.36, previewX: '69%', previewY: '42%' },
+        { position: [-0.2, -0.5, -2.5], color: '#ffffff', size: 0.4, previewX: '42%', previewY: '68%' },
+        { position: [1.3, -0.9, -1.5], color: '#536dfe', size: 0.34, previewX: '74%', previewY: '82%' },
+      ],
+    },
   ]);
-  
+
+  // 새 그룹 추가 모달 & 3D 그룹 상세 보기 상태
+  const [createGroupModalVisible, setCreateGroupModalVisible] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [activeGroup3D, setActiveGroup3D] = useState(null); // 카드를 눌렀을 때 3D로 크게 볼 그룹
+
   // 👆 한 손가락 위치 & 두 손가락 사이 거리를 기억할 변수
   const lastTouch = useRef({ x: 0, y: 0 });
   const lastPinchDist = useRef(null);
 
-  // 두 손가락 사이의 거리를 계산하는 함수
   const getDistance = (touches) => {
     const dx = touches[0].pageX - touches[1].pageX;
     const dy = touches[0].pageY - touches[1].pageY;
     return Math.sqrt(dx * dx + dy * dy);
   };
 
-  // 터치 시작 시 실행
   const handleTouchStart = (e) => {
     const touches = e.nativeEvent.touches;
     if (touches.length === 1) {
@@ -113,12 +136,9 @@ export default function App() {
     }
   };
 
-  // 손가락 이동 시 실행 (1손가락: 회전 / 2손가락: 확대·축소)
   const handleTouchMove = (e) => {
     const touches = e.nativeEvent.touches;
-    
     if (touches.length === 1) {
-      // 두 손가락에서 한 손가락을 뗀 직후 화면이 튀는 현상 방지
       if (lastPinchDist.current !== null) {
         lastPinchDist.current = null;
         lastTouch.current = { x: touches[0].pageX, y: touches[0].pageY };
@@ -135,14 +155,12 @@ export default function App() {
       const currentDist = getDistance(touches);
       if (lastPinchDist.current !== null) {
         const distDelta = currentDist - lastPinchDist.current;
-        // 손가락을 벌리면(distDelta > 0) 카메라 거리가 가까워지며 확대 (최소 1.2 ~ 최대 10)
         targetCameraZ = Math.min(Math.max(targetCameraZ - distDelta * 0.015, 1.2), 10);
       }
       lastPinchDist.current = currentDist;
     }
   };
 
-  // 손가락을 뗄 때 실행
   const handleTouchEnd = (e) => {
     const touches = e.nativeEvent.touches;
     if (touches.length === 1) {
@@ -153,55 +171,104 @@ export default function App() {
     }
   };
 
-  // 🌟 일기 작성 완료 시 나의 우주에 새 별을 띄우는 함수
+  // 🔒 일기 작성 시 공개 범위(비공개 / 그룹) 토글 함수
+  const handleSelectPrivate = () => {
+    setSelectedGroupIds([]); // 비공개를 누르면 모든 그룹 체크 해제
+  };
+
+  const handleToggleGroupSelect = (groupId) => {
+    if (selectedGroupIds.includes(groupId)) {
+      setSelectedGroupIds(selectedGroupIds.filter((id) => id !== groupId));
+    } else {
+      setSelectedGroupIds([...selectedGroupIds, groupId]);
+    }
+  };
+
+  // 🌟 일기 작성 완료 시 나의 우주 + 체크한 그룹 우주에 새 별을 띄우는 함수
   const handleAddDiaryStar = () => {
-    const starColors = ['#ff6b6b', '#48dbfb', '#feca57', '#ff9ff3', '#1dd1a1', '#a29bfe', '#ffffff'];
+    const starColors = ['#ff5252', '#536dfe', '#ffd740', '#ff9ff3', '#1dd1a1', '#ffffff'];
     const randomColor = starColors[Math.floor(Math.random() * starColors.length)];
     const randomPosition = [
-      (Math.random() - 0.5) * 3.5,
-      (Math.random() - 0.5) * 3.5,
+      (Math.random() - 0.5) * 3.0,
+      (Math.random() - 0.5) * 3.0,
       -1 - Math.random() * 2.5,
     ];
+    // 그룹 카드 프리뷰용 2D 위치
+    const previewX = `${Math.floor(20 + Math.random() * 60)}%`;
+    const previewY = `${Math.floor(20 + Math.random() * 60)}%`;
 
     const newStar = {
       position: randomPosition,
       color: randomColor,
-      size: 0.35,
+      size: 0.36,
+      previewX,
+      previewY,
     };
 
-    setMyStars([...myStars, newStar]);
+    // 1) 내 우주에 별 추가
+    setMyStars((prev) => [...prev, newStar]);
+
+    // 2) 체크된 그룹이 있다면 해당 그룹들의 우주에도 똑같은 별 추가!
+    if (selectedGroupIds.length > 0) {
+      setGroups((prevGroups) =>
+        prevGroups.map((group) =>
+          selectedGroupIds.includes(group.id)
+            ? { ...group, stars: [...group.stars, newStar] }
+            : group
+        )
+      );
+    }
+
+    // 입력 초기화 및 홈 화면으로 이동
     setDiaryText('');
+    setSelectedGroupIds([]);
     setCurrentScreen('home');
   };
 
-  // 친구 초대 함수
-  const handleInviteFriend = () => {
-    if (!friendNameInput.trim()) return;
-    setGroupMembers([...groupMembers, friendNameInput.trim()]);
-    const randomPos = [
-      (Math.random() - 0.5) * 3,
-      (Math.random() - 0.5) * 3,
-      -1 - Math.random() * 2,
-    ];
-    const colors = ['#ff9ff3', '#54a0ff', '#5f27cd', '#1dd1a1', '#ff6b6b'];
-    const randomColor = colors[Math.floor(Math.random() * colors.length)];
-    setGroupStars([
-      ...groupStars,
-      { position: randomPos, color: randomColor, size: 0.35, author: friendNameInput.trim() },
-    ]);
-    setFriendNameInput('');
-    setInviteModalVisible(false);
+  // ➕ 오른쪽 화면에서 새로운 그룹 생성 함수
+  const handleCreateGroup = () => {
+    const defaultName = `그룹${groups.length + 1}`;
+    const finalName = newGroupName.trim() ? newGroupName.trim() : defaultName;
+
+    const newGroup = {
+      id: `group-${Date.now()}`,
+      name: finalName,
+      stars: [], // 처음 생성 시 별은 0개 (일기를 공유하면 추가됨)
+    };
+
+    setGroups([...groups, newGroup]);
+    setNewGroupName('');
+    setCreateGroupModalVisible(false);
   };
 
   return (
     <View style={styles.container}>
       
       {/* ==========================================
-          화면 1: 우주 홈 화면 (가운데 메인 화면)
+          화면 1 (가운데): 우주 홈 화면
       ========================================== */}
       {currentScreen === 'home' && (
         <View style={styles.universeContainer}>
-          {/* 👇 3D 우주 터치 전용 센서 영역 (1손가락 회전 / 2손가락 확대·축소) 👇 */}
+          {/* 은하수 배경 점들 */}
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            {BG_DOTS.map((dot) => (
+              <View
+                key={dot.id}
+                style={{
+                  position: 'absolute',
+                  top: dot.top,
+                  left: dot.left,
+                  width: dot.size,
+                  height: dot.size,
+                  borderRadius: dot.size / 2,
+                  backgroundColor: '#fff',
+                  opacity: dot.opacity,
+                }}
+              />
+            ))}
+          </View>
+
+          {/* 👇 3D 우주 터치 전용 센서 영역 👇 */}
           <View
             style={{ flex: 1 }}
             onStartShouldSetResponder={() => true}
@@ -221,72 +288,289 @@ export default function App() {
 
           {/* 상단 바 (우주 위에 떠 있음) */}
           <View style={styles.topBar}>
-            <TouchableOpacity style={styles.iconButton}>
-              <Text style={styles.whiteText}>☰</Text>
+            <TouchableOpacity style={styles.iconButton} onPress={() => setCurrentScreen('community')}>
+              <Text style={styles.iconButtonText}>☰</Text>
             </TouchableOpacity>
             
             <TouchableOpacity style={styles.statsPill} onPress={() => setCurrentScreen('shop')}>
-              <Text style={styles.statsText}>★ {myStars.length}   🪙 999   ✔️ 2</Text>
+              <Text style={styles.statsText}>★ {myStars.length}     🪙 999     ✔️ 2</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.questButton} onPress={() => setQuestVisible(true)}>
               <Text style={styles.questText}>Quest</Text>
             </TouchableOpacity>
           </View>
-
-          {/* ➕ 오른쪽 하단: 별(일기) 생성 버튼 */}
-          <TouchableOpacity
-            style={styles.addStarFab}
-            onPress={() => setCurrentScreen('diary')}
-          >
-            <Text style={styles.addStarFabText}>+</Text>
-          </TouchableOpacity>
         </View>
       )}
 
       {/* ==========================================
-          화면 2: 일기 작성 화면 (수정하지 않음)
+          화면 2 (왼쪽): 일기 작성 화면 (left-write 시안 반영)
       ========================================== */}
       {currentScreen === 'diary' && (
-        <ScrollView style={styles.diaryContainer}>
-          <TouchableOpacity onPress={() => setCurrentScreen('home')}>
-            <Text style={styles.backText}>{'< 나의 우주'}</Text>
-          </TouchableOpacity>
+        <View style={styles.diaryScreenWrapper}>
+          <View style={styles.diaryOuterCard}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
+              {/* 상단: 나의 우주로 돌아가기 */}
+              <TouchableOpacity onPress={() => setCurrentScreen('home')}>
+                <Text style={styles.diaryBackText}>{'‹  나의 우주'}</Text>
+              </TouchableOpacity>
 
-          <Text style={styles.diaryTitle}>오늘은 어떤 별일이 있었나요?</Text>
-          <Text style={styles.diaryDate}>2026년 9월 17일 목요일</Text>
+              {/* 타이틀 & 날짜 */}
+              <Text style={styles.diaryMainTitle}>오늘은 어떤 별일이 있었나요?</Text>
+              <Text style={styles.diaryDateText}>2026년 9월 17일 목요일</Text>
 
-          <View style={styles.diaryCard}>
-            <Text style={styles.diaryCardTitle}>발표가 끝나고 찾아온 뿌듯함</Text>
-            <TextInput 
-              style={styles.diaryInput}
-              multiline={true}
-              placeholder="여기에 일기를 적어보세요..."
-              placeholderTextColor="#999"
-              value={diaryText}
-              onChangeText={setDiaryText}
-            />
-            <Text style={styles.wordCount}>{diaryText.length}자 · 자동 저장됨</Text>
-          </View>
+              <View style={styles.diaryDivider} />
 
-          <View style={styles.photoSection}>
-            <Text style={styles.photoTitle}>오늘의 장면 <Text style={styles.photoSubtitle}>사진 1 / 5</Text></Text>
-            <View style={styles.photoBoxes}>
-              <View style={styles.photoBoxPlaceholder}>
-                 <View style={styles.fakeSun} />
-                 <View style={styles.fakeMountain1} />
-                 <View style={styles.fakeMountain2} />
+              {/* 본문 입력 영역 */}
+              <TextInput
+                style={styles.diaryTextInput}
+                multiline={true}
+                placeholder="글을 입력해주세요."
+                placeholderTextColor="#222"
+                value={diaryText}
+                onChangeText={setDiaryText}
+              />
+
+              <View style={styles.diaryDivider} />
+
+              {/* 오늘의 장면 (사진 영역) */}
+              <View style={styles.photoHeaderRow}>
+                <Text style={styles.photoSectionTitle}>오늘의 장면</Text>
+                <Text style={styles.photoCountText}>사진 1 / 5</Text>
               </View>
-              <TouchableOpacity style={styles.addPhotoBox}>
-                <Text style={styles.addPhotoText}>+{"\n"}사진 추가</Text>
+
+              <View style={styles.photoBoxesRow}>
+                {/* 첫 번째 사진 아이콘 박스 */}
+                <View style={styles.photoIconBox}>
+                  <View style={styles.photoSunCircle} />
+                  <View style={styles.photoMountainLeft} />
+                  <View style={styles.photoMountainRight} />
+                </View>
+
+                {/* 두 번째 사진 추가(+) 박스 */}
+                <TouchableOpacity style={styles.photoAddBox}>
+                  <Text style={styles.photoAddPlus}>+</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.diaryDivider} />
+
+              {/* 🔒 공개 범위 및 그룹 선택 알약 버튼들 */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.sharePillsRow}
+              >
+                {/* 비공개 버튼 */}
+                <TouchableOpacity
+                  style={[
+                    styles.sharePill,
+                    selectedGroupIds.length === 0 && styles.sharePillSelected,
+                  ]}
+                  onPress={handleSelectPrivate}
+                >
+                  <Text style={styles.sharePillText}>🔒 비공개</Text>
+                </TouchableOpacity>
+
+                {/* 생성된 그룹 버튼들 (그룹1, 그룹2, ...) */}
+                {groups.map((group) => {
+                  const isSelected = selectedGroupIds.includes(group.id);
+                  return (
+                    <TouchableOpacity
+                      key={group.id}
+                      style={[styles.sharePill, isSelected && styles.sharePillSelected]}
+                      onPress={() => handleToggleGroupSelect(group.id)}
+                    >
+                      <Text style={styles.sharePillText}>{group.name}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              {/* 하단: 오늘의 별 띄우기 버튼 */}
+              <TouchableOpacity style={styles.submitStarButton} onPress={handleAddDiaryStar}>
+                <Text style={styles.submitStarButtonText}>오늘의 별 띄우기</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      )}
+
+      {/* ==========================================
+          화면 3 (오른쪽): 그룹 우주 화면 (right-group 시안 반영)
+      ========================================== */}
+      {currentScreen === 'group' && (
+        <View style={styles.groupScreenWrapper}>
+          <Text style={styles.groupHeaderTitle}>우리의 우주</Text>
+
+          <ScrollView
+            style={styles.groupListScroll}
+            contentContainerStyle={{ paddingBottom: 40 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {groups.map((group) => {
+              // 오른쪽 하단 별 5개 중 연두색으로 칠할 개수 계산 (최대 5개)
+              const activeStarCount = Math.min(group.stars.length, 5);
+              return (
+                <TouchableOpacity
+                  key={group.id}
+                  activeOpacity={0.85}
+                  style={styles.groupCard}
+                  onPress={() => setActiveGroup3D(group)}
+                >
+                  {/* 카드 상단: 그룹 우주 미리보기 창 */}
+                  <View style={styles.groupUniversePreview}>
+                    {/* 은하수 작은 배경 별들 */}
+                    {BG_DOTS.slice(0, 18).map((dot) => (
+                      <View
+                        key={dot.id}
+                        style={{
+                          position: 'absolute',
+                          top: dot.top,
+                          left: dot.left,
+                          width: dot.size,
+                          height: dot.size,
+                          borderRadius: dot.size / 2,
+                          backgroundColor: '#fff',
+                          opacity: dot.opacity,
+                        }}
+                      />
+                    ))}
+
+                    {/* 이 그룹에 공유된 빛나는 별들 */}
+                    {group.stars.map((star, idx) => (
+                      <View
+                        key={idx}
+                        style={[
+                          styles.previewGlowingStar,
+                          {
+                            top: star.previewY || `${30 + ((idx * 25) % 50)}%`,
+                            left: star.previewX || `${25 + ((idx * 30) % 55)}%`,
+                            backgroundColor: star.color,
+                            shadowColor: star.color,
+                          },
+                        ]}
+                      />
+                    ))}
+                  </View>
+
+                  {/* 카드 하단: 그룹 이름 & 별 진행도 아이콘 */}
+                  <View style={styles.groupCardFooter}>
+                    <Text style={styles.groupCardName}>{group.name}</Text>
+                    <View style={styles.groupStarIconsRow}>
+                      {[0, 1, 2, 3, 4].map((starIdx) => {
+                        // 오른쪽 끝부터 연두색 별이 채워지도록 표현
+                        const isNeon = starIdx >= 5 - activeStarCount;
+                        return (
+                          <Text
+                            key={starIdx}
+                            style={[
+                              styles.groupFooterStar,
+                              isNeon ? styles.neonGreenStar : styles.darkStar,
+                            ]}
+                          >
+                            ★
+                          </Text>
+                        );
+                      })}
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+
+            {/* ➕ 새 그룹 추가 동그란 버튼 */}
+            <View style={styles.addGroupBtnWrapper}>
+              <TouchableOpacity
+                style={styles.addGroupCircleBtn}
+                onPress={() => setCreateGroupModalVisible(true)}
+              >
+                <Text style={styles.addGroupPlusText}>+</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </ScrollView>
 
-          <TouchableOpacity style={styles.submitButton} onPress={handleAddDiaryStar}>
-            <Text style={styles.submitButtonText}>오늘의 별 띄우기</Text>
-          </TouchableOpacity>
-        </ScrollView>
+          {/* 팝업 1: 새 그룹 추가 모달 */}
+          <Modal transparent={true} visible={createGroupModalVisible} animationType="fade">
+            <TouchableOpacity
+              style={styles.modalOverlay}
+              activeOpacity={1}
+              onPress={() => setCreateGroupModalVisible(false)}
+            >
+              <TouchableOpacity activeOpacity={1} style={styles.inviteModalCard}>
+                <Text style={styles.inviteModalTitle}>🪐 새로운 그룹 우주 만들기</Text>
+                <Text style={styles.inviteModalDesc}>
+                  일기를 작성할 때 그룹을 선택하면 내 우주와 그룹 우주에 함께 별이 떠요!
+                </Text>
+                <TextInput
+                  style={styles.inviteInput}
+                  placeholder={`그룹 이름 (비워두면 '그룹${groups.length + 1}')`}
+                  placeholderTextColor="#888"
+                  value={newGroupName}
+                  onChangeText={setNewGroupName}
+                />
+                <View style={styles.inviteModalButtonRow}>
+                  <TouchableOpacity
+                    style={styles.inviteCancelBtn}
+                    onPress={() => setCreateGroupModalVisible(false)}
+                  >
+                    <Text style={styles.whiteText}>취소</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.inviteConfirmBtn}
+                    onPress={handleCreateGroup}
+                  >
+                    <Text style={styles.inviteConfirmText}>생성하기</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </Modal>
+
+          {/* 팝업 2: 그룹 카드를 눌렀을 때 해당 그룹 우주를 3D로 크게 보기 */}
+          <Modal transparent={false} visible={activeGroup3D !== null} animationType="slide">
+            {activeGroup3D && (
+              <View style={styles.container}>
+                <View
+                  style={{ flex: 1 }}
+                  onStartShouldSetResponder={() => true}
+                  onMoveShouldSetResponder={() => true}
+                  onStartShouldSetResponderCapture={() => true}
+                  onMoveShouldSetResponderCapture={() => true}
+                  onResponderGrant={handleTouchStart}
+                  onResponderMove={handleTouchMove}
+                  onResponderRelease={handleTouchEnd}
+                >
+                  <View style={{ flex: 1 }} pointerEvents="none">
+                    <Canvas style={{ flex: 1 }}>
+                      <UniverseScene
+                        stars={
+                          groups.find((g) => g.id === activeGroup3D.id)?.stars || []
+                        }
+                      />
+                    </Canvas>
+                  </View>
+                </View>
+
+                <View style={styles.topBar}>
+                  <TouchableOpacity
+                    style={styles.questButton}
+                    onPress={() => setActiveGroup3D(null)}
+                  >
+                    <Text style={styles.questText}>{'< 목록으로'}</Text>
+                  </TouchableOpacity>
+                  <View style={styles.statsPill}>
+                    <Text style={styles.statsText}>
+                      {activeGroup3D.name}의 우주 (★{' '}
+                      {groups.find((g) => g.id === activeGroup3D.id)?.stars.length || 0})
+                    </Text>
+                  </View>
+                  <View style={{ width: 60 }} />
+                </View>
+              </View>
+            )}
+          </Modal>
+        </View>
       )}
 
       {/* ==========================================
@@ -320,7 +604,7 @@ export default function App() {
       </Modal>
 
       {/* ==========================================
-          화면 3: 커뮤니티 화면 (왼쪽 화면)
+          부가 화면: 커뮤니티 & 글쓰기 & 상점 (기존 기능 유지)
       ========================================== */}
       {currentScreen === 'community' && (
         <View style={styles.communityContainer}>
@@ -339,50 +623,18 @@ export default function App() {
                 </View>
                 <Text style={styles.instaAuthor}>지구용사</Text>
               </View>
-              
               <View style={styles.instaImagePlaceholder}>
                 <Text style={styles.instaImageText}>own space capture{"\n"}picture</Text>
               </View>
-              
               <View style={styles.instaActions}>
                 <Text style={styles.actionIcon}>🤍 97</Text>
                 <Text style={styles.actionIcon}>💬 5</Text>
-              </View>
-              
-              <View style={styles.commentSection}>
-                <View style={styles.commentRow}>
-                  <Text style={styles.commentAuthor}>지우용사</Text>
-                  <Text style={styles.commentText}>우와 이뻐용</Text>
-                </View>
-                <View style={styles.commentRow}>
-                  <Text style={styles.commentAuthor}>지구용사_567</Text>
-                  <Text style={styles.commentText}>멋있어요 잘 보고 갑니다</Text>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.instaCard}>
-              <View style={styles.instaHeader}>
-                <View style={styles.profileCircleOuter}>
-                  <View style={styles.profileCircleInner} />
-                </View>
-                <Text style={styles.instaAuthor}>우주용사</Text>
-              </View>
-              
-              <View style={styles.instaImagePlaceholder} />
-              
-              <View style={styles.instaActions}>
-                <Text style={styles.actionIcon}>🤍 67</Text>
-                <Text style={styles.actionIcon}>💬 3</Text>
               </View>
             </View>
           </ScrollView>
         </View>
       )}
 
-      {/* ==========================================
-          화면 4: 자랑하기 (새 글 쓰기) 화면
-      ========================================== */}
       {currentScreen === 'write_post' && (
         <View style={styles.writeContainer}>
           <View style={styles.writeHeader}>
@@ -397,7 +649,6 @@ export default function App() {
               <Text style={styles.writeShareText}>공유</Text>
             </TouchableOpacity>
           </View>
-
           <ScrollView style={styles.writeScroll}>
             <View style={styles.writeImagePlaceholder}>
               <Text style={styles.writeImageText}>+ 캡처한 우주 사진 추가</Text>
@@ -412,9 +663,6 @@ export default function App() {
         </View>
       )}
 
-      {/* ==========================================
-          화면 5: 상점 화면 (수정하지 않음)
-      ========================================== */}
       {currentScreen === 'shop' && (
         <View style={styles.shopContainer}>
           <View style={styles.shopHeader}>
@@ -432,32 +680,23 @@ export default function App() {
                 <Text style={styles.shopItemDesc}>연속 출석 멈춤을 1회 방어할 수 있다.</Text>
                 <Text style={styles.shopPriceText}>🪙 30</Text>
               </View>
-
               <View style={styles.shopItemCard}>
                 <Text style={styles.shopItemIcon}>🌌</Text>
                 <Text style={styles.shopItemName}>배경 (blue)</Text>
                 <Text style={styles.shopItemDesc}>나의 우주 배경을 바꿀 수 있다.</Text>
                 <Text style={styles.shopPriceText}>🪙 50</Text>
               </View>
-
               <View style={styles.shopItemCard}>
                 <Text style={styles.shopItemIcon}>☄️</Text>
                 <Text style={styles.shopItemName}>혜성</Text>
                 <Text style={styles.shopItemDesc}>5초마다 나의 우주에 혜성이 떨어진다.</Text>
                 <Text style={styles.shopPriceText}>🪙 30</Text>
               </View>
-
               <View style={styles.shopItemCard}>
                 <Text style={styles.shopItemIcon}>🌃</Text>
                 <Text style={styles.shopItemName}>배경 (black)</Text>
                 <Text style={styles.shopItemDesc}>나의 우주 배경을 바꿀 수 있다.</Text>
                 <Text style={styles.shopPriceText}>🪙 50</Text>
-              </View>
-
-              <View style={styles.shopItemCard}>
-                <View style={styles.comingSoonContainer}>
-                  <Text style={styles.comingSoonText}>coming{"\n"}soon{"\n"}...</Text>
-                </View>
               </View>
             </View>
           </ScrollView>
@@ -465,91 +704,13 @@ export default function App() {
       )}
 
       {/* ==========================================
-          화면 6: 오른쪽 화면 - 친구들과 함께 쓰는 모임 우주
-      ========================================== */}
-      {currentScreen === 'group' && (
-        <View style={styles.groupScreenContainer}>
-          <View style={styles.groupOuterCard}>
-            <View style={styles.groupHeaderRow}>
-              <View>
-                <Text style={styles.groupTitleText}>어쩌구모임의 우주</Text>
-                <Text style={styles.groupMemberText}>
-                  참여 중: {groupMembers.join(', ')} ({groupMembers.length}명)
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.inviteButton}
-                onPress={() => setInviteModalVisible(true)}
-              >
-                <Text style={styles.inviteButtonText}>+ 친구 초대</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View
-              style={styles.groupInnerUniverse}
-              onStartShouldSetResponder={() => true}
-              onMoveShouldSetResponder={() => true}
-              onStartShouldSetResponderCapture={() => true}
-              onMoveShouldSetResponderCapture={() => true}
-              onResponderGrant={handleTouchStart}
-              onResponderMove={handleTouchMove}
-              onResponderRelease={handleTouchEnd}
-            >
-              <View style={{ flex: 1 }} pointerEvents="none">
-                <Canvas style={{ flex: 1 }}>
-                  <UniverseScene stars={groupStars} />
-                </Canvas>
-              </View>
-            </View>
-          </View>
-
-          {/* 팝업: 친구 초대 모달 */}
-          <Modal transparent={true} visible={inviteModalVisible} animationType="fade">
-            <TouchableOpacity
-              style={styles.modalOverlay}
-              activeOpacity={1}
-              onPress={() => setInviteModalVisible(false)}
-            >
-              <TouchableOpacity activeOpacity={1} style={styles.inviteModalCard}>
-                <Text style={styles.inviteModalTitle}>🪐 같은 우주에 친구 초대하기</Text>
-                <Text style={styles.inviteModalDesc}>
-                  초대한 친구가 일기를 쓰면 우리 모임의 우주에 함께 별이 떠요!
-                </Text>
-                <TextInput
-                  style={styles.inviteInput}
-                  placeholder="초대할 친구 닉네임 입력"
-                  placeholderTextColor="#888"
-                  value={friendNameInput}
-                  onChangeText={setFriendNameInput}
-                />
-                <View style={styles.inviteModalButtonRow}>
-                  <TouchableOpacity
-                    style={styles.inviteCancelBtn}
-                    onPress={() => setInviteModalVisible(false)}
-                  >
-                    <Text style={styles.whiteText}>닫기</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.inviteConfirmBtn}
-                    onPress={handleInviteFriend}
-                  >
-                    <Text style={styles.inviteConfirmText}>초대하기</Text>
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-            </TouchableOpacity>
-          </Modal>
-        </View>
-      )}
-
-      {/* ==========================================
-          공통: 하단 네비게이션 (버튼 클릭 이동 방식)
-          왼쪽: 커뮤니티 / 가운데: 메인(홈) / 오른쪽: 모임 우주
+          공통: 하단 네비게이션
+          왼쪽: 일기 작성(diary) / 가운데: 홈(home) / 오른쪽: 그룹 우주(group)
       ========================================== */}
       <View style={styles.bottomNav}>
         <TouchableOpacity 
-          style={[styles.navPill, (currentScreen === 'community' || currentScreen === 'write_post') && styles.activePill]} 
-          onPress={() => setCurrentScreen('community')} 
+          style={[styles.navPill, currentScreen === 'diary' && styles.activePill]} 
+          onPress={() => setCurrentScreen('diary')} 
         />
         <TouchableOpacity 
           style={[styles.navPill, styles.navPillLong, currentScreen === 'home' && styles.activePill]} 
@@ -573,67 +734,281 @@ const styles = StyleSheet.create({
   whiteText: { color: '#fff' },
   grayText: { color: '#a4b0be' },
   
+  // 1. 가운데 홈(우주) 화면 스타일
   universeContainer: { flex: 1, position: 'relative' },
   topBar: {
     position: 'absolute', top: 60, left: 20, right: 20,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 10,
   },
-  iconButton: { backgroundColor: '#333', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10 },
-  statsPill: { backgroundColor: '#a4b0be', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20 },
-  statsText: { fontWeight: 'bold', color: '#111' },
-  questButton: { backgroundColor: '#a4b0be', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 15 },
-  questText: { fontWeight: 'bold', color: '#111' },
+  iconButton: { backgroundColor: '#7f8c8d', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 10 },
+  iconButtonText: { color: '#111', fontSize: 18, fontWeight: 'bold' },
+  statsPill: { backgroundColor: '#7f8c8d', paddingHorizontal: 18, paddingVertical: 8, borderRadius: 12 },
+  statsText: { fontWeight: 'bold', color: '#111', fontSize: 14 },
+  questButton: { backgroundColor: '#7f8c8d', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+  questText: { fontWeight: 'bold', color: '#111', fontSize: 14 },
 
-  // ➕ 오른쪽 하단 별(일기) 생성 플로팅 버튼 스타일
-  addStarFab: {
+  // 2. 왼쪽 일기 작성 화면 스타일 (left-write 시안 반영)
+  diaryScreenWrapper: {
+    flex: 1,
+    backgroundColor: '#000',
+    paddingTop: 65,
+    paddingBottom: 110,
+    paddingHorizontal: 18,
+  },
+  diaryOuterCard: {
+    flex: 1,
+    backgroundColor: '#787878',
+    borderRadius: 26,
+    paddingHorizontal: 22,
+    paddingTop: 22,
+    paddingBottom: 20,
+  },
+  diaryBackText: {
+    color: '#111',
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  diaryMainTitle: {
+    color: '#000',
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 6,
+  },
+  diaryDateText: {
+    color: '#333',
+    fontSize: 13,
+    marginBottom: 14,
+  },
+  diaryDivider: {
+    height: 1,
+    backgroundColor: '#222',
+    marginVertical: 12,
+  },
+  diaryTextInput: {
+    color: '#000',
+    fontSize: 14,
+    minHeight: 200,
+    textAlignVertical: 'top',
+  },
+  photoHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  photoSectionTitle: {
+    color: '#000',
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+  photoCountText: {
+    color: '#222',
+    fontSize: 12,
+  },
+  photoBoxesRow: {
+    flexDirection: 'row',
+    gap: 14,
+    marginBottom: 8,
+  },
+  photoIconBox: {
+    width: 96,
+    height: 96,
+    backgroundColor: '#000',
+    borderRadius: 14,
+    borderWidth: 4,
+    borderColor: '#d9d9d9',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  photoSunCircle: {
     position: 'absolute',
-    bottom: 145,
-    right: 25,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#dcdde1',
+    top: 16,
+    left: 16,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#d9d9d9',
+  },
+  photoMountainLeft: {
+    position: 'absolute',
+    bottom: -18,
+    left: 4,
+    width: 52,
+    height: 52,
+    backgroundColor: '#d9d9d9',
+    transform: [{ rotate: '45deg' }],
+  },
+  photoMountainRight: {
+    position: 'absolute',
+    bottom: -12,
+    right: -4,
+    width: 60,
+    height: 60,
+    backgroundColor: '#d9d9d9',
+    transform: [{ rotate: '45deg' }],
+  },
+  photoAddBox: {
+    width: 96,
+    height: 96,
+    backgroundColor: '#d9d9d9',
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 20,
-    shadowColor: '#fff',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 5,
   },
-  addStarFabText: {
-    color: '#05050A',
-    fontSize: 32,
+  photoAddPlus: {
+    color: '#a0a0a0',
+    fontSize: 42,
+    fontWeight: '300',
+    lineHeight: 46,
+  },
+  sharePillsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 6,
+    marginBottom: 18,
+  },
+  sharePill: {
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: 20,
+    backgroundColor: '#9e9e9e',
+    borderWidth: 1,
+    borderColor: '#444',
+  },
+  sharePillSelected: {
+    backgroundColor: '#d9d9d9',
+    borderColor: '#d9d9d9',
+  },
+  sharePillText: {
+    color: '#000',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  submitStarButton: {
+    backgroundColor: '#bdbdbd',
+    paddingVertical: 15,
+    borderRadius: 18,
+    alignItems: 'center',
+    marginTop: 'auto',
+  },
+  submitStarButtonText: {
+    color: '#000',
+    fontSize: 14,
     fontWeight: 'bold',
+  },
+
+  // 3. 오른쪽 그룹 우주 화면 스타일 (right-group 시안 반영)
+  groupScreenWrapper: {
+    flex: 1,
+    backgroundColor: '#000',
+    paddingTop: 75,
+    paddingBottom: 100,
+    paddingHorizontal: 22,
+  },
+  groupHeaderTitle: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 22,
+  },
+  groupListScroll: {
+    flex: 1,
+  },
+  groupCard: {
+    backgroundColor: '#9e9e9e',
+    borderRadius: 22,
+    padding: 12,
+    marginBottom: 22,
+  },
+  groupUniversePreview: {
+    width: '100%',
+    height: 155,
+    backgroundColor: '#08080c',
+    borderRadius: 16,
+    overflow: 'hidden',
+    position: 'relative',
+    marginBottom: 10,
+  },
+  previewGlowingStar: {
+    position: 'absolute',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.95,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  groupCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  groupCardName: {
+    color: '#000',
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+  groupStarIconsRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  groupFooterStar: {
+    fontSize: 18,
+  },
+  neonGreenStar: {
+    color: '#76ff03',
+  },
+  darkStar: {
+    color: '#1a1a1a',
+  },
+  addGroupBtnWrapper: {
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 30,
+  },
+  addGroupCircleBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#787878',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addGroupPlusText: {
+    color: '#ccc',
+    fontSize: 30,
+    fontWeight: '300',
     lineHeight: 34,
   },
 
-  diaryContainer: {
-    flex: 1, paddingTop: 60, paddingHorizontal: 25,
-    backgroundColor: 'rgba(20,20,30,0.8)', 
+  // 공통 하단 네비게이션
+  bottomNav: {
+    position: 'absolute',
+    bottom: 100,
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
   },
-  backText: { color: '#fff', fontSize: 16, marginBottom: 20 },
-  diaryTitle: { color: '#fff', fontSize: 24, fontWeight: 'bold', marginBottom: 5 },
-  diaryDate: { color: '#999', fontSize: 14, marginBottom: 25 },
-  diaryCard: { backgroundColor: '#1E1E24', borderRadius: 20, padding: 25, minHeight: 280, marginBottom: 30 },
-  diaryCardTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginBottom: 15 },
-  diaryInput: { color: '#fff', fontSize: 16, flex: 1, textAlignVertical: 'top' },
-  wordCount: { color: '#888', fontSize: 12, marginTop: 10 },
-  photoSection: { marginBottom: 120 }, 
-  photoTitle: { color: '#fff', fontSize: 16, marginBottom: 15, fontWeight: 'bold' },
-  photoSubtitle: { color: '#888', fontSize: 14, fontWeight: 'normal' },
-  photoBoxes: { flexDirection: 'row', gap: 15 },
-  addPhotoBox: { width: 110, height: 110, backgroundColor: '#111115', borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
-  addPhotoText: { color: '#fff', textAlign: 'center', fontSize: 14, lineHeight: 22 },
-  submitButton: { backgroundColor: '#4b4b5c', padding: 18, borderRadius: 15, alignItems: 'center', marginBottom: 120 },
-  submitButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  navPill: {
+    width: 38,
+    height: 18,
+    backgroundColor: '#7f8c8d',
+    borderRadius: 10,
+  },
+  navPillLong: {
+    width: 115,
+  },
+  activePill: {
+    backgroundColor: '#dcdde1',
+  },
 
-  photoBoxPlaceholder: { width: 110, height: 110, backgroundColor: '#95a5a6', borderRadius: 15, overflow: 'hidden', position: 'relative' },
-  fakeSun: { position: 'absolute', top: 20, right: 20, width: 20, height: 20, backgroundColor: '#f1c40f', borderRadius: 10 },
-  fakeMountain1: { position: 'absolute', bottom: -10, left: -20, width: 100, height: 60, backgroundColor: '#2c3e50', transform: [{ rotate: '45deg' }] },
-  fakeMountain2: { position: 'absolute', bottom: -20, right: -10, width: 80, height: 80, backgroundColor: '#34495e', transform: [{ rotate: '45deg' }] },
-
+  // 모달 & 기타 화면 스타일
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
   questCard: {
     position: 'absolute', top: 120, right: 20, width: 220,
@@ -646,56 +1021,42 @@ const styles = StyleSheet.create({
   progressBar: { height: 4, backgroundColor: '#444', borderRadius: 2, marginBottom: 10 },
   progressFill: { height: '100%', backgroundColor: '#80e03e', borderRadius: 2 },
 
-  bottomNav: {
-    position: 'absolute', bottom: 100, width: '100%',
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 15,
+  inviteModalCard: {
+    width: '82%',
+    backgroundColor: '#1E1E24',
+    borderRadius: 20,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: '#333',
   },
-  navPill: { width: 45, height: 18, backgroundColor: '#636e72', borderRadius: 10 },
-  navPillLong: { width: 90 },
-  activePill: { backgroundColor: '#dcdde1' },
+  inviteModalTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginBottom: 8 },
+  inviteModalDesc: { color: '#a4b0be', fontSize: 13, marginBottom: 16, lineHeight: 18 },
+  inviteInput: {
+    backgroundColor: '#111115', color: '#fff', borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, marginBottom: 16,
+  },
+  inviteModalButtonRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
+  inviteCancelBtn: { backgroundColor: '#444', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
+  inviteConfirmBtn: { backgroundColor: '#3498db', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
+  inviteConfirmText: { color: '#fff', fontWeight: 'bold' },
 
-  // 🔥 인스타 스타일 커뮤니티 디자인
-  communityContainer: {
-    flex: 1, paddingTop: 60, paddingHorizontal: 15,
-    backgroundColor: '#000',
-  },
-  communityHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginBottom: 20, marginTop: 10,
-  },
+  // 커뮤니티 & 상점 스타일 유지
+  communityContainer: { flex: 1, paddingTop: 60, paddingHorizontal: 15, backgroundColor: '#000' },
+  communityHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, marginTop: 10 },
   communityHeaderTitle: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
   bragButton: { backgroundColor: '#cfd8dc', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 5 },
   bragButtonText: { color: '#000', fontWeight: 'bold', fontSize: 14 },
-  
   communityScroll: { marginBottom: 80 },
-  instaCard: { 
-    backgroundColor: '#000', borderRadius: 15, padding: 15, marginBottom: 20,
-    borderWidth: 1, borderColor: '#333'
-  },
+  instaCard: { backgroundColor: '#000', borderRadius: 15, padding: 15, marginBottom: 20, borderWidth: 1, borderColor: '#333' },
   instaHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
-  profileCircleOuter: { 
-    width: 32, height: 32, borderRadius: 16, 
-    borderWidth: 2, borderColor: '#fff', 
-    justifyContent: 'center', alignItems: 'center', marginRight: 10 
-  },
+  profileCircleOuter: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: '#fff', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
   profileCircleInner: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#555' },
   instaAuthor: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  
-  instaImagePlaceholder: { 
-    width: '100%', height: 250, backgroundColor: '#57606f', 
-    justifyContent: 'center', alignItems: 'center', marginBottom: 15 
-  },
+  instaImagePlaceholder: { width: '100%', height: 250, backgroundColor: '#57606f', justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
   instaImageText: { color: '#fff', textAlign: 'center', fontSize: 14 },
-  
   instaActions: { flexDirection: 'row', gap: 20, marginBottom: 15 },
   actionIcon: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  
-  commentSection: { marginTop: 5 },
-  commentRow: { flexDirection: 'row', marginBottom: 8 },
-  commentAuthor: { color: '#fff', fontWeight: 'bold', fontSize: 14, marginRight: 10, width: 90 },
-  commentText: { color: '#dcdde1', fontSize: 14, flex: 1 },
 
-  // 🔥 글쓰기 화면 디자인
   writeContainer: { flex: 1, backgroundColor: '#000', paddingTop: 20 },
   writeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 15, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: '#333' },
   writeCancelText: { color: '#fff', fontSize: 16 },
@@ -706,125 +1067,16 @@ const styles = StyleSheet.create({
   writeImageText: { color: '#888', fontSize: 16, fontWeight: 'bold' },
   writeInput: { color: '#fff', fontSize: 16, paddingHorizontal: 15, height: 150, textAlignVertical: 'top' },
 
-  // 🔥 상점 화면 디자인
   shopContainer: { flex: 1, backgroundColor: '#000', paddingTop: 60, paddingHorizontal: 20 },
   shopHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
   shopTitle: { color: '#fff', fontSize: 26, fontWeight: 'bold' },
   shopCoinPill: { backgroundColor: '#7f8c8d', paddingHorizontal: 18, paddingVertical: 8, borderRadius: 10 },
   shopCoinText: { color: '#000', fontWeight: 'bold', fontSize: 16 },
-  
   shopScroll: { flex: 1, marginBottom: 80 },
   shopGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  shopItemCard: { 
-    backgroundColor: '#b2bec3', width: '48%', borderRadius: 10, padding: 15, 
-    alignItems: 'center', marginBottom: 15 
-  },
+  shopItemCard: { backgroundColor: '#b2bec3', width: '48%', borderRadius: 10, padding: 15, alignItems: 'center', marginBottom: 15 },
   shopItemIcon: { fontSize: 50, marginBottom: 15 },
   shopItemName: { fontSize: 16, fontWeight: 'bold', marginBottom: 8, color: '#000' },
   shopItemDesc: { fontSize: 10, color: '#2d3436', textAlign: 'center', marginBottom: 20, minHeight: 30 },
   shopPriceText: { fontWeight: 'bold', fontSize: 16, color: '#000' },
-  
-  comingSoonContainer: { flex: 1, justifyContent: 'center', alignItems: 'flex-start', width: '100%', minHeight: 140 },
-  comingSoonText: { fontSize: 12, color: '#2d3436', textAlign: 'left' },
-
-  // 🔥 오른쪽 화면: 친구 모임 공유 우주 디자인
-  groupScreenContainer: {
-    flex: 1,
-    backgroundColor: '#05050A',
-    paddingTop: 70,
-    paddingBottom: 140,
-    paddingHorizontal: 18,
-  },
-  groupOuterCard: {
-    flex: 1,
-    backgroundColor: '#e6e6ea',
-    borderRadius: 28,
-    paddingTop: 18,
-    paddingBottom: 14,
-    paddingHorizontal: 14,
-  },
-  groupHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    marginBottom: 12,
-  },
-  groupTitleText: {
-    color: '#111',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  groupMemberText: {
-    color: '#555',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  inviteButton: {
-    backgroundColor: '#2d3436',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 14,
-  },
-  inviteButtonText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: 'bold',
-  },
-  groupInnerUniverse: {
-    flex: 1,
-    backgroundColor: '#05050A',
-    borderRadius: 22,
-    overflow: 'hidden',
-  },
-  inviteModalCard: {
-    width: '82%',
-    backgroundColor: '#1E1E24',
-    borderRadius: 20,
-    padding: 22,
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  inviteModalTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  inviteModalDesc: {
-    color: '#a4b0be',
-    fontSize: 13,
-    marginBottom: 16,
-    lineHeight: 18,
-  },
-  inviteInput: {
-    backgroundColor: '#111115',
-    color: '#fff',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    marginBottom: 16,
-  },
-  inviteModalButtonRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 10,
-  },
-  inviteCancelBtn: {
-    backgroundColor: '#444',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  inviteConfirmBtn: {
-    backgroundColor: '#3498db',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  inviteConfirmText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
 });
