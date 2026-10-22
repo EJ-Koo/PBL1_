@@ -8,7 +8,6 @@ import {
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -17,6 +16,7 @@ import {
   View,
 } from 'react-native';
 
+import WriteScreen from '@/app/write';
 import { CommunityScreen } from '@/components/community-screen';
 import { GroupsScreen } from '@/components/groups-screen';
 import { ShopScreen } from '@/components/shop-screen';
@@ -24,19 +24,25 @@ import { UniverseCanvas } from '@/components/universe-scene';
 import { useDiary } from '@/store/diary-context';
 
 const { width, height } = Dimensions.get('window');
-// 상점은 페이저 탭이 아니라 우주 화면 상단에서 여는 팝업(모달)으로 분리함 — UniversePage 참고.
-const PAGE_LABELS = ['나의 우주', '그룹', '커뮤니티'];
+// fffju 디자인대로 스와이프 3면: 왼쪽=일기 작성 / 가운데=나의 우주 / 오른쪽=그룹.
+// 상점은 우주 화면 상단 stats 알약 탭, 커뮤니티는 상단 ☰ 버튼으로 각각 팝업으로 연다.
+const PAGE_LABELS = ['일기', '나의 우주', '그룹'];
 
 export default function HomeScreen() {
   const { isLoggedIn } = useDiary();
   const scrollRef = useRef<ScrollView>(null);
-  const [pageIndex, setPageIndex] = useState(0);
+  // 가운데(나의 우주 = index 1)에서 시작
+  const [pageIndex, setPageIndex] = useState(1);
 
   useEffect(() => {
     if (!isLoggedIn) {
       router.replace('/login');
     }
   }, [isLoggedIn]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ x: width, y: 0, animated: false });
+  }, []);
 
   if (!isLoggedIn) {
     return <View style={styles.container} />;
@@ -61,23 +67,24 @@ export default function HomeScreen() {
         pagingEnabled
         scrollEnabled={false}
         showsHorizontalScrollIndicator={false}
+        contentOffset={{ x: width, y: 0 }}
         onMomentumScrollEnd={handleScrollEnd}
         onScrollEndDrag={handleScrollEnd}
       >
+        <View style={{ width, height }}>
+          <WriteScreen onComplete={() => goToPage(1)} />
+        </View>
         <View style={{ width, height }}>
           <UniversePage />
         </View>
         <View style={{ width, height }}>
           <GroupsScreen />
         </View>
-        <View style={{ width, height }}>
-          <CommunityScreen />
-        </View>
       </ScrollView>
 
-      {/* [MODIFIED] 스와이프 외에, 화면 오른쪽 끝을 탭하면 다음 페이지로 넘어가는 보조 동작 추가.
-          (요청: "스와이프 말고 오른쪽 화면으로 클릭을 하면 넘어가도록") */}
-      {pageIndex < PAGE_LABELS.length - 1 && (
+      {/* 화면 오른쪽 끝을 탭하면 다음 페이지로 넘어가는 보조 동작. 우주(가운데) 화면에서만 —
+          왼쪽 일기 작성 폼 위에 겹쳐 탭을 가로채지 않도록 가운데 페이지로 한정함. */}
+      {pageIndex === 1 && (
         <Pressable
           style={styles.nextZone}
           onPress={() => goToPage(pageIndex + 1)}
@@ -110,6 +117,7 @@ function UniversePage() {
   const { entries } = useDiary();
   const [questVisible, setQuestVisible] = useState(false);
   const [shopVisible, setShopVisible] = useState(false);
+  const [communityVisible, setCommunityVisible] = useState(false);
 
   return (
     <View style={styles.universeContainer}>
@@ -117,12 +125,15 @@ function UniversePage() {
 
       {entries.length === 0 && (
         <View style={styles.emptyState} pointerEvents="none">
-          <Text style={styles.emptyText}>아직 기록이 없어요.{'\n'}첫 별을 띄워보세요.</Text>
+          <Text style={styles.emptyText}>아직 기록이 없어요.{'\n'}왼쪽으로 넘겨 첫 별을 띄워보세요.</Text>
         </View>
       )}
 
-      {/* 우주 위에 떠 있는 상단 바. fffju 디자인대로 가운데 stats 알약을 누르면 상점이 열린다. */}
+      {/* 우주 위에 떠 있는 상단 바. fffju 디자인대로 ☰=커뮤니티, 가운데 stats 알약=상점, 오른쪽=퀘스트. */}
       <View style={styles.topBar} pointerEvents="box-none">
+        <TouchableOpacity style={styles.iconButton} onPress={() => setCommunityVisible(true)}>
+          <Text style={styles.iconButtonText}>☰</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.statsPill} onPress={() => setShopVisible(true)}>
           <Text style={styles.statsText}>★ {entries.length}   🪙 999   ✔️ 2</Text>
         </TouchableOpacity>
@@ -131,13 +142,7 @@ function UniversePage() {
         </TouchableOpacity>
       </View>
 
-      <Pressable style={styles.fab} onPress={() => router.push('/write')}>
-        <Text style={styles.fabText}>+</Text>
-      </Pressable>
-
-      {/* [MODIFIED] 원래 frontend/index.jsx의 퀘스트 패널(진행률 바 포함)을 그대로 복원함.
-          "커뮤니티"는 별도로 페이저의 세 번째 페이지(PlaceholderPage)로 옮김 — 이 버튼/모달은
-          그대로 "퀘스트"를 가리킴. 실제 커뮤니티 기능 내용/디자인은 아직 미정. */}
+      {/* [MODIFIED] 원래 frontend/index.jsx의 퀘스트 패널(진행률 바 포함)을 그대로 복원함. */}
       <Modal transparent visible={questVisible} animationType="fade">
         <Pressable style={styles.modalOverlay} onPress={() => setQuestVisible(false)}>
           <View style={styles.questCard}>
@@ -171,9 +176,18 @@ function UniversePage() {
         </Pressable>
       </Modal>
 
-      {/* 상점: 페이저 탭이 아니라 상단 버튼으로 여는 전체화면 팝업 */}
+      {/* 상점: 상단 stats 알약으로 여는 전체화면 팝업 */}
       <Modal visible={shopVisible} animationType="slide" onRequestClose={() => setShopVisible(false)}>
         <ShopScreen onClose={() => setShopVisible(false)} />
+      </Modal>
+
+      {/* 커뮤니티: 상단 ☰ 버튼으로 여는 전체화면 팝업 (fffju 디자인) */}
+      <Modal
+        visible={communityVisible}
+        animationType="slide"
+        onRequestClose={() => setCommunityVisible(false)}
+      >
+        <CommunityScreen onClose={() => setCommunityVisible(false)} />
       </Modal>
     </View>
   );
@@ -257,6 +271,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  iconButton: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
   statsPill: {
     backgroundColor: 'rgba(255,255,255,0.15)',
     paddingHorizontal: 15,
@@ -325,30 +352,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 8,
-  },
-  fab: {
-    position: 'absolute',
-    right: 24,
-    bottom: 40,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#7C6CF6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 6,
-    ...Platform.select({
-      web: { boxShadow: '0px 0px 12px rgba(124, 108, 246, 0.5)' },
-      default: {
-        shadowColor: '#7C6CF6',
-        shadowOpacity: 0.5,
-        shadowRadius: 12,
-      },
-    }),
-  },
-  fabText: {
-    color: '#FFFFFF',
-    fontSize: 28,
-    lineHeight: 30,
   },
 });

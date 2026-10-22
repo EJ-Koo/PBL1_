@@ -19,7 +19,7 @@ const POSTS = [
   { id: '2', author: '우주용사', likes: 67, comments: [] },
 ];
 
-export function CommunityScreen() {
+export function CommunityScreen({ onClose }: { onClose?: () => void } = {}) {
   const [view, setView] = useState<'feed' | 'write'>('feed');
 
   if (view === 'write') {
@@ -29,7 +29,14 @@ export function CommunityScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>✨ 다른 우주 구경하기</Text>
+        <View style={styles.headerLeft}>
+          {onClose && (
+            <Pressable style={styles.closeButton} onPress={onClose} hitSlop={8}>
+              <Text style={styles.closeText}>‹</Text>
+            </Pressable>
+          )}
+          <Text style={styles.headerTitle}>✨ 다른 우주 구경하기</Text>
+        </View>
         <Pressable style={styles.bragButton} onPress={() => setView('write')}>
           <Text style={styles.bragButtonText}>+ 자랑하기</Text>
         </Pressable>
@@ -115,7 +122,10 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     marginTop: 10,
   },
-  headerTitle: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
+  closeButton: { paddingHorizontal: 4 },
+  closeText: { color: '#fff', fontSize: 28, fontWeight: 'bold', lineHeight: 28 },
+  headerTitle: { color: '#fff', fontSize: 22, fontWeight: 'bold', flexShrink: 1 },
   bragButton: { backgroundColor: '#cfd8dc', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 5 },
   bragButtonText: { color: '#000', fontWeight: 'bold', fontSize: 14 },
 

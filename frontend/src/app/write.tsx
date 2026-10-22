@@ -17,7 +17,9 @@ const VISIBILITY_OPTIONS: { value: Visibility; label: string }[] = [
   { value: 'private', label: '공개안함' },
 ];
 
-export default function WriteScreen() {
+// onComplete가 넘어오면 페이저 왼쪽 페이지로 임베드된 모드 — 저장/취소 후 라우터 back 대신
+// onComplete()로 가운데(우주) 페이지로 돌려보낸다. 없으면 /write 라우트(수정 등)로 동작.
+export default function WriteScreen({ onComplete }: { onComplete?: () => void } = {}) {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const isEditMode = Boolean(id);
   const { addEntry, updateEntry, getEntry, groups } = useDiary();
@@ -27,6 +29,22 @@ export default function WriteScreen() {
   const [visibility, setVisibility] = useState<Visibility>('public');
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+
+  const resetForm = () => {
+    setText('');
+    setPhotoUri(null);
+    setVisibility('public');
+    setSelectedGroupIds([]);
+  };
+
+  const finish = () => {
+    if (onComplete) {
+      resetForm();
+      onComplete();
+    } else {
+      goBackSafe();
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -64,7 +82,7 @@ export default function WriteScreen() {
     setIsSaving(false);
 
     if (result.ok) {
-      goBackSafe();
+      finish();
     } else {
       showNotice('저장 실패', result.error);
     }
@@ -144,7 +162,7 @@ export default function WriteScreen() {
       />
 
       <View style={styles.buttonRow}>
-        <Pressable style={styles.cancelButton} onPress={goBackSafe}>
+        <Pressable style={styles.cancelButton} onPress={finish}>
           <Text style={styles.cancelButtonText}>취소</Text>
         </Pressable>
         <Pressable
