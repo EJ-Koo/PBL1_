@@ -121,19 +121,14 @@ function UniversePage() {
         </View>
       )}
 
-      {/* 우주 위에 떠 있는 상단 바 */}
+      {/* 우주 위에 떠 있는 상단 바. fffju 디자인대로 가운데 stats 알약을 누르면 상점이 열린다. */}
       <View style={styles.topBar} pointerEvents="box-none">
-        <View style={styles.statsPill}>
-          <Text style={styles.statsText}>★ {entries.length}</Text>
-        </View>
-        <View style={styles.topBarRight}>
-          <TouchableOpacity style={styles.shopButton} onPress={() => setShopVisible(true)}>
-            <Text style={styles.shopButtonText}>🛍️ 상점</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.questButton} onPress={() => setQuestVisible(true)}>
-            <Text style={styles.questText}>퀘스트</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity style={styles.statsPill} onPress={() => setShopVisible(true)}>
+          <Text style={styles.statsText}>★ {entries.length}   🪙 999   ✔️ 2</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.questButton} onPress={() => setQuestVisible(true)}>
+          <Text style={styles.questText}>퀘스트</Text>
+        </TouchableOpacity>
       </View>
 
       <Pressable style={styles.fab} onPress={() => router.push('/write')}>
@@ -269,21 +264,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   statsText: {
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  topBarRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  shopButton: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 15,
-  },
-  shopButtonText: {
     fontWeight: '700',
     color: '#FFFFFF',
   },
