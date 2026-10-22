@@ -112,11 +112,11 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           setAccessToken(result.access_token);
           setIsLoggedIn(true);
           try {
-            const [diaryList, starList, groupList] = await Promise.all([
-              apiListDiaries(result.access_token),
-              apiListStars(result.access_token),
-              apiListGroups(result.access_token),
-            ]);
+            // 일기가 핵심. 별/그룹 조회는 보조라 실패해도 일기를 비우지 않도록 각각 격리한다.
+            // (그룹 API 미배포 시 /groups 404가 나도 일기·별은 그대로 보여야 함)
+            const diaryList = await apiListDiaries(result.access_token);
+            const starList = await apiListStars(result.access_token).catch(() => []);
+            const groupList = await apiListGroups(result.access_token).catch(() => []);
             const starByDiaryId = new Map(starList.map((s) => [s.diary_id, s]));
             setEntries(diaryList.map((d, i) => toEntry(d, i, starByDiaryId.get(d.id))));
             setGroups(groupList);
@@ -173,17 +173,11 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
             visibility,
             group_ids: groupIds,
           });
-          let star: ApiStar | undefined;
-          try {
-            const [starList, groupList] = await Promise.all([
-              apiListStars(accessToken),
-              apiListGroups(accessToken),
-            ]);
-            star = starList.find((s) => s.diary_id === created.id);
-            setGroups(groupList);
-          } catch {
-            star = undefined;
-          }
+          // 별/그룹 재조회는 보조. 하나가 실패(예: /groups 미배포)해도 일기 추가는 진행한다.
+          const starList = await apiListStars(accessToken).catch(() => []);
+          const star = starList.find((s) => s.diary_id === created.id);
+          const groupList = await apiListGroups(accessToken).catch(() => null);
+          if (groupList) setGroups(groupList);
           const entry = toEntry(created, entries.length, star);
           setEntries((prev) => [entry, ...prev]);
           return { ok: true };
