@@ -15,6 +15,7 @@ export default function RootLayout() {
           <Stack.Screen name="index" />
           <Stack.Screen name="write" options={{ presentation: 'modal' }} />
           <Stack.Screen name="planet/[id]" />
+          <Stack.Screen name="groups/[id]" />
           <Stack.Screen name="admin/login" />
           <Stack.Screen name="admin/index" />
         </Stack>

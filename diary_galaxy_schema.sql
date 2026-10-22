@@ -120,6 +120,56 @@ begin
   end if;
 end $$;
 
+-- groups ----------------------------------------------------------------------
+-- 일기를 작성할 때 선택적으로 공유할 수 있는, 유저 소유의 "그룹 우주" 묶음.
+-- (다른 유저와의 멤버십/초대는 아직 미정 — diary_groups는 자기 자신의 일기만 그룹에 태그함)
+create table if not exists groups (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  name text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table groups enable row level security;
+
+create policy "groups_select_own" on groups
+  for select using (auth.uid() = user_id);
+
+create policy "groups_insert_own" on groups
+  for insert with check (auth.uid() = user_id);
+
+-- diary_groups: 일기 하나를 그룹 0개 이상에 태그 (다대다)
+create table if not exists diary_groups (
+  diary_id uuid not null references diaries (id) on delete cascade,
+  group_id uuid not null references groups (id) on delete cascade,
+  primary key (diary_id, group_id)
+);
+
+alter table diary_groups enable row level security;
+
+create policy "diary_groups_select_own" on diary_groups
+  for select using (
+    exists (
+      select 1 from diaries
+      where diaries.id = diary_groups.diary_id
+        and diaries.user_id = auth.uid()
+    )
+  );
+
+create policy "diary_groups_insert_own" on diary_groups
+  for insert with check (
+    exists (
+      select 1 from diaries
+      where diaries.id = diary_groups.diary_id
+        and diaries.user_id = auth.uid()
+    )
+    and exists (
+      select 1 from groups
+      where groups.id = diary_groups.group_id
+        and groups.user_id = auth.uid()
+    )
+  );
+
 -- admins ----------------------------------------------------------------------
 -- 일반 유저(auth.users)와 완전히 분리된 관리자 계정. 회원가입 없이 서버 스크립트로만 생성.
 create table if not exists admins (

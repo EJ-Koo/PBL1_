@@ -7,6 +7,10 @@ import { goBackSafe } from '@/lib/navigation';
 import { showNotice } from '@/lib/notice';
 import { useDiary, type Visibility } from '@/store/diary-context';
 
+function toggleId(ids: string[], id: string): string[] {
+  return ids.includes(id) ? ids.filter((i) => i !== id) : [...ids, id];
+}
+
 const VISIBILITY_OPTIONS: { value: Visibility; label: string }[] = [
   { value: 'public', label: '전체공개' },
   { value: 'friends', label: '친구에게만 공개' },
@@ -16,11 +20,12 @@ const VISIBILITY_OPTIONS: { value: Visibility; label: string }[] = [
 export default function WriteScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const isEditMode = Boolean(id);
-  const { addEntry, updateEntry, getEntry } = useDiary();
+  const { addEntry, updateEntry, getEntry, groups } = useDiary();
 
   const [text, setText] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [visibility, setVisibility] = useState<Visibility>('public');
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -55,7 +60,7 @@ export default function WriteScreen() {
     const result =
       isEditMode && id
         ? await updateEntry(id, text.trim(), photoUri, visibility)
-        : await addEntry(text.trim(), photoUri, visibility);
+        : await addEntry(text.trim(), photoUri, visibility, selectedGroupIds);
     setIsSaving(false);
 
     if (result.ok) {
@@ -93,6 +98,33 @@ export default function WriteScreen() {
           ))}
         </View>
       </View>
+
+      {!isEditMode && groups.length > 0 && (
+        <View style={styles.visibilitySection}>
+          <Text style={styles.visibilityLabel}>그룹 우주에도 공유</Text>
+          <View style={styles.visibilityRow}>
+            {groups.map((group) => (
+              <Pressable
+                key={group.id}
+                style={[
+                  styles.visibilityChip,
+                  selectedGroupIds.includes(group.id) && styles.visibilityChipActive,
+                ]}
+                onPress={() => setSelectedGroupIds((prev) => toggleId(prev, group.id))}
+              >
+                <Text
+                  style={[
+                    styles.visibilityChipText,
+                    selectedGroupIds.includes(group.id) && styles.visibilityChipTextActive,
+                  ]}
+                >
+                  {group.name}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      )}
 
       <Pressable style={styles.photoBox} onPress={handlePickImage}>
         {photoUri ? (

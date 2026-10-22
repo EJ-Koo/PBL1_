@@ -18,12 +18,13 @@ import {
 } from 'react-native';
 
 import { CommunityScreen } from '@/components/community-screen';
+import { GroupsScreen } from '@/components/groups-screen';
 import { ShopScreen } from '@/components/shop-screen';
 import { UniverseCanvas } from '@/components/universe-scene';
 import { useDiary } from '@/store/diary-context';
 
 const { width, height } = Dimensions.get('window');
-const PAGE_LABELS = ['상점', '나의 우주', '커뮤니티'];
+const PAGE_LABELS = ['상점', '나의 우주', '그룹', '커뮤니티'];
 
 export default function HomeScreen() {
   const { isLoggedIn } = useDiary();
@@ -73,6 +74,9 @@ export default function HomeScreen() {
         </View>
         <View style={{ width, height }}>
           <UniversePage />
+        </View>
+        <View style={{ width, height }}>
+          <GroupsScreen />
         </View>
         <View style={{ width, height }}>
           <CommunityScreen />

@@ -87,7 +87,12 @@ export async function apiListDiaries(accessToken: string) {
 
 export async function apiCreateDiary(
   accessToken: string,
-  payload: { content: string; photo_url: string | null; visibility: ApiVisibility }
+  payload: {
+    content: string;
+    photo_url: string | null;
+    visibility: ApiVisibility;
+    group_ids?: string[];
+  }
 ) {
   const res = await fetch(`${API_BASE_URL}/diaries`, {
     method: 'POST',
@@ -99,6 +104,38 @@ export async function apiCreateDiary(
     throw new Error(data.detail ?? '일기 저장에 실패했습니다.');
   }
   return data as ApiDiary;
+}
+
+export type ApiGroup = {
+  id: string;
+  user_id: string;
+  name: string;
+  created_at: string;
+  diary_ids: string[];
+};
+
+export async function apiListGroups(accessToken: string) {
+  const res = await fetch(`${API_BASE_URL}/groups`, {
+    headers: authHeaders(accessToken),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail ?? '그룹 목록을 불러오지 못했습니다.');
+  }
+  return data as ApiGroup[];
+}
+
+export async function apiCreateGroup(accessToken: string, name: string) {
+  const res = await fetch(`${API_BASE_URL}/groups`, {
+    method: 'POST',
+    headers: authHeaders(accessToken),
+    body: JSON.stringify({ name }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail ?? '그룹 생성에 실패했습니다.');
+  }
+  return data as ApiGroup;
 }
 
 export async function apiUploadPhoto(accessToken: string, localUri: string) {

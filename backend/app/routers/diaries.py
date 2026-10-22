@@ -50,6 +50,29 @@ def _create_star_for_diary(diary_id: str, content: str) -> None:
     ).execute()
 
 
+def _assert_owns_groups(group_ids: list[str], user_id: str) -> None:
+    if not group_ids:
+        return
+    owned = (
+        supabase.table("groups")
+        .select("id")
+        .eq("user_id", user_id)
+        .in_("id", group_ids)
+        .execute()
+    )
+    owned_ids = {g["id"] for g in owned.data}
+    if owned_ids != set(group_ids):
+        raise HTTPException(status_code=404, detail="Group not found")
+
+
+def _tag_diary_groups(diary_id: str, group_ids: list[str]) -> None:
+    if not group_ids:
+        return
+    supabase.table("diary_groups").insert(
+        [{"diary_id": diary_id, "group_id": gid} for gid in group_ids]
+    ).execute()
+
+
 def _with_signed_photo_url(diary: dict) -> dict:
     path = diary.get("photo_url")
     if not path:
@@ -100,6 +123,7 @@ def get_diary(diary_id: UUID, user_id: str = Depends(get_current_user_id)):
 
 @router.post("", response_model=Diary)
 def create_diary(diary: DiaryCreate, user_id: str = Depends(get_current_user_id)):
+    _assert_owns_groups(diary.group_ids, user_id)
     result = (
         supabase.table("diaries")
         .insert(
@@ -114,6 +138,7 @@ def create_diary(diary: DiaryCreate, user_id: str = Depends(get_current_user_id)
     )
     created = result.data[0]
     _create_star_for_diary(created["id"], diary.content)
+    _tag_diary_groups(created["id"], diary.group_ids)
     return _with_signed_photo_url(created)
 
 
