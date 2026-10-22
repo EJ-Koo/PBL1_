@@ -24,23 +24,19 @@ import { UniverseCanvas } from '@/components/universe-scene';
 import { useDiary } from '@/store/diary-context';
 
 const { width, height } = Dimensions.get('window');
-const PAGE_LABELS = ['상점', '나의 우주', '그룹', '커뮤니티'];
+// 상점은 페이저 탭이 아니라 우주 화면 상단에서 여는 팝업(모달)으로 분리함 — UniversePage 참고.
+const PAGE_LABELS = ['나의 우주', '그룹', '커뮤니티'];
 
 export default function HomeScreen() {
   const { isLoggedIn } = useDiary();
   const scrollRef = useRef<ScrollView>(null);
-  const [pageIndex, setPageIndex] = useState(1);
+  const [pageIndex, setPageIndex] = useState(0);
 
   useEffect(() => {
     if (!isLoggedIn) {
       router.replace('/login');
     }
   }, [isLoggedIn]);
-
-  useEffect(() => {
-    // 가운데(나의 우주) 페이지에서 시작
-    scrollRef.current?.scrollTo({ x: width, y: 0, animated: false });
-  }, []);
 
   if (!isLoggedIn) {
     return <View style={styles.container} />;
@@ -65,13 +61,9 @@ export default function HomeScreen() {
         pagingEnabled
         scrollEnabled={false}
         showsHorizontalScrollIndicator={false}
-        contentOffset={{ x: width, y: 0 }}
         onMomentumScrollEnd={handleScrollEnd}
         onScrollEndDrag={handleScrollEnd}
       >
-        <View style={{ width, height }}>
-          <ShopScreen />
-        </View>
         <View style={{ width, height }}>
           <UniversePage />
         </View>
@@ -117,6 +109,7 @@ export default function HomeScreen() {
 function UniversePage() {
   const { entries } = useDiary();
   const [questVisible, setQuestVisible] = useState(false);
+  const [shopVisible, setShopVisible] = useState(false);
 
   return (
     <View style={styles.universeContainer}>
@@ -133,9 +126,14 @@ function UniversePage() {
         <View style={styles.statsPill}>
           <Text style={styles.statsText}>★ {entries.length}</Text>
         </View>
-        <TouchableOpacity style={styles.questButton} onPress={() => setQuestVisible(true)}>
-          <Text style={styles.questText}>퀘스트</Text>
-        </TouchableOpacity>
+        <View style={styles.topBarRight}>
+          <TouchableOpacity style={styles.shopButton} onPress={() => setShopVisible(true)}>
+            <Text style={styles.shopButtonText}>🛍️ 상점</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.questButton} onPress={() => setQuestVisible(true)}>
+            <Text style={styles.questText}>퀘스트</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <Pressable style={styles.fab} onPress={() => router.push('/write')}>
@@ -176,6 +174,11 @@ function UniversePage() {
             </View>
           </View>
         </Pressable>
+      </Modal>
+
+      {/* 상점: 페이저 탭이 아니라 상단 버튼으로 여는 전체화면 팝업 */}
+      <Modal visible={shopVisible} animationType="slide" onRequestClose={() => setShopVisible(false)}>
+        <ShopScreen onClose={() => setShopVisible(false)} />
       </Modal>
     </View>
   );
@@ -266,6 +269,21 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   statsText: {
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  topBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  shopButton: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 15,
+  },
+  shopButtonText: {
     fontWeight: '700',
     color: '#FFFFFF',
   },

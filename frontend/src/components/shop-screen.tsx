@@ -1,6 +1,6 @@
 // front 브랜치 frontend/src/app/index.jsx의 'shop' 화면을 그대로 이식.
 // 아직 실제 재화/구매 연동 없음 — 하드코딩된 더미 데이터 그대로.
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 const SHOP_ITEMS = [
   { icon: '❄️', name: '프리즘', desc: '연속 출석 멈춤을 1회 방어할 수 있다.', price: 30 },
@@ -9,13 +9,20 @@ const SHOP_ITEMS = [
   { icon: '🌃', name: '배경 (black)', desc: '나의 우주 배경을 바꿀 수 있다.', price: 50 },
 ];
 
-export function ShopScreen() {
+export function ShopScreen({ onClose }: { onClose?: () => void } = {}) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>🛍️ 상점</Text>
-        <View style={styles.coinPill}>
-          <Text style={styles.coinText}>🪙 999</Text>
+        <View style={styles.headerRight}>
+          <View style={styles.coinPill}>
+            <Text style={styles.coinText}>🪙 999</Text>
+          </View>
+          {onClose && (
+            <Pressable style={styles.closeButton} onPress={onClose}>
+              <Text style={styles.closeText}>✕</Text>
+            </Pressable>
+          )}
         </View>
       </View>
 
@@ -50,8 +57,18 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   title: { color: '#fff', fontSize: 26, fontWeight: 'bold' },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   coinPill: { backgroundColor: '#7f8c8d', paddingHorizontal: 18, paddingVertical: 8, borderRadius: 10 },
   coinText: { color: '#000', fontWeight: 'bold', fontSize: 16 },
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 
   scroll: { flex: 1, marginBottom: 80 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
