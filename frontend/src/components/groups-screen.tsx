@@ -1,7 +1,5 @@
-// origin/fffju(front 브랜치 연장) 커밋 "그룹 우주 화면 구성"의 mockup(frontend/src/app/index.jsx,
-// @ts-nocheck, 하드코딩 데이터, 백엔드 연동 없음)을 이 저장소의 실제 구조로 포팅.
-// 다른 유저와의 그룹 멤버십/초대는 아직 미정이라 구현하지 않음 — 그룹은 "내 일기를 모아 보는
-// 묶음" 정도로만 동작 (diary_groups가 자기 자신의 일기만 태그).
+// fffju(frontend/src/app/index.jsx)의 'group'(우리의 우주) 화면 디자인을 그대로 가져옴.
+// 데이터는 하드코딩 대신 실제 백엔드(그룹/일기)를 사용. 다른 유저와의 멤버십/초대는 아직 미정.
 import { useState } from 'react';
 import { router } from 'expo-router';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -19,7 +17,6 @@ const BG_DOTS: BgDot[] = Array.from({ length: 18 }).map((_, i) => ({
   opacity: ((i % 5) + 2) * 0.12,
 }));
 
-// 그룹 미리보기 카드 안에서 별을 흩어 보일 2D 위치 (실제 좌표는 3D라 미리보기용으로만 씀)
 function previewPosition(index: number): { top: `${number}%`; left: `${number}%` } {
   return {
     top: `${30 + ((index * 25) % 50)}%`,
@@ -47,18 +44,24 @@ export function GroupsScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>우리의 우주</Text>
+    <View style={styles.wrapper}>
+      <Text style={styles.headerTitle}>우리의 우주</Text>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        style={styles.listScroll}
+        contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+      >
         {groups.map((group) => {
           const groupStars = entries.filter((e) => group.diary_ids.includes(e.id));
+          const activeStarCount = Math.min(groupStars.length, 5);
           return (
             <Pressable
               key={group.id}
               style={styles.card}
               onPress={() => router.push(`/groups/${group.id}` as Parameters<typeof router.push>[0])}
             >
+              {/* 카드 상단: 그룹 우주 미리보기 */}
               <View style={styles.preview}>
                 {BG_DOTS.map((dot) => (
                   <View
@@ -85,17 +88,34 @@ export function GroupsScreen() {
                   />
                 ))}
               </View>
+
+              {/* 카드 하단: 그룹 이름 + 별 진행도 (오른쪽부터 연두색으로 채움) */}
               <View style={styles.cardFooter}>
                 <Text style={styles.cardName}>{group.name}</Text>
-                <Text style={styles.cardCount}>★ {groupStars.length}</Text>
+                <View style={styles.starIconsRow}>
+                  {[0, 1, 2, 3, 4].map((starIdx) => {
+                    const isNeon = starIdx >= 5 - activeStarCount;
+                    return (
+                      <Text
+                        key={starIdx}
+                        style={[styles.footerStar, isNeon ? styles.neonGreenStar : styles.darkStar]}
+                      >
+                        ★
+                      </Text>
+                    );
+                  })}
+                </View>
               </View>
             </Pressable>
           );
         })}
 
-        <Pressable style={styles.addButton} onPress={() => setModalVisible(true)}>
-          <Text style={styles.addButtonText}>+ 새 그룹 우주 만들기</Text>
-        </Pressable>
+        {/* 새 그룹 추가 동그란 버튼 */}
+        <View style={styles.addBtnWrapper}>
+          <Pressable style={styles.addCircleBtn} onPress={() => setModalVisible(true)}>
+            <Text style={styles.addPlusText}>+</Text>
+          </Pressable>
+        </View>
       </ScrollView>
 
       <Modal transparent visible={modalVisible} animationType="fade">
@@ -113,10 +133,10 @@ export function GroupsScreen() {
               onChangeText={setNewGroupName}
             />
             <View style={styles.modalButtonRow}>
-              <Pressable style={styles.modalCancelButton} onPress={() => setModalVisible(false)}>
-                <Text style={styles.modalCancelText}>취소</Text>
+              <Pressable style={styles.modalCancelBtn} onPress={() => setModalVisible(false)}>
+                <Text style={styles.whiteText}>취소</Text>
               </Pressable>
-              <Pressable style={styles.modalConfirmButton} onPress={handleCreate} disabled={isCreating}>
+              <Pressable style={styles.modalConfirmBtn} onPress={handleCreate} disabled={isCreating}>
                 <Text style={styles.modalConfirmText}>{isCreating ? '생성 중...' : '생성하기'}</Text>
               </Pressable>
             </View>
@@ -127,14 +147,21 @@ export function GroupsScreen() {
   );
 }
 
+// fffju 'group' 화면 스타일 그대로.
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 60, paddingHorizontal: 20, backgroundColor: '#05050A' },
-  title: { color: '#fff', fontSize: 22, fontWeight: 'bold', marginBottom: 20 },
-  scrollContent: { paddingBottom: 90 },
-  card: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 22, padding: 12, marginBottom: 18 },
+  wrapper: {
+    flex: 1,
+    backgroundColor: '#000',
+    paddingTop: 75,
+    paddingBottom: 100,
+    paddingHorizontal: 22,
+  },
+  headerTitle: { color: '#fff', fontSize: 24, fontWeight: 'bold', marginBottom: 22 },
+  listScroll: { flex: 1 },
+  card: { backgroundColor: '#9e9e9e', borderRadius: 22, padding: 12, marginBottom: 22 },
   preview: {
     width: '100%',
-    height: 150,
+    height: 155,
     backgroundColor: '#08080c',
     borderRadius: 16,
     overflow: 'hidden',
@@ -143,12 +170,12 @@ const styles = StyleSheet.create({
   },
   previewStar: {
     position: 'absolute',
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.95,
-    shadowRadius: 10,
+    shadowRadius: 12,
     elevation: 10,
   },
   cardFooter: {
@@ -157,17 +184,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 6,
   },
-  cardName: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
-  cardCount: { color: '#9C9CC0', fontSize: 13, fontWeight: '600' },
-  addButton: {
-    borderWidth: 1,
-    borderColor: '#2A2A45',
-    borderStyle: 'dashed',
-    borderRadius: 16,
-    paddingVertical: 18,
+  cardName: { color: '#000', fontSize: 15, fontWeight: 'bold' },
+  starIconsRow: { flexDirection: 'row', gap: 6 },
+  footerStar: { fontSize: 18 },
+  neonGreenStar: { color: '#76ff03' },
+  darkStar: { color: '#1a1a1a' },
+  addBtnWrapper: { alignItems: 'center', marginTop: 10, marginBottom: 30 },
+  addCircleBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#787878',
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  addButtonText: { color: '#9C9CC0', fontSize: 14, fontWeight: '600' },
+  addPlusText: { color: '#ccc', fontSize: 30, fontWeight: '300', lineHeight: 34 },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
   modalCard: {
@@ -190,8 +221,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalButtonRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
-  modalCancelButton: { backgroundColor: '#444', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
-  modalCancelText: { color: '#fff', fontWeight: 'bold' },
-  modalConfirmButton: { backgroundColor: '#3498db', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
+  modalCancelBtn: { backgroundColor: '#444', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
+  whiteText: { color: '#fff', fontWeight: 'bold' },
+  modalConfirmBtn: { backgroundColor: '#3498db', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
   modalConfirmText: { color: '#fff', fontWeight: 'bold' },
 });

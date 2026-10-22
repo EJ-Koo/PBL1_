@@ -92,19 +92,20 @@ export default function HomeScreen() {
         />
       )}
 
-      {/* 스와이프를 끄고(scrollEnabled=false) 이 버튼으로만 페이지를 넘기도록 함
-          — 우주 화면 안에서 별을 드래그로 둘러보는 동작과 좌우 스와이프가 겹치는 문제 때문 */}
-      <View style={styles.navRow} pointerEvents="box-none">
+      {/* fffju 하단 네비게이션: 글자 없는 회색 pill 3개 (왼쪽=일기 / 가운데 긴 pill=우주 / 오른쪽=그룹).
+          스와이프는 꺼두고(scrollEnabled=false) 이 pill로만 페이지 전환 — 우주 화면의 별 드래그와 겹침 방지 */}
+      <View style={styles.bottomNav} pointerEvents="box-none">
         {PAGE_LABELS.map((label, index) => (
           <Pressable
             key={label}
-            style={[styles.navButton, pageIndex === index && styles.navButtonActive]}
+            accessibilityLabel={label}
+            style={[
+              styles.navPill,
+              index === 1 && styles.navPillLong,
+              pageIndex === index && styles.activePill,
+            ]}
             onPress={() => goToPage(index)}
-          >
-            <Text style={[styles.navButtonText, pageIndex === index && styles.navButtonTextActive]}>
-              {label}
-            </Text>
-          </Pressable>
+          />
         ))}
       </View>
     </View>
@@ -196,50 +197,45 @@ function UniversePage() {
 const styles = StyleSheet.create({
   pagerWrap: {
     flex: 1,
-    backgroundColor: '#0B0B1A',
+    backgroundColor: '#05050A',
   },
   pager: {
     flex: 1,
-    backgroundColor: '#0B0B1A',
+    backgroundColor: '#05050A',
   },
   nextZone: {
-    // 상단 퀘스트 버튼(top:60~100 부근), 하단 FAB(bottom:40~96 부근)과 겹치지 않도록
-    // 화면 오른쪽 가장자리의 중간 구간만 탭 영역으로 사용
+    // 우주 화면 오른쪽 가장자리 중간 구간만 탭 영역으로 사용 (상단바/하단 네비와 안 겹치게)
     position: 'absolute',
     top: 110,
-    bottom: 100,
+    bottom: 130,
     right: 0,
     width: 50,
   },
-  navRow: {
+  // fffju 하단 네비게이션
+  bottomNav: {
     position: 'absolute',
-    bottom: 16,
-    left: 20,
-    right: 20,
+    bottom: 40,
+    width: '100%',
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 8,
+    alignItems: 'center',
+    gap: 12,
   },
-  navButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+  navPill: {
+    width: 38,
+    height: 18,
+    backgroundColor: '#7f8c8d',
+    borderRadius: 10,
   },
-  navButtonActive: {
-    backgroundColor: '#7C6CF6',
+  navPillLong: {
+    width: 115,
   },
-  navButtonText: {
-    color: '#9C9CC0',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  navButtonTextActive: {
-    color: '#FFFFFF',
+  activePill: {
+    backgroundColor: '#dcdde1',
   },
   container: {
     flex: 1,
-    backgroundColor: '#0B0B1A',
+    backgroundColor: '#05050A',
     paddingTop: 60,
   },
   universeContainer: {
@@ -272,37 +268,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   iconButton: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#7f8c8d',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 10,
   },
   iconButtonText: {
-    color: '#FFFFFF',
+    color: '#111',
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: 'bold',
   },
   statsPill: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 15,
+    backgroundColor: '#7f8c8d',
+    paddingHorizontal: 18,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 12,
   },
   statsText: {
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: 'bold',
+    color: '#111',
+    fontSize: 14,
   },
   questButton: {
-    backgroundColor: '#7C6CF6',
-    paddingHorizontal: 15,
+    backgroundColor: '#7f8c8d',
+    paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 15,
+    borderRadius: 10,
   },
   questText: {
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: 'bold',
+    color: '#111',
+    fontSize: 14,
   },
   whiteText: {
     color: '#FFFFFF',

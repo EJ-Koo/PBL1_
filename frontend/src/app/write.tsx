@@ -11,13 +11,13 @@ function toggleId(ids: string[], id: string): string[] {
   return ids.includes(id) ? ids.filter((i) => i !== id) : [...ids, id];
 }
 
-const VISIBILITY_OPTIONS: { value: Visibility; label: string }[] = [
-  { value: 'public', label: '전체공개' },
-  { value: 'friends', label: '친구에게만 공개' },
-  { value: 'private', label: '공개안함' },
-];
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+function todayLabel() {
+  const d = new Date();
+  return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 ${WEEKDAYS[d.getDay()]}요일`;
+}
 
-// onComplete가 넘어오면 페이저 왼쪽 페이지로 임베드된 모드 — 저장/취소 후 라우터 back 대신
+// onComplete가 넘어오면 페이저 왼쪽 페이지로 임베드된 모드 — 저장/뒤로 후 라우터 back 대신
 // onComplete()로 가운데(우주) 페이지로 돌려보낸다. 없으면 /write 라우트(수정 등)로 동작.
 export default function WriteScreen({ onComplete }: { onComplete?: () => void } = {}) {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -26,14 +26,24 @@ export default function WriteScreen({ onComplete }: { onComplete?: () => void } 
 
   const [text, setText] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [visibility, setVisibility] = useState<Visibility>('public');
+  // fffju 디자인엔 공개범위 3종(public/friends/private) UI가 없고 "비공개 ↔ 그룹 공유"만 있다.
+  // 그래서 그룹을 하나도 안 고르면 private, 하나라도 고르면 friends(공유)로 매핑한다.
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!id) return;
+    const entry = getEntry(id);
+    if (entry) {
+      setText(entry.text);
+      setPhotoUri(entry.photoUri);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   const resetForm = () => {
     setText('');
     setPhotoUri(null);
-    setVisibility('public');
     setSelectedGroupIds([]);
   };
 
@@ -45,17 +55,6 @@ export default function WriteScreen({ onComplete }: { onComplete?: () => void } 
       goBackSafe();
     }
   };
-
-  useEffect(() => {
-    if (!id) return;
-    const entry = getEntry(id);
-    if (entry) {
-      setText(entry.text);
-      setPhotoUri(entry.photoUri);
-      setVisibility(entry.visibility);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
 
   const handlePickImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -74,6 +73,7 @@ export default function WriteScreen({ onComplete }: { onComplete?: () => void } 
   const handleSave = async () => {
     if (!text.trim() || isSaving) return;
 
+    const visibility: Visibility = selectedGroupIds.length > 0 ? 'friends' : 'private';
     setIsSaving(true);
     const result =
       isEditMode && id
@@ -89,209 +89,161 @@ export default function WriteScreen({ onComplete }: { onComplete?: () => void } 
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>{isEditMode ? '기록 수정' : '별 생성'}</Text>
+    <View style={styles.wrapper}>
+      <View style={styles.card}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
+          <Pressable onPress={finish}>
+            <Text style={styles.backText}>{'‹  나의 우주'}</Text>
+          </Pressable>
 
-      <View style={styles.visibilitySection}>
-        <Text style={styles.visibilityLabel}>공개 범위</Text>
-        <View style={styles.visibilityRow}>
-          {VISIBILITY_OPTIONS.map((option) => (
-            <Pressable
-              key={option.value}
-              style={[
-                styles.visibilityChip,
-                visibility === option.value && styles.visibilityChipActive,
-              ]}
-              onPress={() => setVisibility(option.value)}
-            >
-              <Text
-                style={[
-                  styles.visibilityChipText,
-                  visibility === option.value && styles.visibilityChipTextActive,
-                ]}
-              >
-                {option.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
+          <Text style={styles.mainTitle}>
+            {isEditMode ? '오늘의 별을 고쳐볼까요?' : '오늘은 어떤 별일이 있었나요?'}
+          </Text>
+          <Text style={styles.dateText}>{todayLabel()}</Text>
 
-      {!isEditMode && groups.length > 0 && (
-        <View style={styles.visibilitySection}>
-          <Text style={styles.visibilityLabel}>그룹 우주에도 공유</Text>
-          <View style={styles.visibilityRow}>
-            {groups.map((group) => (
-              <Pressable
-                key={group.id}
-                style={[
-                  styles.visibilityChip,
-                  selectedGroupIds.includes(group.id) && styles.visibilityChipActive,
-                ]}
-                onPress={() => setSelectedGroupIds((prev) => toggleId(prev, group.id))}
-              >
-                <Text
-                  style={[
-                    styles.visibilityChipText,
-                    selectedGroupIds.includes(group.id) && styles.visibilityChipTextActive,
-                  ]}
-                >
-                  {group.name}
-                </Text>
-              </Pressable>
-            ))}
+          <View style={styles.divider} />
+
+          <TextInput
+            style={styles.textInput}
+            multiline
+            placeholder="글을 입력해주세요."
+            placeholderTextColor="#222"
+            value={text}
+            onChangeText={setText}
+          />
+
+          <View style={styles.divider} />
+
+          <View style={styles.photoHeaderRow}>
+            <Text style={styles.photoSectionTitle}>오늘의 장면</Text>
+            <Text style={styles.photoCountText}>사진 {photoUri ? 1 : 0} / 1</Text>
           </View>
-        </View>
-      )}
 
-      <Pressable style={styles.photoBox} onPress={handlePickImage}>
-        {photoUri ? (
-          <Image source={{ uri: photoUri }} style={styles.photo} />
-        ) : (
-          <Text style={styles.photoPlaceholder}>+ 사진 추가</Text>
-        )}
-      </Pressable>
+          <View style={styles.photoBoxesRow}>
+            {photoUri ? (
+              <Pressable style={styles.photoIconBox} onPress={handlePickImage}>
+                <Image source={{ uri: photoUri }} style={styles.photoImage} />
+              </Pressable>
+            ) : (
+              <Pressable style={styles.photoAddBox} onPress={handlePickImage}>
+                <Text style={styles.photoAddPlus}>+</Text>
+              </Pressable>
+            )}
+          </View>
 
-      <TextInput
-        style={styles.textInput}
-        placeholder="오늘 하루는 어땠나요?"
-        placeholderTextColor="#5F5F80"
-        multiline
-        value={text}
-        onChangeText={setText}
-      />
+          <View style={styles.divider} />
 
-      <View style={styles.buttonRow}>
-        <Pressable style={styles.cancelButton} onPress={finish}>
-          <Text style={styles.cancelButtonText}>취소</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.saveButton, (!text.trim() || isSaving) && styles.saveButtonDisabled]}
-          onPress={handleSave}
-          disabled={!text.trim() || isSaving}
-        >
-          <Text style={styles.saveButtonText}>{isSaving ? '저장 중...' : '저장'}</Text>
-        </Pressable>
+          {/* fffju 공유 pill: 🔒 비공개 ↔ 그룹들 (수정모드에선 공유 대상 변경 없음) */}
+          {!isEditMode && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.sharePillsRow}
+            >
+              <Pressable
+                style={[styles.sharePill, selectedGroupIds.length === 0 && styles.sharePillSelected]}
+                onPress={() => setSelectedGroupIds([])}
+              >
+                <Text style={styles.sharePillText}>🔒 비공개</Text>
+              </Pressable>
+              {groups.map((group) => {
+                const selected = selectedGroupIds.includes(group.id);
+                return (
+                  <Pressable
+                    key={group.id}
+                    style={[styles.sharePill, selected && styles.sharePillSelected]}
+                    onPress={() => setSelectedGroupIds((prev) => toggleId(prev, group.id))}
+                  >
+                    <Text style={styles.sharePillText}>{group.name}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          )}
+
+          <Pressable
+            style={[styles.submitButton, (!text.trim() || isSaving) && styles.submitButtonDisabled]}
+            onPress={handleSave}
+            disabled={!text.trim() || isSaving}
+          >
+            <Text style={styles.submitButtonText}>
+              {isSaving ? '저장 중...' : isEditMode ? '수정 완료' : '오늘의 별 띄우기'}
+            </Text>
+          </Pressable>
+        </ScrollView>
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
+// fffju(frontend/src/app/index.jsx)의 'diary' 화면 스타일을 그대로 가져옴.
 const styles = StyleSheet.create({
-  container: {
+  wrapper: {
     flex: 1,
-    backgroundColor: '#0B0B1A',
+    backgroundColor: '#000',
+    paddingTop: 65,
+    paddingBottom: 110,
+    paddingHorizontal: 18,
   },
-  content: {
-    paddingTop: 60,
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-    gap: 16,
+  card: {
+    flex: 1,
+    backgroundColor: '#787878',
+    borderRadius: 26,
+    paddingHorizontal: 22,
+    paddingTop: 22,
+    paddingBottom: 20,
   },
-  title: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 8,
-  },
-  photoBox: {
-    width: '100%',
-    height: 160,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#2A2A45',
-    borderStyle: 'dashed',
-    backgroundColor: '#14142A',
+  backText: { color: '#111', fontSize: 15, fontWeight: '600', marginBottom: 16 },
+  mainTitle: { color: '#000', fontSize: 22, fontWeight: 'bold', marginBottom: 6 },
+  dateText: { color: '#333', fontSize: 13, marginBottom: 14 },
+  divider: { height: 1, backgroundColor: '#222', marginVertical: 12 },
+  textInput: { color: '#000', fontSize: 14, minHeight: 200, textAlignVertical: 'top' },
+  photoHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  photoSectionTitle: { color: '#000', fontSize: 15, fontWeight: 'bold' },
+  photoCountText: { color: '#222', fontSize: 12 },
+  photoBoxesRow: { flexDirection: 'row', gap: 14, marginBottom: 8 },
+  photoIconBox: {
+    width: 96,
+    height: 96,
+    backgroundColor: '#000',
+    borderRadius: 14,
+    borderWidth: 4,
+    borderColor: '#d9d9d9',
     overflow: 'hidden',
   },
-  photo: {
-    width: '100%',
-    height: '100%',
-  },
-  photoPlaceholder: {
-    color: '#5F5F80',
-    fontSize: 14,
-  },
-  textInput: {
-    minHeight: 160,
-    borderWidth: 1,
-    borderColor: '#2A2A45',
-    borderRadius: 12,
-    backgroundColor: '#14142A',
-    color: '#FFFFFF',
-    fontSize: 15,
-    padding: 16,
-    textAlignVertical: 'top',
-  },
-  visibilitySection: {
-    gap: 10,
-    alignItems: 'center',
-  },
-  visibilityLabel: {
-    color: '#9C9CC0',
-    fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  visibilityRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  photoImage: { width: '100%', height: '100%' },
+  photoAddBox: {
+    width: 96,
+    height: 96,
+    backgroundColor: '#d9d9d9',
+    borderRadius: 14,
     justifyContent: 'center',
-    gap: 8,
+    alignItems: 'center',
   },
-  visibilityChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+  photoAddPlus: { color: '#a0a0a0', fontSize: 42, fontWeight: '300', lineHeight: 46 },
+  sharePillsRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6, marginBottom: 18 },
+  sharePill: {
+    paddingHorizontal: 18,
+    paddingVertical: 9,
     borderRadius: 20,
+    backgroundColor: '#9e9e9e',
     borderWidth: 1,
-    borderColor: '#2A2A45',
-    backgroundColor: '#14142A',
+    borderColor: '#444',
   },
-  visibilityChipActive: {
-    backgroundColor: '#7C6CF6',
-    borderColor: '#7C6CF6',
-  },
-  visibilityChipText: {
-    color: '#9C9CC0',
-    fontSize: 13,
-  },
-  visibilityChipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-  },
-  cancelButton: {
-    flex: 1,
-    paddingVertical: 16,
-    borderRadius: 10,
+  sharePillSelected: { backgroundColor: '#d9d9d9', borderColor: '#d9d9d9' },
+  sharePillText: { color: '#000', fontSize: 13, fontWeight: '600' },
+  submitButton: {
+    backgroundColor: '#bdbdbd',
+    paddingVertical: 15,
+    borderRadius: 18,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#2A2A45',
+    marginTop: 'auto',
   },
-  cancelButtonText: {
-    color: '#9C9CC0',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  saveButton: {
-    flex: 2,
-    paddingVertical: 16,
-    borderRadius: 10,
-    alignItems: 'center',
-    backgroundColor: '#7C6CF6',
-  },
-  saveButtonDisabled: {
-    backgroundColor: '#3A3A5A',
-  },
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
-  },
+  submitButtonDisabled: { opacity: 0.5 },
+  submitButtonText: { color: '#000', fontSize: 14, fontWeight: 'bold' },
 });
