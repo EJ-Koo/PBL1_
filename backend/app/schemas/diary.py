@@ -9,6 +9,7 @@ class DiaryCreate(BaseModel):
     content: str
     photo_url: str | None = None
     visibility: Visibility = "private"
+    group_ids: list[str] = []
 
 
 class DiaryUpdate(BaseModel):

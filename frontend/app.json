@@ -1,14 +1,15 @@
 {
   "expo": {
-    "name": "mockup",
-    "slug": "mockup",
+    "name": "starex-926-app",
+    "slug": "starex-926-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mockup",
+    "scheme": "starex926app",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.jwo916.starex-926-app"
     },
     "android": {
       "adaptiveIcon": {
@@ -32,7 +33,8 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,
