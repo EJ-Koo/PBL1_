@@ -5,17 +5,20 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 
+from app import ai_client
 from app.db import supabase
 from app.dependencies import get_current_user_id
-from app.schemas.diary import Diary, DiaryCreate, DiaryUpdate
+from app.schemas.diary import Diary, DiaryCreate, DiaryUpdate, RelatedDiary
 
 router = APIRouter(prefix="/diaries", tags=["diaries"])
 
 PHOTO_BUCKET = "diary-photos"
 PHOTO_URL_TTL = 3600
 
-# x/y/z는 AI 클러스터링(HDBSCAN)이 들어오기 전까지 구 껍질 위 무작위 배치로 대체.
+# x/y/z는 AI 서비스가 일기 의미로 정한 좌표(비슷한 기억 근처). AI 서비스가 없거나 실패하면
+# 구 껍질 위 무작위 배치. 한 번 정한 좌표는 다른 일기가 추가·수정돼도 바뀌지 않는다.
 # size는 글자 길이에 비례 (스키마 주석에 명시된 규칙).
+# color/brightness는 AI 감정 분석 결과 (AI 서비스가 없거나 실패하면 테이블 기본값).
 STAR_RADIUS_RANGE = (3.0, 12.0)
 STAR_SIZE_RANGE = (0.25, 1.2)
 STAR_SIZE_CHARS_FOR_MAX = 400
@@ -37,15 +40,17 @@ def _star_size_for_content(content: str) -> float:
     return min_size + (max_size - min_size) * ratio
 
 
-def _create_star_for_diary(diary_id: str, content: str) -> None:
-    x, y, z = _random_star_position()
+def _create_star_for_diary(diary_id: str, content: str, user_id: str) -> None:
+    position = ai_client.place_diary(user_id, diary_id, content)
+    if position is None:
+        x, y, z = _random_star_position()
+        position = {"x": x, "y": y, "z": z}
     supabase.table("stars").insert(
         {
             "diary_id": diary_id,
-            "x": x,
-            "y": y,
-            "z": z,
+            **position,
             "size": _star_size_for_content(content),
+            **(ai_client.analyze_diary(content) or {}),
         }
     ).execute()
 
@@ -121,6 +126,34 @@ def get_diary(diary_id: UUID, user_id: str = Depends(get_current_user_id)):
     return _with_signed_photo_url(_get_owned_diary(diary_id, user_id))
 
 
+@router.get("/{diary_id}/related", response_model=list[RelatedDiary])
+def get_related_diaries(diary_id: UUID, user_id: str = Depends(get_current_user_id)):
+    """이 일기와 의미가 가까운 내 일기(최대 3개, 유사도 높은 순). 관련 기억이 없거나 AI 서비스가 없으면 빈 목록.
+    similarity는 코사인 유사도이며 확률이 아니다."""
+    _get_owned_diary(diary_id, user_id)
+    related = ai_client.related_diaries(user_id, str(diary_id)) or []
+    if not related:
+        return []
+    rows = (
+        supabase.table("diaries")
+        .select("id, content, created_at")
+        .eq("user_id", user_id)
+        .in_("id", [r["diary_id"] for r in related])
+        .execute()
+    )
+    by_id = {row["id"]: row for row in rows.data}
+    return [
+        {
+            "diary_id": r["diary_id"],
+            "similarity": r["similarity"],
+            "content": by_id[r["diary_id"]]["content"],
+            "created_at": by_id[r["diary_id"]]["created_at"],
+        }
+        for r in related
+        if r["diary_id"] in by_id  # 다른 사용자 일기나 이미 삭제된 일기는 내보내지 않는다
+    ]
+
+
 @router.post("", response_model=Diary)
 def create_diary(diary: DiaryCreate, user_id: str = Depends(get_current_user_id)):
     _assert_owns_groups(diary.group_ids, user_id)
@@ -137,7 +170,7 @@ def create_diary(diary: DiaryCreate, user_id: str = Depends(get_current_user_id)
         .execute()
     )
     created = result.data[0]
-    _create_star_for_diary(created["id"], diary.content)
+    _create_star_for_diary(created["id"], diary.content, user_id)
     _tag_diary_groups(created["id"], diary.group_ids)
     return _with_signed_photo_url(created)
 
@@ -168,8 +201,12 @@ def update_diary(
 
     if "content" in update_data:
         supabase.table("stars").update(
-            {"size": _star_size_for_content(update_data["content"])}
+            {
+                "size": _star_size_for_content(update_data["content"]),
+                **(ai_client.analyze_diary(update_data["content"]) or {}),
+            }
         ).eq("diary_id", str(diary_id)).execute()
+        ai_client.update_diary_layout(user_id, str(diary_id), update_data["content"])
 
     new_photo_path = update_data.get("photo_url", old_photo_path)
     if old_photo_path and old_photo_path != new_photo_path:
@@ -187,6 +224,7 @@ def delete_diary(diary_id: UUID, user_id: str = Depends(get_current_user_id)):
     supabase.table("diaries").delete().eq("id", str(diary_id)).eq(
         "user_id", user_id
     ).execute()
+    ai_client.forget_diary(user_id, str(diary_id))
     if existing.get("photo_url"):
         try:
             supabase.storage.from_(PHOTO_BUCKET).remove([existing["photo_url"]])

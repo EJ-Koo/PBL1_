@@ -25,6 +25,8 @@ export type DiaryEntry = {
   visibility: Visibility;
   createdAt: number;
   color: string;
+  /** AI 감정 분석으로 정한 별 밝기. 1이면 기존과 같은 밝기. */
+  brightness: number;
   position: [number, number, number];
 };
 
@@ -82,6 +84,16 @@ function fallbackPosition(index: number): [number, number, number] {
   return [x, y, z];
 }
 
+// AI 감정 분석이 정한 별 색. AI 분석 전에 만들어진 별(테이블 기본값 흰색)은 기존 팔레트 색을 쓴다.
+const STAR_DEFAULT_COLOR = '#ffffff';
+
+function starColor(star: ApiStar | undefined, colorIndex: number): string {
+  if (star && star.color && star.color.toLowerCase() !== STAR_DEFAULT_COLOR) {
+    return star.color;
+  }
+  return PLANET_COLORS[colorIndex % PLANET_COLORS.length];
+}
+
 function toEntry(diary: ApiDiary, colorIndex: number, star?: ApiStar): DiaryEntry {
   return {
     id: diary.id,
@@ -89,7 +101,8 @@ function toEntry(diary: ApiDiary, colorIndex: number, star?: ApiStar): DiaryEntr
     photoUri: diary.photo_url,
     visibility: diary.visibility,
     createdAt: new Date(diary.created_at).getTime(),
-    color: PLANET_COLORS[colorIndex % PLANET_COLORS.length],
+    color: starColor(star, colorIndex),
+    brightness: star?.brightness ?? 1,
     position: star ? [star.x, star.y, star.z] : fallbackPosition(colorIndex),
   };
 }
@@ -219,6 +232,16 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
                 : e
             )
           );
+          // 내용이 바뀌면 서버가 감정 분석을 다시 해 별 색·밝기를 바꾸므로 그 값을 다시 받아온다.
+          const starList = await apiListStars(accessToken).catch(() => []);
+          const star = starList.find((s) => s.diary_id === id);
+          if (star) {
+            setEntries((prev) =>
+              prev.map((e, i) =>
+                e.id === id ? { ...e, color: starColor(star, i), brightness: star.brightness } : e
+              )
+            );
+          }
           return { ok: true };
         } catch (err) {
           return {
