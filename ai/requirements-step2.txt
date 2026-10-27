@@ -1,0 +1,14 @@
+# 오늘의별일 AI 2단계(의미 임베딩·3D 좌표) 로컬 실험 의존성
+# 검증 환경: Python 3.13.5, Windows 11, 저장소 .venv. 임베딩 모델은 CPU(float32)로 실행했다.
+#     .venv\Scripts\python -m pip install -r ai/requirements-step2.txt
+# 임베딩 모델 3종(KURE-v1, bge-m3, multilingual-e5-small)은 transformers로 직접 불러오므로
+# sentence-transformers는 설치하지 않는다. 가중치는 실행 시 ai/.cache(Git 제외)에 받는다(약 5GB).
+
+-r requirements-train.txt
+
+scikit-learn==1.9.1
+umap-learn==0.5.12
+plotly==7.1.0
+psutil==7.2.2
+# umap-learn 설치 시 함께 들어온 버전(직접 사용하지 않음): numba 0.68.0, llvmlite 0.50.0,
+# pynndescent 0.6.0, scipy 1.18.1, joblib 1.6.0, threadpoolctl 3.7.0

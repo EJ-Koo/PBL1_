@@ -1,0 +1,32 @@
+{
+  "description": "2단계 로컬 실험(의미 임베딩 → 관련 기억 → 3D 좌표) 설정. 합성 pilot 평가이며 실제 사용자 성능·사람 평가가 아니다.",
+  "dataset": "pilot_diaries.json",
+  "embedding_models": "embedding_models.json",
+  "outputs_dir": "outputs/step2",
+  "model_order": ["kure_v1", "bge_m3", "e5_small"],
+  "smoke_test": {"model": "kure_v1", "n_diaries": 10},
+  "retrieval": {
+    "ks": [1, 3, 5],
+    "k_link": 3,
+    "threshold_positive_min_rel": 2,
+    "threshold_rule": "dev 쌍에서 'sim ≥ τ → 연결'의 F1(양성 = 관련성 2)이 최대인 τ. 동점이면 높은 τ. test 결과를 본 뒤 바꾸지 않는다."
+  },
+  "timing": {"n_warmup": 3, "n_single": 20},
+  "selection_rule": {
+    "primary": "dev ndcg@5",
+    "tie_margin": 0.02,
+    "tie_break": "tie_margin 안이면 dev 무관 연결률(link_unrelated_rate)이 낮은 모델, 그것도 0.02 안이면 CPU 1개 지연시간이 짧은 모델",
+    "note": "모델 선택은 dev 결과만 쓴다. test는 선택 후 확인용으로만 보고한다."
+  },
+  "layout": {
+    "target_radius": 10.0,
+    "min_dist": 0.8,
+    "min_dist_note": "프론트 별 반지름 0.35(지름 0.7)보다 조금 크게. 좌표 단위는 프론트 3D 장면 단위와 같게 가정.",
+    "pca_umap": {"n_pca": 16, "n_neighbors": 8, "min_dist": 0.5, "metric": "cosine", "random_state": 42},
+    "neighbor": {"k": 3, "gap": 1.2, "tau_source": "07 노트북에서 dev로 정한 모델별 τ"},
+    "insert_order": "test 일기를 diary_id 순서(작성 순서 가정)로 빈 우주에 한 개씩 추가",
+    "n_orders": 5,
+    "order_seed": 0,
+    "eval_k": 5
+  }
+}
