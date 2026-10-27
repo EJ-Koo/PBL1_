@@ -1,0 +1,12 @@
+# 오늘의별일 AI — 감정 분류 학습/추론 단계 의존성 (분석 단계 패키지 + PyTorch)
+# 검증 환경: Python 3.13.5, Windows 11, RTX 4060 Ti 8GB, NVIDIA 드라이버 595.97 (CUDA 13.2 지원)
+#
+# NVIDIA GPU(CUDA 13.x 드라이버) 환경:
+#     pip install -r ai/requirements-train.txt
+# CPU만 쓰는 환경(또는 다른 CUDA 버전)에서는 아래 torch 두 줄을 지우고
+# https://pytorch.org/get-started/locally/ 안내에 맞는 torch==2.14.1 빌드를 설치한다.
+
+-r requirements.txt
+
+--extra-index-url https://download.pytorch.org/whl/cu130
+torch==2.14.1+cu130
