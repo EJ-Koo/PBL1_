@@ -167,6 +167,8 @@ id_ed25519*
 # AI 로컬 데이터·캐시·결과 (실행 시 생성됨)
 ai/data/raw/
 ai/data/processed/
+# AI 서비스의 사용자별 임베딩·좌표 저장소(일기 원문에서 만든 민감 정보)
+ai/data/service/
 ai/checkpoints/
 ai/outputs/
 ai/.cache/
