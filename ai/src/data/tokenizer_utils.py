@@ -12,8 +12,16 @@ WEIGHT_PATTERNS = ["*.bin", "*.safetensors", "*.pt", "*.pth", "*.ckpt", "*.onnx"
 
 
 def download_tokenizer_files(repo_id: str, revision: str, allow_patterns: list[str]) -> Path:
+    """토크나이저 파일만 내려받는다. 이 호출 중에 가중치 파일이 새로 생기면 오류로 중단한다.
+
+    같은 revision으로 모델을 학습한 적이 있으면 캐시 폴더에 가중치가 이미 있을 수 있는데,
+    그것은 이 함수가 받은 것이 아니므로 허용한다.
+    """
+    import time
+
     from huggingface_hub import snapshot_download
 
+    started = time.time()
     local = snapshot_download(
         repo_id=repo_id,
         revision=revision,
@@ -21,9 +29,10 @@ def download_tokenizer_files(repo_id: str, revision: str, allow_patterns: list[s
         ignore_patterns=WEIGHT_PATTERNS,
     )
     path = Path(local)
-    weights = [p.name for pat in WEIGHT_PATTERNS for p in path.glob(pat)]
-    if weights:
-        raise RuntimeError(f"가중치 파일이 내려받아졌습니다: {weights}")
+    new_weights = [p.name for pat in WEIGHT_PATTERNS for p in path.glob(pat)
+                   if p.resolve().stat().st_mtime >= started - 1]
+    if new_weights:
+        raise RuntimeError(f"토크나이저만 받아야 하는데 가중치 파일이 새로 내려받아졌습니다: {new_weights}")
     return path
 
 
