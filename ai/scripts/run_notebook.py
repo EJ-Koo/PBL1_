@@ -3,10 +3,12 @@
 1) 노트북을 notebooks/ 폴더를 작업 디렉터리로 하여 위에서부터 전체 실행
 2) 출력이 포함된 실행본을 ai/outputs/kote/ 에 저장 (Git 제외)
 3) Git 관리용 원본 노트북의 outputs·execution_count·불필요한 metadata 정리
+   (--keep-outputs: 정리하지 않고 실행 결과를 원본 노트북에 그대로 남김. Git 공유 전에는 --strip-only로 정리)
 
 사용 예 (저장소 루트에서):
     .venv/Scripts/python ai/scripts/run_notebook.py            # 실행 + 정리
     .venv/Scripts/python ai/scripts/run_notebook.py --strip-only
+    .venv/Scripts/python ai/scripts/run_notebook.py --notebook ai/notebooks/07_embedding_retrieval.ipynb         --executed-out ai/outputs/step2/notebooks/07_embedding_retrieval.executed.ipynb --keep-outputs
 """
 from __future__ import annotations
 
@@ -55,11 +57,19 @@ def strip_notebook(nb: nbformat.NotebookNode) -> nbformat.NotebookNode:
     return nb
 
 
-def scan_sources(nb: nbformat.NotebookNode) -> list[str]:
+def scan_sources(nb: nbformat.NotebookNode, include_outputs: bool = False) -> list[str]:
     hits = []
     for i, cell in enumerate(nb.cells):
+        texts = [cell.source]
+        if include_outputs and cell.cell_type == "code":
+            for o in cell.get("outputs", []):
+                t = o.get("text", "")
+                texts.append(t if isinstance(t, str) else "".join(t))
+                for v in o.get("data", {}).values():
+                    if isinstance(v, str) and not v.startswith("iVBOR"):   # PNG(base64)은 제외
+                        texts.append(v)
         for name, pat in SECRET_PATTERNS.items():
-            if re.search(pat, cell.source):
+            if any(re.search(pat, t) for t in texts):
                 hits.append(f"cell {i}: {name}")
     return hits
 
@@ -69,6 +79,7 @@ def main() -> int:
     ap.add_argument("--notebook", type=Path, default=DEFAULT_NB)
     ap.add_argument("--executed-out", type=Path, default=DEFAULT_OUT)
     ap.add_argument("--strip-only", action="store_true")
+    ap.add_argument("--keep-outputs", action="store_true", help="실행 결과를 원본 노트북에 남긴다(정리 안 함)")
     ap.add_argument("--timeout", type=int, default=3600)
     args = ap.parse_args()
 
@@ -83,6 +94,17 @@ def main() -> int:
         args.executed_out.parent.mkdir(parents=True, exist_ok=True)
         nbformat.write(nb, args.executed_out)
         print(f"실행본 저장: {_display(args.executed_out)}")
+
+    if args.keep_outputs and not args.strip_only:
+        nbformat.validate(nb)
+        nbformat.write(nb, args.notebook)
+        print(f"실행 결과 포함 원본 저장(정리 안 함): {_display(args.notebook)}")
+        hits = scan_sources(nb, include_outputs=True)
+        if hits:
+            print("경고: 비밀값/개인 경로로 보이는 패턴이 셀 소스·출력에 있습니다:", hits)
+            return 1
+        print("셀 소스·출력 비밀값 패턴 점검: 없음")
+        return 0
 
     clean = strip_notebook(nb)
     nbformat.validate(clean)
