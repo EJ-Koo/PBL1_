@@ -115,11 +115,14 @@ function FloatingStar({
   position,
   color,
   size,
+  brightness = 1,
   onPress,
 }: {
   position: [number, number, number];
   color: string;
   size: number;
+  /** AI 감정 분석 밝기. 1이면 기존 발광 세기(1.5)와 같다. */
+  brightness?: number;
   onPress?: () => void;
 }) {
   const meshRef = useRef<Mesh>(null);
@@ -139,7 +142,7 @@ function FloatingStar({
   return (
     <mesh position={position} ref={meshRef} onClick={handleClick}>
       <sphereGeometry args={[size, 32, 32]} />
-      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.5} roughness={0.2} />
+      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.5 * brightness} roughness={0.2} />
     </mesh>
   );
 }
@@ -268,6 +271,7 @@ export function UniverseScene({
             key={entry.id}
             position={entry.position}
             color={entry.color}
+            brightness={entry.brightness}
             size={0.35}
             onPress={() => onStarPress(entry.id)}
           />
