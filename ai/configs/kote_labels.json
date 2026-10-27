@@ -1,0 +1,199 @@
+{
+  "dataset": "KOTE",
+  "source": {
+    "label_order": "Hugging Face searle-j/kote@66f0eefe4b675a5d5411c7aa08e2c97fc9a9b17f, kote.py의 _LABELS 리스트 순서 (ast 파싱, 코드 미실행). GitHub README의 정서 레이블 목록과 같은 순서.",
+    "id_definition": "라벨 ID = _LABELS 리스트 인덱스(0부터). TSV labels 컬럼의 정수와 같은 체계(kote.py가 ClassLabel(names=_LABELS)로 정의)."
+  },
+  "num_labels": 44,
+  "num_emotions": 43,
+  "none_label": {
+    "id": 24,
+    "name": "없음",
+    "paper_name": "NO EMOTION",
+    "note": "평가자가 정서를 찾지 못했을 때 선택하는 특수 라벨. 라벨이 비어 있는 경우([])와 다르다."
+  },
+  "labels": [
+    {
+      "id": 0,
+      "name": "불평/불만"
+    },
+    {
+      "id": 1,
+      "name": "환영/호의"
+    },
+    {
+      "id": 2,
+      "name": "감동/감탄"
+    },
+    {
+      "id": 3,
+      "name": "지긋지긋"
+    },
+    {
+      "id": 4,
+      "name": "고마움"
+    },
+    {
+      "id": 5,
+      "name": "슬픔"
+    },
+    {
+      "id": 6,
+      "name": "화남/분노"
+    },
+    {
+      "id": 7,
+      "name": "존경"
+    },
+    {
+      "id": 8,
+      "name": "기대감"
+    },
+    {
+      "id": 9,
+      "name": "우쭐댐/무시함"
+    },
+    {
+      "id": 10,
+      "name": "안타까움/실망"
+    },
+    {
+      "id": 11,
+      "name": "비장함"
+    },
+    {
+      "id": 12,
+      "name": "의심/불신"
+    },
+    {
+      "id": 13,
+      "name": "뿌듯함"
+    },
+    {
+      "id": 14,
+      "name": "편안/쾌적"
+    },
+    {
+      "id": 15,
+      "name": "신기함/관심"
+    },
+    {
+      "id": 16,
+      "name": "아껴주는"
+    },
+    {
+      "id": 17,
+      "name": "부끄러움"
+    },
+    {
+      "id": 18,
+      "name": "공포/무서움"
+    },
+    {
+      "id": 19,
+      "name": "절망"
+    },
+    {
+      "id": 20,
+      "name": "한심함"
+    },
+    {
+      "id": 21,
+      "name": "역겨움/징그러움"
+    },
+    {
+      "id": 22,
+      "name": "짜증"
+    },
+    {
+      "id": 23,
+      "name": "어이없음"
+    },
+    {
+      "id": 24,
+      "name": "없음"
+    },
+    {
+      "id": 25,
+      "name": "패배/자기혐오"
+    },
+    {
+      "id": 26,
+      "name": "귀찮음"
+    },
+    {
+      "id": 27,
+      "name": "힘듦/지침"
+    },
+    {
+      "id": 28,
+      "name": "즐거움/신남"
+    },
+    {
+      "id": 29,
+      "name": "깨달음"
+    },
+    {
+      "id": 30,
+      "name": "죄책감"
+    },
+    {
+      "id": 31,
+      "name": "증오/혐오"
+    },
+    {
+      "id": 32,
+      "name": "흐뭇함(귀여움/예쁨)"
+    },
+    {
+      "id": 33,
+      "name": "당황/난처"
+    },
+    {
+      "id": 34,
+      "name": "경악"
+    },
+    {
+      "id": 35,
+      "name": "부담/안_내킴"
+    },
+    {
+      "id": 36,
+      "name": "서러움"
+    },
+    {
+      "id": 37,
+      "name": "재미없음"
+    },
+    {
+      "id": 38,
+      "name": "불쌍함/연민"
+    },
+    {
+      "id": 39,
+      "name": "놀람"
+    },
+    {
+      "id": 40,
+      "name": "행복"
+    },
+    {
+      "id": 41,
+      "name": "불안/걱정"
+    },
+    {
+      "id": 42,
+      "name": "기쁨"
+    },
+    {
+      "id": 43,
+      "name": "안심/신뢰"
+    }
+  ],
+  "aggregation": {
+    "source": "Jeon et al. (2022), arXiv:2205.05300, 4.2 Label / 4.4 Finetuning Preparation",
+    "raw_annotation": "댓글 1개당 평가자 5명이 해당하는 정서를 모두 선택(복수 선택). 5명의 이진 선택을 합해 라벨별 0~5 값을 만든다.",
+    "released_label_rule": "댓글별로 라벨 값(0~5)을 min-max 스케일링한 뒤 0.2를 초과하면 1, 아니면 0. GitHub TSV/Hugging Face dichotomized 설정의 labels가 이 결과다.",
+    "local_check": "raw.json으로 이 규칙을 재현해 배포 라벨과 비교한 결과는 ai/reports/kote_analysis_ko.md 참고."
+  }
+}

@@ -141,3 +141,44 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# =====================================================================
+# Python / AI (ai/) — 데이터·비밀정보·모델 가중치가 Git에 올라가지 않도록
+# =====================================================================
+
+# Python 바이트코드·가상환경
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# 비밀키·인증서 파일 (.env 규칙은 위 dotenv 섹션에 있음, .env.example은 추적 허용)
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+
+# AI 로컬 데이터·캐시·결과 (실행 시 생성됨)
+ai/data/raw/
+ai/data/processed/
+ai/checkpoints/
+ai/outputs/
+ai/.cache/
+
+# 모델 가중치
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors
+ai/**/*.bin
+
+# OS 파일
+.DS_Store
+Thumbs.db
