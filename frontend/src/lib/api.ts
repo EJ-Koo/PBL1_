@@ -1,6 +1,8 @@
 import { Platform } from 'react-native';
 
-export const API_BASE_URL = 'https://diary-galaxy-backend-production-b42c.up.railway.app';
+// 기본은 운영 백엔드. 로컬 백엔드로 확인할 때만 EXPO_PUBLIC_API_BASE_URL(예: http://127.0.0.1:8000)을 지정한다.
+export const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL || 'https://diary-galaxy-backend-production-b42c.up.railway.app';
 
 export type ApiVisibility = 'public' | 'friends' | 'private';
 

@@ -1,0 +1,56 @@
+{
+  "run_name": "ax_bin_lr5e5",
+  "model": {
+    "repo_id": "skt/A.X-Encoder-base",
+    "revision_name": "main@9708f9c",
+    "revision": "9708f9c404ace91efd25c06fac2d73413616f4ef",
+    "note": "SKT A.X Encoder (ModernBERT, 149M, Apache-2.0, 2026-01). KOTE test [UNK] 포함 샘플 1.6%, 최대 242토큰."
+  },
+  "data": {
+    "max_length": 256,
+    "padding": "dynamic",
+    "labels": "official_binary",
+    "label_note": "평가는 항상 공식 이진 라벨. objective.label_target은 학습 목표만 바꾼다."
+  },
+  "train": {
+    "seed": 42,
+    "epochs": 10,
+    "batch_size": 32,
+    "micro_batch_size": 16,
+    "gradient_checkpointing": true,
+    "eval_batch_size": 32,
+    "learning_rate": 5e-05,
+    "weight_decay": 0.01,
+    "warmup_ratio": 0.1,
+    "scheduler": "linear",
+    "max_grad_norm": 1.0,
+    "precision": "bf16",
+    "early_stopping_patience": 3,
+    "selection_metric": "val_macro_f1_tuned",
+    "num_workers": 0,
+    "max_gpu_mem_gib": null,
+    "gpu_mem_note": "실효 배치 32 = micro-batch 16 × 누적 2. gradient checkpointing으로 활성값 메모리를 줄여, 다른 프로그램(게임·Office 등)이 VRAM을 쓰는 상황에서도 학습되게 했다. 결과는 batch 32와 수학적으로 같고 속도만 다르다.",
+    "selection_note": "soft label은 확률 크기가 달라 고정 0.3이 의미 없으므로, 모든 실험에서 validation 라벨별 threshold macro-F1로 epoch를 고른다.",
+    "lr_note": "ModernBERT 계열은 보통 BERT보다 높은 학습률로 미세조정하므로 2e-5(다른 모델과 동일)와 5e-5를 비교하고 validation 라벨 macro-F1로 고른다."
+  },
+  "eval": {
+    "paper_threshold": 0.3,
+    "threshold_grid": {
+      "start": 0.02,
+      "stop": 0.95,
+      "step": 0.01
+    }
+  },
+  "reference": {
+    "paper_macro_f1": 0.56,
+    "hf_trainer_version_macro_f1": 0.55,
+    "source": "KOTE GitHub README (macro F1 0.56 pytorch-lightning 논문 버전 vs 0.55 HF Trainer 버전), 논문 decision threshold 0.3",
+    "differences": "논문은 학습 시 토큰 5% 무작위 교체·5% 마스킹 증강, max_length 512 고정 패딩, warmup 2,500/총 12,500 step을 사용했다. 이 베이스라인은 증강 없이 256 동적 패딩을 쓴다."
+  },
+  "objective": {
+    "label_target": "binary",
+    "group_head": false,
+    "group_loss_weight": 1.0,
+    "note": "A.X Encoder, 공식 이진 라벨 (대조군 exp_kc_bin과 같은 조건)"
+  }
+}
