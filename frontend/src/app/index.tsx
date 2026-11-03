@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 
 import WriteScreen from '@/app/write';
-import { CommunityScreen } from '@/components/community-screen';
+import { MenuScreen } from '@/components/menu-screen';
 import { GroupsScreen } from '@/components/groups-screen';
 import { ShopScreen } from '@/components/shop-screen';
 import { UniverseCanvas } from '@/components/universe-scene';
@@ -25,7 +25,7 @@ import { useDiary } from '@/store/diary-context';
 
 const { width, height } = Dimensions.get('window');
 // fffju 디자인대로 스와이프 3면: 왼쪽=일기 작성 / 가운데=나의 우주 / 오른쪽=그룹.
-// 상점은 우주 화면 상단 stats 알약 탭, 커뮤니티는 상단 ☰ 버튼으로 각각 팝업으로 연다.
+// 상점은 우주 화면 상단 stats 알약 탭, 메뉴(검색·테마·로그아웃 등)는 상단 ☰ 버튼으로 각각 팝업으로 연다.
 const PAGE_LABELS = ['일기', '나의 우주', '그룹'];
 
 export default function HomeScreen() {
@@ -118,7 +118,7 @@ function UniversePage() {
   const { entries } = useDiary();
   const [questVisible, setQuestVisible] = useState(false);
   const [shopVisible, setShopVisible] = useState(false);
-  const [communityVisible, setCommunityVisible] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
 
   return (
     <View style={styles.universeContainer}>
@@ -130,9 +130,9 @@ function UniversePage() {
         </View>
       )}
 
-      {/* 우주 위에 떠 있는 상단 바. fffju 디자인대로 ☰=커뮤니티, 가운데 stats 알약=상점, 오른쪽=퀘스트. */}
+      {/* 우주 위에 떠 있는 상단 바. ☰=메뉴, 가운데 stats 알약=상점, 오른쪽=퀘스트. */}
       <View style={styles.topBar} pointerEvents="box-none">
-        <TouchableOpacity style={styles.iconButton} onPress={() => setCommunityVisible(true)}>
+        <TouchableOpacity style={styles.iconButton} onPress={() => setMenuVisible(true)}>
           <Text style={styles.iconButtonText}>☰</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.statsPill} onPress={() => setShopVisible(true)}>
@@ -182,13 +182,14 @@ function UniversePage() {
         <ShopScreen onClose={() => setShopVisible(false)} />
       </Modal>
 
-      {/* 커뮤니티: 상단 ☰ 버튼으로 여는 전체화면 팝업 (fffju 디자인) */}
+      {/* 메뉴: 상단 ☰ 버튼으로 여는 팝업 (기존 "다른 우주 구경하기" 커뮤니티 팝업을 대체) */}
       <Modal
-        visible={communityVisible}
-        animationType="slide"
-        onRequestClose={() => setCommunityVisible(false)}
+        transparent
+        visible={menuVisible}
+        animationType="fade"
+        onRequestClose={() => setMenuVisible(false)}
       >
-        <CommunityScreen onClose={() => setCommunityVisible(false)} />
+        <MenuScreen onClose={() => setMenuVisible(false)} />
       </Modal>
     </View>
   );

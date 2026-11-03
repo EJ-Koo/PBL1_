@@ -20,9 +20,17 @@ STAR_RADIUS_RANGE = (3.0, 12.0)
 STAR_SIZE_RANGE = (0.25, 1.2)
 STAR_SIZE_CHARS_FOR_MAX = 400
 
+# [MODIFIED 2026-11-03] 별끼리 겹치지 않게 최소 간격을 둔다.
+# 두 별 중심 거리 >= 두 별 반지름(size) 합 + STAR_MIN_GAP 이어야 "빈자리"로 본다.
+# 임베딩 기반 배치가 들어오면 위치 결정 방식 자체가 바뀌므로, 지금은 무작위 후보를 여러 번 뽑는 단순한 방식만 쓴다.
+STAR_MIN_GAP = 0.3
+STAR_PLACEMENT_TRIES = 30
+STAR_RADIUS_GROW_EVERY = 10  # 이만큼 연속으로 실패하면 배치 범위를 바깥으로 넓힌다
+STAR_RADIUS_GROW_STEP = 3.0
 
-def _random_star_position() -> tuple[float, float, float]:
-    radius = random.uniform(*STAR_RADIUS_RANGE)
+
+def _random_star_position(max_radius: float = STAR_RADIUS_RANGE[1]) -> tuple[float, float, float]:
+    radius = random.uniform(STAR_RADIUS_RANGE[0], max_radius)
     theta = random.uniform(0, 2 * math.pi)
     phi = math.acos(2 * random.random() - 1)
     x = radius * math.sin(phi) * math.cos(theta)
@@ -37,15 +45,49 @@ def _star_size_for_content(content: str) -> float:
     return min_size + (max_size - min_size) * ratio
 
 
-def _create_star_for_diary(diary_id: str, content: str) -> None:
-    x, y, z = _random_star_position()
+def _free_star_position(size: float, others: list[dict]) -> tuple[float, float, float]:
+    """기존 별(others: x, y, z, size)과 최소 간격 이상 떨어진 무작위 자리를 찾는다.
+    STAR_PLACEMENT_TRIES번 안에 못 찾으면(별이 아주 많을 때) 가장 덜 붙는 자리를 쓴다."""
+    best: tuple[float, float, float] | None = None
+    best_gap = -math.inf
+    for attempt in range(STAR_PLACEMENT_TRIES):
+        max_radius = STAR_RADIUS_RANGE[1] + STAR_RADIUS_GROW_STEP * (attempt // STAR_RADIUS_GROW_EVERY)
+        candidate = _random_star_position(max_radius)
+        gap = min(
+            (
+                math.dist(candidate, (o["x"], o["y"], o["z"]))
+                - (size + float(o.get("size") or STAR_SIZE_RANGE[0]))
+                for o in others
+            ),
+            default=math.inf,
+        )
+        if gap >= STAR_MIN_GAP:
+            return candidate
+        if gap > best_gap:
+            best, best_gap = candidate, gap
+    assert best is not None
+    return best
+
+
+def _create_star_for_diary(diary_id: str, content: str, user_id: str) -> None:
+    size = _star_size_for_content(content)
+    # 내 기존 별들과 겹치지 않는 자리를 고른다 (다른 사용자 우주는 따로 보이므로 내 별만 비교).
+    existing = (
+        supabase.table("stars")
+        .select("x, y, z, size, diaries!inner(user_id)")
+        .eq("diaries.user_id", user_id)
+        .execute()
+        .data
+        or []
+    )
+    x, y, z = _free_star_position(size, existing)
     supabase.table("stars").insert(
         {
             "diary_id": diary_id,
             "x": x,
             "y": y,
             "z": z,
-            "size": _star_size_for_content(content),
+            "size": size,
         }
     ).execute()
 
@@ -137,7 +179,7 @@ def create_diary(diary: DiaryCreate, user_id: str = Depends(get_current_user_id)
         .execute()
     )
     created = result.data[0]
-    _create_star_for_diary(created["id"], diary.content)
+    _create_star_for_diary(created["id"], diary.content, user_id)
     _tag_diary_groups(created["id"], diary.group_ids)
     return _with_signed_photo_url(created)
 

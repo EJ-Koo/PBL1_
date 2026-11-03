@@ -9,6 +9,7 @@ import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber/native';
 import { Platform, View } from 'react-native';
 import { DataTexture, LinearFilter, RGBAFormat, type Mesh, type Points } from 'three';
 
+import { getRotateSensitivity, loadSettings } from '@/lib/settings';
 import type { DiaryEntry } from '@/store/diary-context';
 
 // pointsMaterial은 텍스처가 없으면 각 점을 네모로 그린다. 중심은 불투명, 가장자리는
@@ -151,7 +152,8 @@ function FloatingStar({
  * r3f가 별 클릭(onClick)에 쓰는 것과 같은 자체 포인터 이벤트 시스템으로 통일함.
  */
 const ZOOM_MIN = 1.2;
-const ZOOM_MAX = 10;
+// [MODIFIED 2026-11-03] 10 → 25: 축소했을 때 우주 전체를 밖에서 내려다볼 수 있게 범위를 넓힘.
+const ZOOM_MAX = 25;
 
 function pointerDistance(points: Map<number, { x: number; y: number }>) {
   const [a, b] = Array.from(points.values());
@@ -195,8 +197,10 @@ function DragPlane() {
         if (!dragging.current) return;
         const deltaX = e.nativeEvent.pageX - lastPoint.current.x;
         const deltaY = e.nativeEvent.pageY - lastPoint.current.y;
-        targetRotX += deltaX * 0.01;
-        targetRotY += deltaY * 0.01;
+        // [MODIFIED 2026-11-03] 메뉴의 회전 민감도(0.1~1.5배)를 곱한다.
+        const speed = 0.01 * getRotateSensitivity();
+        targetRotX += deltaX * speed;
+        targetRotY += deltaY * speed;
         lastPoint.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
       }}
       onPointerUp={(e: ThreeEvent<PointerEvent>) => {
@@ -228,8 +232,11 @@ function DragPlane() {
 function useWheelZoom() {
   useEffect(() => {
     if (Platform.OS !== 'web') return;
+    // [MODIFIED 2026-11-03] 고정 거리(+deltaY*0.0015, 휠 한 칸에 약 0.15)는 체감이 거의 없어서,
+    // 현재 거리에 비례해 움직이는 방식으로 바꿈(휠 한 칸에 약 16%). 가까이서도 멀리서도 같은 느낌으로 움직인다.
     const handleWheel = (e: WheelEvent) => {
-      targetCameraZ = Math.min(Math.max(targetCameraZ + e.deltaY * 0.0015, ZOOM_MIN), ZOOM_MAX);
+      const next = targetCameraZ * Math.exp(e.deltaY * 0.0015);
+      targetCameraZ = Math.min(Math.max(next, ZOOM_MIN), ZOOM_MAX);
     };
     window.addEventListener('wheel', handleWheel, { passive: true });
     return () => window.removeEventListener('wheel', handleWheel);
@@ -244,9 +251,24 @@ export function UniverseScene({
   onStarPress: (id: string) => void;
 }) {
   const groupRef = useRef<import('three').Group>(null);
+  // [MODIFIED 2026-11-03] 행성 상세·일기 작성 화면에 갔다 오면 3D 화면이 새로 만들어지면서
+  // 각도가 0(처음 화면)에서 시작해, 기억해 둔 각도까지 저절로 빙글 돌아가던 문제를 막는다.
+  // 첫 프레임에서 기억한 각도·거리로 바로 맞추고, 그 다음 프레임부터 부드럽게 따라가게 한다.
+  const synced = useRef(false);
   useWheelZoom();
 
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
   useFrame((state) => {
+    if (!synced.current && groupRef.current) {
+      groupRef.current.rotation.y = targetRotX;
+      groupRef.current.rotation.x = targetRotY;
+      state.camera.position.z = targetCameraZ;
+      synced.current = true;
+      return;
+    }
     if (groupRef.current) {
       groupRef.current.rotation.y += (targetRotX - groupRef.current.rotation.y) * 0.1;
       groupRef.current.rotation.x += (targetRotY - groupRef.current.rotation.x) * 0.1;

@@ -184,9 +184,13 @@ const styles = StyleSheet.create({
     paddingTop: 65,
     paddingBottom: 110,
     paddingHorizontal: 18,
+    // [MODIFIED 2026-11-03] PC 모니터처럼 넓은 화면에서 카드가 가로로 너무 늘어나지 않게 가운데 정렬
+    alignItems: 'center',
   },
   card: {
     flex: 1,
+    width: '100%',
+    maxWidth: 520,
     backgroundColor: '#787878',
     borderRadius: 26,
     paddingHorizontal: 22,
