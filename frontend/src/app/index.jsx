@@ -1,7 +1,46 @@
 // @ts-nocheck
-import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView } from 'react-native';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, ImageBackground, AppState, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { Canvas, useFrame } from '@react-three/fiber/native';
+import { Color } from 'three';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { HomeHud } from '@/components/ui/home-hud';
+import { DiaryWriteScreen } from '@/components/ui/diary-write-screen';
+import { GroupSpaceScreen } from '@/components/ui/group-space-screen';
+import { UniverseBottomNav } from '@/components/ui/universe-bottom-nav';
+import { QuestPanel } from '@/components/ui/quest-panel';
+import { DesignPaint, DesignSize } from '@/constants/ui-design';
+import { JournalDialog } from '@/components/ui/journal-dialog';
+import { useJournal } from '@/hooks/use-journal';
+import { useUniverseAudio } from '@/hooks/use-universe-audio';
+import { addDiary, MAX_PHOTOS, localDateKey, purchaseItem, rotationDelta } from '@/lib/journal';
+import { pickPhotos, recoverPendingPhotos } from '@/lib/photos';
+import { showMessage } from '@/lib/feedback';
+import { hasReminderPermission, setDiaryReminder } from '@/lib/reminders';
+
+// Radially faded light, rendered at the same 3D positions as the diary stars.
+// The view-facing vertices keep the light round while the universe rotates.
+const STAR_GLOW_VERTEX = `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    vec4 center = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+    center.xy += position.xy;
+    gl_Position = projectionMatrix * center;
+  }
+`;
+const STAR_GLOW_FRAGMENT = `
+  uniform vec3 glowColor;
+  varying vec2 vUv;
+  void main() {
+    vec2 p = vUv * 2.0 - 1.0;
+    float r2 = dot(p, p);
+    float alpha = exp(-6.0 * r2) * (1.0 - smoothstep(0.8, 1.0, r2));
+    gl_FragColor = vec4(glowColor, alpha);
+    #include <colorspace_fragment>
+  }
+`;
 
 // ---------------------------------------------------------
 // 🚀 [마법의 공책] 손가락으로 화면을 민 거리와 확대 정도를 기억해두는 곳이에요!
@@ -11,8 +50,9 @@ let targetRotY = 0;
 let targetCameraZ = 5; // 기본 카메라 거리 (숫자가 작아질수록 확대, 커질수록 축소)
 
 // 🌟 빛나는 구슬(별) 컴포넌트
-function FloatingStar({ position, color, size }) {
+function FloatingStar({ position, color, size, glow = false }) {
   const meshRef = useRef(null);
+  const glowUniforms = useMemo(() => ({ glowColor: { value: new Color(color) } }), [color]);
   
   // 별이 제자리에서 아주 천천히 반짝거리게 두기
   useFrame((state, delta) => {
@@ -24,14 +64,46 @@ function FloatingStar({ position, color, size }) {
 
   return (
     <mesh position={position} ref={meshRef}>
-      <sphereGeometry args={[size, 32, 32]} />
-      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.5} roughness={0.2} />
+      {glow ? (
+        <>
+          <planeGeometry args={[size * 2, size * 2]} />
+          <shaderMaterial
+            uniforms={glowUniforms}
+            vertexShader={STAR_GLOW_VERTEX}
+            fragmentShader={STAR_GLOW_FRAGMENT}
+            transparent
+            depthWrite={false}
+            toneMapped={false}
+          />
+        </>
+      ) : (
+        <>
+          <sphereGeometry args={[size, 32, 32]} />
+          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.5} roughness={0.2} />
+        </>
+      )}
     </mesh>
   );
 }
 
 // 🌌 우주 공간 전체 컴포넌트 (개인 우주 & 모임 우주 공용)
-function UniverseScene({ stars }) {
+function Comet() {
+  const ref = useRef(null);
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    const phase = clock.getElapsedTime() % 5;
+    ref.current.visible = phase < 1.2;
+    ref.current.position.set(-3 + phase * 5, 3 - phase * 4, -2);
+  });
+  return <group ref={ref}>{Array.from({ length: 12 }, (_, i) => (
+    <mesh key={i} position={[-i * 0.08, i * 0.065, 0]}>
+      <sphereGeometry args={[0.045 * (1 - i / 14), 8, 8]} />
+      <meshBasicMaterial color="#fff" transparent opacity={1 - i / 12} />
+    </mesh>
+  ))}</group>;
+}
+
+function UniverseScene({ stars, glow = false, comet = false }) {
   const groupRef = useRef(null);
   
   // 🔥 [핵심 기능] 매 프레임마다 한 손가락 회전 & 두 손가락 확대/축소를 부드럽게 적용해요!
@@ -47,6 +119,7 @@ function UniverseScene({ stars }) {
     <group ref={groupRef}>
       <ambientLight intensity={0.5} />
       <pointLight position={[10, 10, 10]} intensity={1} />
+      {comet && <Comet />}
       
       {stars.map((star, index) => (
         <FloatingStar
@@ -54,62 +127,126 @@ function UniverseScene({ stars }) {
           position={star.position}
           color={star.color}
           size={star.size}
+          glow={glow}
         />
       ))}
     </group>
   );
 }
 
-// 🌌 배경에 깔리는 작은 은하수 먼지 별들 (시안 느낌 재현용)
-const BG_DOTS = Array.from({ length: 35 }).map((_, i) => ({
-  id: i,
-  top: `${(i * 29) % 100}%`,
-  left: `${(i * 47) % 100}%`,
-  size: (i % 3) + 1,
-  opacity: ((i % 5) + 2) * 0.12,
-}));
-
 // 📱 메인 앱 화면
 export default function App() {
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const uiScale = (width - insets.left - insets.right) / DesignSize.width;
   // 화면 상태: 'diary'(왼쪽 일기작성), 'home'(가운데 홈), 'group'(오른쪽 그룹우주), 'shop'(상점), 'community'(커뮤니티)
   const [currentScreen, setCurrentScreen] = useState('home');
   const [questVisible, setQuestVisible] = useState(false);
 
-  // 🌟 메인 우주(나의 우주)에 떠 있는 별 목록 상태
-  const [myStars, setMyStars] = useState([
-    { position: [-0.8, 0.8, -2], color: '#ff5252', size: 0.32, previewX: '32%', previewY: '38%' },
-    { position: [1.2, 0.4, -1], color: '#536dfe', size: 0.35, previewX: '66%', previewY: '43%' },
-    { position: [1.4, -0.5, -1.5], color: '#536dfe', size: 0.32, previewX: '70%', previewY: '52%' },
-    { position: [-0.8, -1.2, -1], color: '#ffd740', size: 0.32, previewX: '30%', previewY: '57%' },
-    { position: [-0.1, -0.1, -3], color: '#ffffff', size: 0.42, previewX: '43%', previewY: '49%' },
-  ]);
-
-  // 📝 일기 입력창 텍스트 & 공개 범위(그룹 선택) 상태
-  const [diaryText, setDiaryText] = useState('');
-  const [selectedGroupIds, setSelectedGroupIds] = useState([]); // 비어있으면 '비공개(나만 보기)'
-
-  // 🪐 오른쪽 화면(우리의 우주 - 그룹 목록) 상태
-  const [groups, setGroups] = useState([
-    {
-      id: 'group-1',
-      name: '그룹1',
-      stars: [
-        { position: [-0.3, 0.8, -2], color: '#ffffff', size: 0.38, previewX: '42%', previewY: '22%' },
-        { position: [1.2, 0.3, -1.5], color: '#536dfe', size: 0.38, previewX: '78%', previewY: '38%' },
-        { position: [-0.9, -0.6, -1.5], color: '#ffd740', size: 0.38, previewX: '28%', previewY: '68%' },
-      ],
-    },
-    {
-      id: 'group-2',
-      name: '그룹2',
-      stars: [
-        { position: [-0.8, 0.9, -2], color: '#ff5252', size: 0.36, previewX: '31%', previewY: '15%' },
-        { position: [1.1, 0.3, -1.5], color: '#536dfe', size: 0.36, previewX: '69%', previewY: '42%' },
-        { position: [-0.2, -0.5, -2.5], color: '#ffffff', size: 0.4, previewX: '42%', previewY: '68%' },
-        { position: [1.3, -0.9, -1.5], color: '#536dfe', size: 0.34, previewX: '74%', previewY: '82%' },
-      ],
-    },
-  ]);
+  const { data, update, commit, ready, error: storageError, reload } = useJournal();
+  const { stars: myStars, groups, draft, diaries, settings } = data;
+  const diaryText = draft.content;
+  const selectedGroupIds = draft.groupIds;
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const saveLock = useRef(false);
+  const photoLock = useRef(false);
+  const photoRecoveryHandled = useRef(false);
+  const [dialog, setDialog] = useState(null);
+  const [notificationBusy, setNotificationBusy] = useState(false);
+  const notificationLock = useRef(false);
+  const audio = useUniverseAudio(settings, ready);
+  const [today, setToday] = useState(() => localDateKey(new Date()));
+  const setDraft = (recipe) => {
+    if (saveLock.current) return;
+    void update((value) => ({ ...value, draft: recipe(value.draft) })).catch(() => {});
+  };
+  const setDiaryText = (content) => setDraft((value) => ({ ...value, content }));
+  const reportError = (cause) => showMessage('확인해주세요', cause instanceof Error ? cause.message : '다시 시도해주세요.');
+  const changeSetting = (key, value) => {
+    audio.unlock();
+    if (key === 'theme' && value !== 'original') { void buyItem(value); return; }
+    void update((state) => ({ ...state, settings: { ...state.settings, [key]: value } })).catch(reportError);
+    if (key === 'effectVolume') void audio.playEffect(value).catch(() => {});
+  };
+  const toggleNotifications = async () => {
+    if (notificationLock.current) return;
+    notificationLock.current = true;
+    setNotificationBusy(true);
+    const enabled = !settings.notifications;
+    try {
+      await setDiaryReminder(enabled);
+      try {
+        await commit((state) => ({ ...state, settings: { ...state.settings, notifications: enabled } }));
+      } catch (cause) {
+        await setDiaryReminder(!enabled);
+        throw cause;
+      }
+      if (enabled) showMessage('알림 설정', '매일 오후 9시에 일기 작성 알림을 보내드릴게요.');
+    } catch (cause) { reportError(cause); }
+    finally { notificationLock.current = false; setNotificationBusy(false); }
+  };
+  const menuAction = (action) => {
+    audio.unlock();
+    if (['search', 'calendar'].includes(action)) setDialog(action);
+    else if (action === 'logout' || action === 'delete-account') {
+      showMessage('계정 연결 안내', '현재 화면은 로그인 없이 기기에 데이터를 저장하고 있어요. 연결된 계정이 없어 로그아웃·회원 탈퇴를 처리할 수 없어요.');
+    } else if (action === 'terms') showMessage('이용약관', '아직 등록된 이용약관이 없어요.');
+  };
+  useEffect(() => {
+    if (!ready || photoRecoveryHandled.current) return;
+    photoRecoveryHandled.current = true;
+    photoLock.current = true;
+    void recoverPendingPhotos(MAX_PHOTOS - draft.photos.length).then(async (photos) => {
+      if (photos.length) await update((state) => ({ ...state, draft: { ...state.draft, photos: [...state.draft.photos, ...photos].slice(0, MAX_PHOTOS) } }));
+    }).catch(reportError).finally(() => { photoLock.current = false; });
+  }, [ready, draft.photos.length, update]);
+  useEffect(() => {
+    if (!ready) return;
+    const refresh = () => setToday(localDateKey(new Date()));
+    const timer = setInterval(refresh, 30000);
+    const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') refresh(); });
+    return () => { clearInterval(timer); subscription.remove(); };
+  }, [ready]);
+  useEffect(() => {
+    if (!ready || !settings.notifications) return;
+    let cancelled = false;
+    const reconcile = async () => {
+      try {
+        const granted = await hasReminderPermission();
+        if (cancelled) return;
+        if (!granted) {
+          await setDiaryReminder(false);
+          await update((value) => ({ ...value, settings: { ...value.settings, notifications: false } }));
+        } else await setDiaryReminder(true);
+      } catch (cause) { if (!cancelled) reportError(cause); }
+    };
+    void reconcile();
+    const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') void reconcile(); });
+    return () => { cancelled = true; subscription.remove(); };
+  }, [ready, settings.notifications, update]);
+  const addPhotos = async () => {
+    if (photoLock.current || saveLock.current || draft.photos.length >= MAX_PHOTOS) return;
+    photoLock.current = true; setPhotoBusy(true);
+    try {
+      const photos = await pickPhotos(MAX_PHOTOS - draft.photos.length);
+      if (photos.length) await update((value) => ({ ...value, draft: { ...value.draft, photos: [...value.draft.photos, ...photos].slice(0, MAX_PHOTOS) } }));
+    } catch (cause) { reportError(cause); }
+    finally { photoLock.current = false; setPhotoBusy(false); }
+  };
+  const buyItem = async (id) => {
+    if (saveLock.current) return;
+    if (id === 'prism') {
+      showMessage('프리즘', '연속 출석 기능이 아직 연결되지 않아 이 상품은 구매할 수 없어요.');
+      return;
+    }
+    saveLock.current = true;
+    try {
+      await commit((state) => purchaseItem(state, id));
+      showMessage('상점', id === 'comet' ? '혜성을 나의 우주에 적용했어요.' : '배경을 나의 우주에 적용했어요.');
+    } catch (cause) { reportError(cause); }
+    finally { saveLock.current = false; }
+  };
 
   // 새 그룹 추가 모달 & 3D 그룹 상세 보기 상태
   const [createGroupModalVisible, setCreateGroupModalVisible] = useState(false);
@@ -147,8 +284,8 @@ export default function App() {
       const deltaX = touches[0].pageX - lastTouch.current.x;
       const deltaY = touches[0].pageY - lastTouch.current.y;
       
-      targetRotX += deltaX * 0.01; 
-      targetRotY += deltaY * 0.01; 
+      targetRotX += rotationDelta(deltaX, settings.rotationSensitivity);
+      targetRotY += rotationDelta(deltaY, settings.rotationSensitivity);
       
       lastTouch.current = { x: touches[0].pageX, y: touches[0].pageY };
     } else if (touches.length >= 2) {
@@ -171,102 +308,54 @@ export default function App() {
     }
   };
 
-  // 🔒 일기 작성 시 공개 범위(비공개 / 그룹) 토글 함수
-  const handleSelectPrivate = () => {
-    setSelectedGroupIds([]); // 비공개를 누르면 모든 그룹 체크 해제
+  const handleSelectPrivate = () => setDraft((value) => ({ ...value, groupIds: [] }));
+  const handleToggleGroupSelect = (groupId) => setDraft((value) => ({
+    ...value, groupIds: value.groupIds.includes(groupId) ? value.groupIds.filter((id) => id !== groupId) : [...value.groupIds, groupId],
+  }));
+
+  const handleAddDiaryStar = async () => {
+    if (saveLock.current || photoLock.current) return;
+    saveLock.current = true; setSaving(true);
+    try {
+      await commit((state) => addDiary(state));
+      void audio.playEffect().catch(() => {});
+      setCurrentScreen('home');
+    } catch (cause) { reportError(cause); }
+    finally { saveLock.current = false; setSaving(false); }
   };
 
-  const handleToggleGroupSelect = (groupId) => {
-    if (selectedGroupIds.includes(groupId)) {
-      setSelectedGroupIds(selectedGroupIds.filter((id) => id !== groupId));
-    } else {
-      setSelectedGroupIds([...selectedGroupIds, groupId]);
-    }
+  const handleCreateGroup = async () => {
+    if (saveLock.current) return;
+    saveLock.current = true; setSaving(true);
+    try {
+      await commit((state) => ({ ...state, groups: [...state.groups, {
+        id: `group-${Date.now()}`, name: newGroupName.trim() || `그룹${state.groups.length + 1}`, stars: [],
+      }] }));
+      setNewGroupName('');
+      setCreateGroupModalVisible(false);
+    } catch (cause) { reportError(cause); }
+    finally { saveLock.current = false; setSaving(false); }
   };
 
-  // 🌟 일기 작성 완료 시 나의 우주 + 체크한 그룹 우주에 새 별을 띄우는 함수
-  const handleAddDiaryStar = () => {
-    const starColors = ['#ff5252', '#536dfe', '#ffd740', '#ff9ff3', '#1dd1a1', '#ffffff'];
-    const randomColor = starColors[Math.floor(Math.random() * starColors.length)];
-    const randomPosition = [
-      (Math.random() - 0.5) * 3.0,
-      (Math.random() - 0.5) * 3.0,
-      -1 - Math.random() * 2.5,
-    ];
-    // 그룹 카드 프리뷰용 2D 위치
-    const previewX = `${Math.floor(20 + Math.random() * 60)}%`;
-    const previewY = `${Math.floor(20 + Math.random() * 60)}%`;
-
-    const newStar = {
-      position: randomPosition,
-      color: randomColor,
-      size: 0.36,
-      previewX,
-      previewY,
-    };
-
-    // 1) 내 우주에 별 추가
-    setMyStars((prev) => [...prev, newStar]);
-
-    // 2) 체크된 그룹이 있다면 해당 그룹들의 우주에도 똑같은 별 추가!
-    if (selectedGroupIds.length > 0) {
-      setGroups((prevGroups) =>
-        prevGroups.map((group) =>
-          selectedGroupIds.includes(group.id)
-            ? { ...group, stars: [...group.stars, newStar] }
-            : group
-        )
-      );
-    }
-
-    // 입력 초기화 및 홈 화면으로 이동
-    setDiaryText('');
-    setSelectedGroupIds([]);
-    setCurrentScreen('home');
-  };
-
-  // ➕ 오른쪽 화면에서 새로운 그룹 생성 함수
-  const handleCreateGroup = () => {
-    const defaultName = `그룹${groups.length + 1}`;
-    const finalName = newGroupName.trim() ? newGroupName.trim() : defaultName;
-
-    const newGroup = {
-      id: `group-${Date.now()}`,
-      name: finalName,
-      stars: [], // 처음 생성 시 별은 0개 (일기를 공유하면 추가됨)
-    };
-
-    setGroups([...groups, newGroup]);
-    setNewGroupName('');
-    setCreateGroupModalVisible(false);
-  };
+  if (!ready) return (
+    <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', gap: 20 }]}>
+      {storageError ? <><Text style={styles.whiteText}>{storageError}</Text>
+        <TouchableOpacity onPress={reload}><Text style={styles.whiteText}>다시 불러오기</Text></TouchableOpacity></> : <ActivityIndicator color="#fff" />}
+    </View>
+  );
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onTouchStart={audio.unlock}>
       
       {/* ==========================================
           화면 1 (가운데): 우주 홈 화면
       ========================================== */}
       {currentScreen === 'home' && (
-        <View style={styles.universeContainer}>
-          {/* 은하수 배경 점들 */}
-          <View style={StyleSheet.absoluteFill} pointerEvents="none">
-            {BG_DOTS.map((dot) => (
-              <View
-                key={dot.id}
-                style={{
-                  position: 'absolute',
-                  top: dot.top,
-                  left: dot.left,
-                  width: dot.size,
-                  height: dot.size,
-                  borderRadius: dot.size / 2,
-                  backgroundColor: '#fff',
-                  opacity: dot.opacity,
-                }}
-              />
-            ))}
-          </View>
+        <ImageBackground
+          source={require('../../assets/images/night-sky.png')}
+          resizeMode="cover"
+          style={styles.universeContainer}>
+          {settings.theme !== 'original' && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: settings.theme === 'blue' ? '#09275cbb' : '#000000dd' }]} />}
 
           {/* 👇 3D 우주 터치 전용 센서 영역 👇 */}
           <View
@@ -280,120 +369,47 @@ export default function App() {
             onResponderRelease={handleTouchEnd}
           >
             <View style={{ flex: 1 }} pointerEvents="none">
-              <Canvas style={{ flex: 1 }}>
-                <UniverseScene stars={myStars} />
+              <Canvas style={{ flex: 1 }} gl={{ alpha: true }}>
+                <UniverseScene stars={myStars} glow comet={data.purchases.includes('comet')} />
               </Canvas>
             </View>
           </View>
 
           {/* 상단 바 (우주 위에 떠 있음) */}
-          <View style={styles.topBar}>
-            <TouchableOpacity style={styles.iconButton} onPress={() => setCurrentScreen('community')}>
-              <Text style={styles.iconButtonText}>☰</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.statsPill} onPress={() => setCurrentScreen('shop')}>
-              <Text style={styles.statsText}>★ {myStars.length}     🪙 999     ✔️ 2</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.questButton} onPress={() => setQuestVisible(true)}>
-              <Text style={styles.questText}>Quest</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+          <HomeHud
+            scale={uiScale}
+            starCount={myStars.length}
+            coinCount={data.coins}
+            checkCount={new Set(diaries.map((diary) => localDateKey(diary.createdAt))).size}
+            onStats={() => setCurrentScreen('shop')}
+            onQuest={() => setQuestVisible(true)}
+            menuProps={{ settings, purchases: data.purchases, notificationBusy, onSetting: changeSetting, onVolumePreview: audio.previewVolume,
+              onToggleNotifications: toggleNotifications, onAction: menuAction }}
+          />
+        </ImageBackground>
       )}
 
       {/* ==========================================
           화면 2 (왼쪽): 일기 작성 화면 (left-write 시안 반영)
       ========================================== */}
       {currentScreen === 'diary' && (
-        <View style={styles.diaryScreenWrapper}>
-          <View style={styles.diaryOuterCard}>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
-              {/* 상단: 나의 우주로 돌아가기 */}
-              <TouchableOpacity onPress={() => setCurrentScreen('home')}>
-                <Text style={styles.diaryBackText}>{'‹  나의 우주'}</Text>
-              </TouchableOpacity>
-
-              {/* 타이틀 & 날짜 */}
-              <Text style={styles.diaryMainTitle}>오늘은 어떤 별일이 있었나요?</Text>
-              <Text style={styles.diaryDateText}>2026년 9월 17일 목요일</Text>
-
-              <View style={styles.diaryDivider} />
-
-              {/* 본문 입력 영역 */}
-              <TextInput
-                style={styles.diaryTextInput}
-                multiline={true}
-                placeholder="글을 입력해주세요."
-                placeholderTextColor="#222"
-                value={diaryText}
-                onChangeText={setDiaryText}
-              />
-
-              <View style={styles.diaryDivider} />
-
-              {/* 오늘의 장면 (사진 영역) */}
-              <View style={styles.photoHeaderRow}>
-                <Text style={styles.photoSectionTitle}>오늘의 장면</Text>
-                <Text style={styles.photoCountText}>사진 1 / 5</Text>
-              </View>
-
-              <View style={styles.photoBoxesRow}>
-                {/* 첫 번째 사진 아이콘 박스 */}
-                <View style={styles.photoIconBox}>
-                  <View style={styles.photoSunCircle} />
-                  <View style={styles.photoMountainLeft} />
-                  <View style={styles.photoMountainRight} />
-                </View>
-
-                {/* 두 번째 사진 추가(+) 박스 */}
-                <TouchableOpacity style={styles.photoAddBox}>
-                  <Text style={styles.photoAddPlus}>+</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.diaryDivider} />
-
-              {/* 🔒 공개 범위 및 그룹 선택 알약 버튼들 */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.sharePillsRow}
-              >
-                {/* 비공개 버튼 */}
-                <TouchableOpacity
-                  style={[
-                    styles.sharePill,
-                    selectedGroupIds.length === 0 && styles.sharePillSelected,
-                  ]}
-                  onPress={handleSelectPrivate}
-                >
-                  <Text style={styles.sharePillText}>🔒 비공개</Text>
-                </TouchableOpacity>
-
-                {/* 생성된 그룹 버튼들 (그룹1, 그룹2, ...) */}
-                {groups.map((group) => {
-                  const isSelected = selectedGroupIds.includes(group.id);
-                  return (
-                    <TouchableOpacity
-                      key={group.id}
-                      style={[styles.sharePill, isSelected && styles.sharePillSelected]}
-                      onPress={() => handleToggleGroupSelect(group.id)}
-                    >
-                      <Text style={styles.sharePillText}>{group.name}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-
-              {/* 하단: 오늘의 별 띄우기 버튼 */}
-              <TouchableOpacity style={styles.submitStarButton} onPress={handleAddDiaryStar}>
-                <Text style={styles.submitStarButtonText}>오늘의 별 띄우기</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </View>
+        <DiaryWriteScreen
+          scale={uiScale}
+          diaryText={diaryText}
+          onChangeText={setDiaryText}
+          dateLabel={new Date(`${today}T12:00:00`).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
+          authorLabel="HA_LULU"
+          photoCountLabel={`${draft.photos.length}/${MAX_PHOTOS}`}
+          photos={draft.photos} photoBusy={photoBusy} saving={saving}
+          onAddPhotos={addPhotos}
+          onRemovePhoto={(id) => setDraft((value) => ({ ...value, photos: value.photos.filter((photo) => photo.id !== id) }))}
+          groups={groups}
+          selectedGroupIds={selectedGroupIds}
+          onSelectPrivate={handleSelectPrivate}
+          onToggleGroup={handleToggleGroupSelect}
+          onBack={() => setCurrentScreen('home')}
+          onSubmit={handleAddDiaryStar}
+        />
       )}
 
       {/* ==========================================
@@ -401,97 +417,15 @@ export default function App() {
       ========================================== */}
       {currentScreen === 'group' && (
         <View style={styles.groupScreenWrapper}>
-          <Text style={styles.groupHeaderTitle}>우리의 우주</Text>
-
-          <ScrollView
-            style={styles.groupListScroll}
-            contentContainerStyle={{ paddingBottom: 40 }}
-            showsVerticalScrollIndicator={false}
-          >
-            {groups.map((group) => {
-              // 오른쪽 하단 별 5개 중 연두색으로 칠할 개수 계산 (최대 5개)
-              const activeStarCount = Math.min(group.stars.length, 5);
-              return (
-                <TouchableOpacity
-                  key={group.id}
-                  activeOpacity={0.85}
-                  style={styles.groupCard}
-                  onPress={() => setActiveGroup3D(group)}
-                >
-                  {/* 카드 상단: 그룹 우주 미리보기 창 */}
-                  <View style={styles.groupUniversePreview}>
-                    {/* 은하수 작은 배경 별들 */}
-                    {BG_DOTS.slice(0, 18).map((dot) => (
-                      <View
-                        key={dot.id}
-                        style={{
-                          position: 'absolute',
-                          top: dot.top,
-                          left: dot.left,
-                          width: dot.size,
-                          height: dot.size,
-                          borderRadius: dot.size / 2,
-                          backgroundColor: '#fff',
-                          opacity: dot.opacity,
-                        }}
-                      />
-                    ))}
-
-                    {/* 이 그룹에 공유된 빛나는 별들 */}
-                    {group.stars.map((star, idx) => (
-                      <View
-                        key={idx}
-                        style={[
-                          styles.previewGlowingStar,
-                          {
-                            top: star.previewY || `${30 + ((idx * 25) % 50)}%`,
-                            left: star.previewX || `${25 + ((idx * 30) % 55)}%`,
-                            backgroundColor: star.color,
-                            shadowColor: star.color,
-                          },
-                        ]}
-                      />
-                    ))}
-                  </View>
-
-                  {/* 카드 하단: 그룹 이름 & 별 진행도 아이콘 */}
-                  <View style={styles.groupCardFooter}>
-                    <Text style={styles.groupCardName}>{group.name}</Text>
-                    <View style={styles.groupStarIconsRow}>
-                      {[0, 1, 2, 3, 4].map((starIdx) => {
-                        // 오른쪽 끝부터 연두색 별이 채워지도록 표현
-                        const isNeon = starIdx >= 5 - activeStarCount;
-                        return (
-                          <Text
-                            key={starIdx}
-                            style={[
-                              styles.groupFooterStar,
-                              isNeon ? styles.neonGreenStar : styles.darkStar,
-                            ]}
-                          >
-                            ★
-                          </Text>
-                        );
-                      })}
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-
-            {/* ➕ 새 그룹 추가 동그란 버튼 */}
-            <View style={styles.addGroupBtnWrapper}>
-              <TouchableOpacity
-                style={styles.addGroupCircleBtn}
-                onPress={() => setCreateGroupModalVisible(true)}
-              >
-                <Text style={styles.addGroupPlusText}>+</Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
+          <GroupSpaceScreen
+            scale={uiScale}
+            groups={groups}
+            onSelectGroup={setActiveGroup3D}
+            onAddGroup={() => setCreateGroupModalVisible(true)}
+          />
 
           {/* 팝업 1: 새 그룹 추가 모달 */}
-          <Modal transparent={true} visible={createGroupModalVisible} animationType="fade">
+          <Modal transparent={true} visible={createGroupModalVisible} animationType="fade" onRequestClose={() => setCreateGroupModalVisible(false)}>
             <TouchableOpacity
               style={styles.modalOverlay}
               activeOpacity={1}
@@ -528,7 +462,7 @@ export default function App() {
           </Modal>
 
           {/* 팝업 2: 그룹 카드를 눌렀을 때 해당 그룹 우주를 3D로 크게 보기 */}
-          <Modal transparent={false} visible={activeGroup3D !== null} animationType="slide">
+          <Modal transparent={false} visible={activeGroup3D !== null} animationType="slide" onRequestClose={() => setActiveGroup3D(null)}>
             {activeGroup3D && (
               <View style={styles.container}>
                 <View
@@ -576,31 +510,8 @@ export default function App() {
       {/* ==========================================
           팝업: 퀘스트 창
       ========================================== */}
-      <Modal transparent={true} visible={questVisible} animationType="fade">
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setQuestVisible(false)}>
-          <View style={styles.questCard}>
-            <Text style={styles.questCardTitle}>Quest</Text>
-            <Text style={styles.questSectionTitle}>진행 중</Text>
-            <View style={styles.questItem}>
-              <Text style={styles.whiteText}>오늘의 별 띄우기</Text>
-              <Text style={styles.whiteText}>★ 5</Text>
-            </View>
-            <View style={styles.progressBar}><View style={[styles.progressFill, { width: '80%' }]} /></View>
-
-            <View style={styles.questItem}>
-              <Text style={styles.whiteText}>운석 3개 치우기</Text>
-              <Text style={styles.whiteText}>★ 3</Text>
-            </View>
-            <View style={styles.progressBar}><View style={[styles.progressFill, { width: '40%' }]} /></View>
-
-            <Text style={styles.questSectionTitle}>진행 완료</Text>
-            <View style={styles.questItem}>
-              <Text style={styles.grayText}>친구 우주에 편지 보내기</Text>
-              <Text style={styles.grayText}>★ 3</Text>
-            </View>
-            <View style={styles.progressBar}><View style={[styles.progressFill, { width: '100%', backgroundColor: '#80e03e' }]} /></View>
-          </View>
-        </TouchableOpacity>
+      <Modal transparent={true} visible={questVisible} animationType="fade" onRequestClose={() => setQuestVisible(false)}>
+        <QuestPanel scale={uiScale} todayComplete={diaries.some((diary) => localDateKey(diary.createdAt) === today)} onClose={() => setQuestVisible(false)} />
       </Modal>
 
       {/* ==========================================
@@ -668,36 +579,36 @@ export default function App() {
           <View style={styles.shopHeader}>
             <Text style={styles.shopTitle}>🛍️ 상점</Text>
             <View style={styles.shopCoinPill}>
-              <Text style={styles.shopCoinText}>🪙 999</Text>
+              <Text style={styles.shopCoinText}>🪙 {data.coins}</Text>
             </View>
           </View>
 
           <ScrollView style={styles.shopScroll} showsVerticalScrollIndicator={false}>
             <View style={styles.shopGrid}>
-              <View style={styles.shopItemCard}>
+              <TouchableOpacity accessibilityRole="button" onPress={() => buyItem('prism')} style={styles.shopItemCard}>
                 <Text style={styles.shopItemIcon}>❄️</Text>
                 <Text style={styles.shopItemName}>프리즘</Text>
                 <Text style={styles.shopItemDesc}>연속 출석 멈춤을 1회 방어할 수 있다.</Text>
                 <Text style={styles.shopPriceText}>🪙 30</Text>
-              </View>
-              <View style={styles.shopItemCard}>
+              </TouchableOpacity>
+              <TouchableOpacity accessibilityRole="button" onPress={() => buyItem('blue')} style={styles.shopItemCard}>
                 <Text style={styles.shopItemIcon}>🌌</Text>
                 <Text style={styles.shopItemName}>배경 (blue)</Text>
                 <Text style={styles.shopItemDesc}>나의 우주 배경을 바꿀 수 있다.</Text>
                 <Text style={styles.shopPriceText}>🪙 50</Text>
-              </View>
-              <View style={styles.shopItemCard}>
+              </TouchableOpacity>
+              <TouchableOpacity accessibilityRole="button" onPress={() => buyItem('comet')} style={styles.shopItemCard}>
                 <Text style={styles.shopItemIcon}>☄️</Text>
                 <Text style={styles.shopItemName}>혜성</Text>
                 <Text style={styles.shopItemDesc}>5초마다 나의 우주에 혜성이 떨어진다.</Text>
                 <Text style={styles.shopPriceText}>🪙 30</Text>
-              </View>
-              <View style={styles.shopItemCard}>
+              </TouchableOpacity>
+              <TouchableOpacity accessibilityRole="button" onPress={() => buyItem('black')} style={styles.shopItemCard}>
                 <Text style={styles.shopItemIcon}>🌃</Text>
                 <Text style={styles.shopItemName}>배경 (black)</Text>
                 <Text style={styles.shopItemDesc}>나의 우주 배경을 바꿀 수 있다.</Text>
                 <Text style={styles.shopPriceText}>🪙 50</Text>
-              </View>
+              </TouchableOpacity>
             </View>
           </ScrollView>
         </View>
@@ -707,20 +618,17 @@ export default function App() {
           공통: 하단 네비게이션
           왼쪽: 일기 작성(diary) / 가운데: 홈(home) / 오른쪽: 그룹 우주(group)
       ========================================== */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity 
-          style={[styles.navPill, currentScreen === 'diary' && styles.activePill]} 
-          onPress={() => setCurrentScreen('diary')} 
-        />
-        <TouchableOpacity 
-          style={[styles.navPill, styles.navPillLong, currentScreen === 'home' && styles.activePill]} 
-          onPress={() => setCurrentScreen('home')} 
-        />
-        <TouchableOpacity 
-          style={[styles.navPill, currentScreen === 'group' && styles.activePill]} 
-          onPress={() => setCurrentScreen('group')} 
-        />
-      </View>
+      <JournalDialog mode={dialog} diaries={diaries} onClose={() => setDialog(null)} />
+      {storageError && <TouchableOpacity accessibilityRole="alert" onPress={() => { void update((value) => value).catch(reportError); }}
+        style={{ position: 'absolute', top: insets.top + 10, left: 15, right: 15, padding: 12, backgroundColor: '#802020', zIndex: 30 }}>
+        <Text style={styles.whiteText}>{storageError} (눌러서 다시 저장)</Text>
+      </TouchableOpacity>}
+      <UniverseBottomNav
+        scale={uiScale}
+        onDiary={() => setCurrentScreen('diary')}
+        onHome={() => setCurrentScreen('home')}
+        onGroup={() => setCurrentScreen('group')}
+      />
       
     </View>
   );
@@ -730,7 +638,7 @@ export default function App() {
 // 🎨 디자인(CSS) 영역
 // ---------------------------------------------------------
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#05050A' },
+  container: { flex: 1, backgroundColor: DesignPaint.background },
   whiteText: { color: '#fff' },
   grayText: { color: '#a4b0be' },
   
@@ -747,242 +655,10 @@ const styles = StyleSheet.create({
   questButton: { backgroundColor: '#7f8c8d', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
   questText: { fontWeight: 'bold', color: '#111', fontSize: 14 },
 
-  // 2. 왼쪽 일기 작성 화면 스타일 (left-write 시안 반영)
-  diaryScreenWrapper: {
-    flex: 1,
-    backgroundColor: '#000',
-    paddingTop: 65,
-    paddingBottom: 110,
-    paddingHorizontal: 18,
-  },
-  diaryOuterCard: {
-    flex: 1,
-    backgroundColor: '#787878',
-    borderRadius: 26,
-    paddingHorizontal: 22,
-    paddingTop: 22,
-    paddingBottom: 20,
-  },
-  diaryBackText: {
-    color: '#111',
-    fontSize: 15,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
-  diaryMainTitle: {
-    color: '#000',
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 6,
-  },
-  diaryDateText: {
-    color: '#333',
-    fontSize: 13,
-    marginBottom: 14,
-  },
-  diaryDivider: {
-    height: 1,
-    backgroundColor: '#222',
-    marginVertical: 12,
-  },
-  diaryTextInput: {
-    color: '#000',
-    fontSize: 14,
-    minHeight: 200,
-    textAlignVertical: 'top',
-  },
-  photoHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  photoSectionTitle: {
-    color: '#000',
-    fontSize: 15,
-    fontWeight: 'bold',
-  },
-  photoCountText: {
-    color: '#222',
-    fontSize: 12,
-  },
-  photoBoxesRow: {
-    flexDirection: 'row',
-    gap: 14,
-    marginBottom: 8,
-  },
-  photoIconBox: {
-    width: 96,
-    height: 96,
-    backgroundColor: '#000',
-    borderRadius: 14,
-    borderWidth: 4,
-    borderColor: '#d9d9d9',
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  photoSunCircle: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#d9d9d9',
-  },
-  photoMountainLeft: {
-    position: 'absolute',
-    bottom: -18,
-    left: 4,
-    width: 52,
-    height: 52,
-    backgroundColor: '#d9d9d9',
-    transform: [{ rotate: '45deg' }],
-  },
-  photoMountainRight: {
-    position: 'absolute',
-    bottom: -12,
-    right: -4,
-    width: 60,
-    height: 60,
-    backgroundColor: '#d9d9d9',
-    transform: [{ rotate: '45deg' }],
-  },
-  photoAddBox: {
-    width: 96,
-    height: 96,
-    backgroundColor: '#d9d9d9',
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  photoAddPlus: {
-    color: '#a0a0a0',
-    fontSize: 42,
-    fontWeight: '300',
-    lineHeight: 46,
-  },
-  sharePillsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 6,
-    marginBottom: 18,
-  },
-  sharePill: {
-    paddingHorizontal: 18,
-    paddingVertical: 9,
-    borderRadius: 20,
-    backgroundColor: '#9e9e9e',
-    borderWidth: 1,
-    borderColor: '#444',
-  },
-  sharePillSelected: {
-    backgroundColor: '#d9d9d9',
-    borderColor: '#d9d9d9',
-  },
-  sharePillText: {
-    color: '#000',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  submitStarButton: {
-    backgroundColor: '#bdbdbd',
-    paddingVertical: 15,
-    borderRadius: 18,
-    alignItems: 'center',
-    marginTop: 'auto',
-  },
-  submitStarButtonText: {
-    color: '#000',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-
   // 3. 오른쪽 그룹 우주 화면 스타일 (right-group 시안 반영)
   groupScreenWrapper: {
     flex: 1,
-    backgroundColor: '#000',
-    paddingTop: 75,
-    paddingBottom: 100,
-    paddingHorizontal: 22,
-  },
-  groupHeaderTitle: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 22,
-  },
-  groupListScroll: {
-    flex: 1,
-  },
-  groupCard: {
-    backgroundColor: '#9e9e9e',
-    borderRadius: 22,
-    padding: 12,
-    marginBottom: 22,
-  },
-  groupUniversePreview: {
-    width: '100%',
-    height: 155,
-    backgroundColor: '#08080c',
-    borderRadius: 16,
-    overflow: 'hidden',
-    position: 'relative',
-    marginBottom: 10,
-  },
-  previewGlowingStar: {
-    position: 'absolute',
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.95,
-    shadowRadius: 12,
-    elevation: 10,
-  },
-  groupCardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-  },
-  groupCardName: {
-    color: '#000',
-    fontSize: 15,
-    fontWeight: 'bold',
-  },
-  groupStarIconsRow: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  groupFooterStar: {
-    fontSize: 18,
-  },
-  neonGreenStar: {
-    color: '#76ff03',
-  },
-  darkStar: {
-    color: '#1a1a1a',
-  },
-  addGroupBtnWrapper: {
-    alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 30,
-  },
-  addGroupCircleBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#787878',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  addGroupPlusText: {
-    color: '#ccc',
-    fontSize: 30,
-    fontWeight: '300',
-    lineHeight: 34,
+    backgroundColor: DesignPaint.background,
   },
 
   // 공통 하단 네비게이션
@@ -1010,17 +686,6 @@ const styles = StyleSheet.create({
 
   // 모달 & 기타 화면 스타일
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
-  questCard: {
-    position: 'absolute', top: 120, right: 20, width: 220,
-    backgroundColor: 'rgba(255,255,255,0.2)', 
-    borderRadius: 20, padding: 20,
-  },
-  questCardTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginBottom: 15 },
-  questSectionTitle: { color: '#fff', fontSize: 15, fontWeight: 'bold', marginTop: 15, marginBottom: 10 },
-  questItem: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  progressBar: { height: 4, backgroundColor: '#444', borderRadius: 2, marginBottom: 10 },
-  progressFill: { height: '100%', backgroundColor: '#80e03e', borderRadius: 2 },
-
   inviteModalCard: {
     width: '82%',
     backgroundColor: '#1E1E24',

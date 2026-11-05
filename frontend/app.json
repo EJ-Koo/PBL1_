@@ -33,7 +33,14 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
-      ]
+      ],
+      ["expo-audio", { "microphonePermission": false, "recordAudioAndroid": false }],
+      ["expo-image-picker", {
+        "photosPermission": "일기에 첨부할 사진을 선택합니다.",
+        "cameraPermission": false,
+        "microphonePermission": false
+      }],
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,
