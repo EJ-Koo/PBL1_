@@ -13,15 +13,19 @@ import {
   type ApiDiary,
   type ApiGroup,
   type ApiStar,
-  type ApiVisibility,
 } from '@/lib/api';
 
 export type Visibility = 'public' | 'friends' | 'private';
+
+// [MODIFIED 2026-11-05] 사진 여러 장(최대 5장). uri는 화면 표시용, path는 서버 저장 경로.
+// 새로 고른 사진은 path가 없고(아직 업로드 전), 저장할 때 업로드해서 path를 받는다.
+export type DiaryPhoto = { id: string; uri: string; path?: string };
 
 export type DiaryEntry = {
   id: string;
   text: string;
   photoUri: string | null;
+  photos: DiaryPhoto[];
   visibility: Visibility;
   createdAt: number;
   color: string;
@@ -37,20 +41,22 @@ export type SaveResult = { ok: true } | { ok: false; error: string };
 type DiaryContextValue = {
   isLoggedIn: boolean;
   accessToken: string | null;
+  // 로그인한 이메일 (일기 작성 화면의 작성자 표시용)
+  userEmail: string | null;
   login: (email: string, password: string) => Promise<LoginResult>;
   signup: (email: string, password: string) => Promise<SignupResult>;
   logout: () => void;
   entries: DiaryEntry[];
   addEntry: (
     text: string,
-    photoUri: string | null,
+    photos: DiaryPhoto[],
     visibility: Visibility,
     groupIds?: string[]
   ) => Promise<SaveResult>;
   updateEntry: (
     id: string,
     text: string,
-    photoUri: string | null,
+    photos: DiaryPhoto[],
     visibility: Visibility
   ) => Promise<SaveResult>;
   getEntry: (id: string) => DiaryEntry | undefined;
@@ -82,11 +88,28 @@ function fallbackPosition(index: number): [number, number, number] {
   return [x, y, z];
 }
 
+function toPhotos(diary: ApiDiary): DiaryPhoto[] {
+  const urls = diary.photo_urls ?? (diary.photo_url ? [diary.photo_url] : []);
+  const paths = diary.photo_paths ?? [];
+  return urls.map((uri, i) => ({ id: `${diary.id}-photo-${i}`, uri, path: paths[i] }));
+}
+
+// 새로 고른 사진만 업로드하고, 이미 서버에 있는 사진은 저장 경로를 그대로 쓴다 (순서 유지).
+async function uploadPhotos(accessToken: string, photos: DiaryPhoto[]): Promise<string[]> {
+  const paths: string[] = [];
+  for (const photo of photos) {
+    paths.push(photo.path ?? (await apiUploadPhoto(accessToken, photo.uri)).photo_path);
+  }
+  return paths;
+}
+
 function toEntry(diary: ApiDiary, colorIndex: number, star?: ApiStar): DiaryEntry {
+  const photos = toPhotos(diary);
   return {
     id: diary.id,
     text: diary.content,
-    photoUri: diary.photo_url,
+    photoUri: photos[0]?.uri ?? null,
+    photos,
     visibility: diary.visibility,
     createdAt: new Date(diary.created_at).getTime(),
     color: PLANET_COLORS[colorIndex % PLANET_COLORS.length],
@@ -99,6 +122,7 @@ const DiaryContext = createContext<DiaryContextValue | null>(null);
 export function DiaryProvider({ children }: { children: ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [groups, setGroups] = useState<ApiGroup[]>([]);
 
@@ -106,10 +130,12 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
     () => ({
       isLoggedIn,
       accessToken,
+      userEmail,
       login: async (email: string, password: string): Promise<LoginResult> => {
         try {
           const result = await apiLogin(email, password);
           setAccessToken(result.access_token);
+          setUserEmail(email);
           setIsLoggedIn(true);
           try {
             // 일기가 핵심. 별/그룹 조회는 보조라 실패해도 일기를 비우지 않도록 각각 격리한다.
@@ -137,6 +163,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           const result = await apiSignup(email, password);
           if (result.access_token) {
             setAccessToken(result.access_token);
+            setUserEmail(email);
             setIsLoggedIn(true);
             setEntries([]);
             setGroups([]);
@@ -151,6 +178,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
       },
       logout: () => {
         setAccessToken(null);
+        setUserEmail(null);
         setIsLoggedIn(false);
         setEntries([]);
         setGroups([]);
@@ -158,7 +186,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
       entries,
       addEntry: async (
         text: string,
-        photoUri: string | null,
+        photos: DiaryPhoto[],
         visibility: Visibility,
         groupIds: string[] = []
       ): Promise<SaveResult> => {
@@ -166,10 +194,10 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           return { ok: false, error: '로그인이 필요합니다.' };
         }
         try {
-          const photo_url = photoUri ? (await apiUploadPhoto(accessToken, photoUri)).photo_path : null;
+          const photo_paths = await uploadPhotos(accessToken, photos);
           const created = await apiCreateDiary(accessToken, {
             content: text,
-            photo_url,
+            photo_paths,
             visibility,
             group_ids: groupIds,
           });
@@ -191,31 +219,30 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
       updateEntry: async (
         id: string,
         text: string,
-        photoUri: string | null,
+        photos: DiaryPhoto[],
         visibility: Visibility
       ): Promise<SaveResult> => {
         if (!accessToken) {
           return { ok: false, error: '로그인이 필요합니다.' };
         }
         try {
-          const payload: { content: string; visibility: Visibility; photo_url?: string | null } = {
+          const photo_paths = await uploadPhotos(accessToken, photos);
+          const updated = await apiUpdateDiary(accessToken, id, {
             content: text,
             visibility,
-          };
-          if (photoUri === null) {
-            payload.photo_url = null;
-          } else if (!/^https?:\/\//.test(photoUri)) {
-            payload.photo_url = (await apiUploadPhoto(accessToken, photoUri)).photo_path;
-          }
-          const updated = await apiUpdateDiary(accessToken, id, payload as Partial<{
-            content: string;
-            photo_url: string | null;
-            visibility: ApiVisibility;
-          }>);
+            photo_paths,
+          });
+          const updatedPhotos = toPhotos(updated);
           setEntries((prev) =>
             prev.map((e) =>
               e.id === id
-                ? { ...e, text: updated.content, photoUri: updated.photo_url, visibility: updated.visibility }
+                ? {
+                    ...e,
+                    text: updated.content,
+                    photoUri: updatedPhotos[0]?.uri ?? null,
+                    photos: updatedPhotos,
+                    visibility: updated.visibility,
+                  }
                 : e
             )
           );
@@ -249,7 +276,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
         }
       },
     }),
-    [isLoggedIn, accessToken, entries, groups]
+    [isLoggedIn, accessToken, userEmail, entries, groups]
   );
 
   return <DiaryContext.Provider value={value}>{children}</DiaryContext.Provider>;

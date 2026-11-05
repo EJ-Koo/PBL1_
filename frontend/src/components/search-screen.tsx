@@ -1,4 +1,4 @@
-// 일기 검색 화면 (/search 경로. 메뉴 맨 위 "일기 검색"을 누르면 열림).
+// 일기 검색 화면 (/search 경로. 메뉴의 "일기 내용 검색" 또는 달력 아이콘을 누르면 열림).
 // 팝업이 아니라 독립 화면이라, 결과를 눌러 행성 상세로 갔다가 뒤로 오면 검색어·결과가 그대로 남는다.
 // 위: 키워드 검색 / 아래: 달력(날짜) 검색. 둘 다 쓰면 두 조건을 모두 만족하는 일기만 보여준다.
 import { useEffect, useMemo, useState } from 'react';
@@ -20,13 +20,15 @@ import { useDiary } from '@/store/diary-context';
 type Props = {
   onBack: () => void;
   onOpenEntry: (id: string) => void;
+  // 메뉴의 달력 아이콘으로 열면 달력을 펼친 채로 시작한다.
+  initialCalendarOpen?: boolean;
 };
 
-export function SearchScreen({ onBack, onOpenEntry }: Props) {
+export function SearchScreen({ onBack, onOpenEntry, initialCalendarOpen = false }: Props) {
   const { entries } = useDiary();
   const [keyword, setKeyword] = useState('');
   const [dateKey, setDateKey] = useState<string | null>(null);
-  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(initialCalendarOpen);
   const [recent, setRecent] = useState<string[]>([]);
 
   // 기기에 저장된 최근 검색어를 처음 열 때 한 번 불러온다.
@@ -78,7 +80,7 @@ export function SearchScreen({ onBack, onOpenEntry }: Props) {
             onChangeText={setKeyword}
             onSubmitEditing={saveKeyword}
             returnKeyType="search"
-            autoFocus
+            autoFocus={!initialCalendarOpen}
           />
           {keyword.length > 0 && (
             <Pressable onPress={() => setKeyword('')} hitSlop={10}>

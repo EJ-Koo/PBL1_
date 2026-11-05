@@ -34,7 +34,14 @@
           "imageWidth": 76
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      ["expo-audio", { "microphonePermission": false, "recordAudioAndroid": false }],
+      ["expo-image-picker", {
+        "photosPermission": "일기에 첨부할 사진을 선택합니다.",
+        "cameraPermission": false,
+        "microphonePermission": false
+      }],
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,

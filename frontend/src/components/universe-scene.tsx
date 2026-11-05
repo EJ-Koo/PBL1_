@@ -7,103 +7,34 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber/native';
 import { Platform, View } from 'react-native';
-import { DataTexture, LinearFilter, RGBAFormat, type Mesh, type Points } from 'three';
+import { Color, type Group } from 'three';
 
 import { getRotateSensitivity, loadSettings } from '@/lib/settings';
 import type { DiaryEntry } from '@/store/diary-context';
 
-// pointsMaterial은 텍스처가 없으면 각 점을 네모로 그린다. 중심은 불투명, 가장자리는
-// 투명한 작은 원형 텍스처를 입혀서 동그란 별점으로 보이게 한다.
-function createDotTexture() {
-  const size = 16;
-  const center = size / 2;
-  const data = new Uint8Array(size * size * 4);
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const i = (y * size + x) * 4;
-      const dist = Math.hypot(x - center + 0.5, y - center + 0.5) / center;
-      const alpha = Math.max(0, 1 - dist);
-      data[i] = 255;
-      data[i + 1] = 255;
-      data[i + 2] = 255;
-      data[i + 3] = Math.round(Math.pow(alpha, 1.5) * 255);
-    }
-  }
-  const texture = new DataTexture(data, size, size, RGBAFormat);
-  // DataTexture는 기본 필터가 NearestFilter라 확대하면 각지게 보인다. 부드럽게 보간되도록 바꾼다.
-  texture.magFilter = LinearFilter;
-  texture.minFilter = LinearFilter;
-  texture.generateMipmaps = false;
-  texture.needsUpdate = true;
-  return texture;
-}
-
-const DOT_TEXTURE = createDotTexture();
-
-// pointsMaterial의 size는 점 전체에 하나의 값만 적용돼서 크기를 점마다 다르게 못 준다.
-// 그래서 점마다 다른 aSize 속성을 읽어 gl_PointSize를 정하는 셰이더로 대체한다.
-const STARFIELD_VERTEX_SHADER = `
-  attribute float aSize;
+// [MODIFIED 2026-11-05] fffju 디자인으로 외관 교체: 배경은 화면 뒤의 night-sky 이미지(캔버스는 투명),
+// 별은 둥글게 퍼지는 빛(glow)으로 그린다. 조작(드래그 회전·핀치/휠 확대·별 클릭)은 기존 방식 유지.
+// 빛 번짐 셰이더는 fffju index.jsx의 STAR_GLOW_VERTEX/FRAGMENT를 그대로 가져옴.
+const STAR_GLOW_VERTEX = `
+  varying vec2 vUv;
   void main() {
-    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = aSize * (300.0 / -mvPosition.z);
-    gl_Position = projectionMatrix * mvPosition;
+    vUv = uv;
+    vec4 center = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+    center.xy += position.xy;
+    gl_Position = projectionMatrix * center;
   }
 `;
-const STARFIELD_FRAGMENT_SHADER = `
-  uniform sampler2D map;
+const STAR_GLOW_FRAGMENT = `
+  uniform vec3 glowColor;
+  varying vec2 vUv;
   void main() {
-    vec4 tex = texture2D(map, gl_PointCoord);
-    if (tex.a < 0.3) discard;
-    gl_FragColor = vec4(vec3(1.0), tex.a);
+    vec2 p = vUv * 2.0 - 1.0;
+    float r2 = dot(p, p);
+    float alpha = exp(-6.0 * r2) * (1.0 - smoothstep(0.8, 1.0, r2));
+    gl_FragColor = vec4(glowColor, alpha);
+    #include <colorspace_fragment>
   }
 `;
-const STARFIELD_UNIFORMS = { map: { value: DOT_TEXTURE } };
-
-/** 별이 흩뿌려진 배경 하늘. 우주 그룹에 같이 속해서 드래그하면 별들과 함께 돈다. */
-function Starfield() {
-  const pointsRef = useRef<Points>(null);
-
-  const { positions, sizes } = useMemo(() => {
-    const count = 1200;
-    const pos = new Float32Array(count * 3);
-    const siz = new Float32Array(count);
-    for (let i = 0; i < count; i++) {
-      // 카메라를 완전히 감싸는 구 껍질 위에 별을 무작위로 뿌림
-      const radius = 18 + Math.random() * 32;
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      pos[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
-      pos[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
-      pos[i * 3 + 2] = radius * Math.cos(phi);
-      // 별마다 크기를 무작위로. 너무 작으면 안 보이므로 최소 크기를 확보하고 고르게 분포시킴
-      siz[i] = 0.22 + Math.random() * 0.5;
-    }
-    return { positions: pos, sizes: siz };
-  }, []);
-
-  useFrame((_, delta) => {
-    if (pointsRef.current) {
-      pointsRef.current.rotation.y += delta * 0.006;
-    }
-  });
-
-  return (
-    <points ref={pointsRef}>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-        <bufferAttribute attach="attributes-aSize" args={[sizes, 1]} />
-      </bufferGeometry>
-      <shaderMaterial
-        uniforms={STARFIELD_UNIFORMS}
-        vertexShader={STARFIELD_VERTEX_SHADER}
-        fragmentShader={STARFIELD_FRAGMENT_SHADER}
-        transparent
-        depthWrite={false}
-      />
-    </points>
-  );
-}
 
 // 손가락으로 민 거리를 기억해서 우주 전체 회전 각도에 반영하는 값
 let targetRotX = 0;
@@ -123,14 +54,7 @@ function FloatingStar({
   size: number;
   onPress?: () => void;
 }) {
-  const meshRef = useRef<Mesh>(null);
-
-  useFrame((_, delta) => {
-    if (meshRef.current) {
-      meshRef.current.rotation.x += delta * 0.2;
-      meshRef.current.rotation.y += delta * 0.3;
-    }
-  });
+  const glowUniforms = useMemo(() => ({ glowColor: { value: new Color(color) } }), [color]);
 
   const handleClick = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
@@ -138,10 +62,46 @@ function FloatingStar({
   };
 
   return (
-    <mesh position={position} ref={meshRef} onClick={handleClick}>
-      <sphereGeometry args={[size, 32, 32]} />
-      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.5} roughness={0.2} />
-    </mesh>
+    <group position={position}>
+      {/* 보이는 부분: 항상 화면을 향하는 둥근 빛 */}
+      <mesh raycast={() => null}>
+        <planeGeometry args={[size * 2, size * 2]} />
+        <shaderMaterial
+          uniforms={glowUniforms}
+          vertexShader={STAR_GLOW_VERTEX}
+          fragmentShader={STAR_GLOW_FRAGMENT}
+          transparent
+          depthWrite={false}
+          toneMapped={false}
+        />
+      </mesh>
+      {/* 클릭 판정용 투명 구 (빛 평면은 회전 방향에 따라 클릭이 빗나갈 수 있어서 따로 둔다) */}
+      <mesh onClick={handleClick}>
+        <sphereGeometry args={[size * 0.6, 12, 12]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+    </group>
+  );
+}
+
+/** fffju 상점의 "혜성" 아이템. 5초마다 화면을 가로질러 떨어진다. */
+function Comet() {
+  const ref = useRef<Group>(null);
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    const phase = clock.getElapsedTime() % 5;
+    ref.current.visible = phase < 1.2;
+    ref.current.position.set(-3 + phase * 5, 3 - phase * 4, -2);
+  });
+  return (
+    <group ref={ref}>
+      {Array.from({ length: 12 }, (_, i) => (
+        <mesh key={i} position={[-i * 0.08, i * 0.065, 0]} raycast={() => null}>
+          <sphereGeometry args={[0.045 * (1 - i / 14), 8, 8]} />
+          <meshBasicMaterial color="#fff" transparent opacity={1 - i / 12} />
+        </mesh>
+      ))}
+    </group>
   );
 }
 
@@ -228,36 +188,54 @@ function DragPlane() {
 
 // @react-three/fiber/native의 포인터 이벤트는 터치/드래그는 잘 잡지만(DragPlane 참고),
 // 웹 마우스 휠(wheel) 이벤트는 전달하지 않는다 — RN용 이벤트 매니저라 DOM wheel을 안 다룸.
-// 그래서 캔버스에 기대지 않고 window에 직접 wheel 리스너를 붙여서 웹 줌을 구현한다.
-function useWheelZoom() {
-  useEffect(() => {
-    if (Platform.OS !== 'web') return;
-    // [MODIFIED 2026-11-03] 고정 거리(+deltaY*0.0015, 휠 한 칸에 약 0.15)는 체감이 거의 없어서,
-    // 현재 거리에 비례해 움직이는 방식으로 바꿈(휠 한 칸에 약 16%). 가까이서도 멀리서도 같은 느낌으로 움직인다.
-    const handleWheel = (e: WheelEvent) => {
-      const next = targetCameraZ * Math.exp(e.deltaY * 0.0015);
+// 그래서 window에 직접 wheel 리스너를 붙여서 웹 줌을 구현한다.
+// [MODIFIED 2026-11-05] 휠 줌이 가끔 안 먹던 문제 대응:
+//  1) 리스너를 화면(컴포넌트)마다 붙였다 떼던 방식 → 앱 전체에서 한 번만 붙이고 떼지 않는다.
+//     화면 이동(상세·검색 갔다 오기) 중 붙이기/떼기 순서가 꼬여 리스너가 사라지는 경우를 없앤다.
+//  2) 브라우저·마우스에 따라 deltaY 단위가 픽셀(0)이 아니라 줄(1)·페이지(2)로 오면
+//     값이 3 정도로 작아서 거의 안 움직였다 → 픽셀 기준으로 환산한다.
+//  3) 우주(캔버스) 위에서 굴린 휠만 줌으로 쓴다. 메뉴·검색 목록을 스크롤할 때 우주가 같이 줌되지 않게.
+const WHEEL_PIXELS_PER_LINE = 16;
+const WHEEL_STEP_LIMIT = 300;
+let wheelZoomInstalled = false;
+
+function installWheelZoom() {
+  if (Platform.OS !== 'web' || wheelZoomInstalled || typeof window === 'undefined') return;
+  wheelZoomInstalled = true;
+  window.addEventListener(
+    'wheel',
+    (e: WheelEvent) => {
+      // 캔버스 위에는 react-three-fiber가 이벤트용 div를 덧씌우므로, 대상이 캔버스 자체가 아닐 수 있다.
+      // 그래서 우주 화면을 감싼 View(data-universe-zoom 표시)가 이벤트 대상의 조상인지로 판단한다.
+      if (!(e.target as Element | null)?.closest?.('[data-universe-zoom]')) return;
+      const unit =
+        e.deltaMode === 1 ? WHEEL_PIXELS_PER_LINE : e.deltaMode === 2 ? window.innerHeight : 1;
+      const dy = Math.min(Math.max(e.deltaY * unit, -WHEEL_STEP_LIMIT), WHEEL_STEP_LIMIT);
+      // 현재 거리에 비례해 움직인다(휠 한 칸에 약 16%) — 가까이서도 멀리서도 같은 느낌.
+      const next = targetCameraZ * Math.exp(dy * 0.0015);
       targetCameraZ = Math.min(Math.max(next, ZOOM_MIN), ZOOM_MAX);
-    };
-    window.addEventListener('wheel', handleWheel, { passive: true });
-    return () => window.removeEventListener('wheel', handleWheel);
-  }, []);
+    },
+    { passive: true }
+  );
 }
 
 export function UniverseScene({
   entries,
   onStarPress,
+  comet = false,
 }: {
   entries: DiaryEntry[];
   onStarPress: (id: string) => void;
+  comet?: boolean;
 }) {
-  const groupRef = useRef<import('three').Group>(null);
+  const groupRef = useRef<Group>(null);
   // [MODIFIED 2026-11-03] 행성 상세·일기 작성 화면에 갔다 오면 3D 화면이 새로 만들어지면서
   // 각도가 0(처음 화면)에서 시작해, 기억해 둔 각도까지 저절로 빙글 돌아가던 문제를 막는다.
   // 첫 프레임에서 기억한 각도·거리로 바로 맞추고, 그 다음 프레임부터 부드럽게 따라가게 한다.
   const synced = useRef(false);
-  useWheelZoom();
 
   useEffect(() => {
+    installWheelZoom();
     loadSettings();
   }, []);
 
@@ -283,14 +261,14 @@ export function UniverseScene({
         <ambientLight intensity={0.5} />
         <pointLight position={[10, 10, 10]} intensity={1} />
 
-        <Starfield />
+        {comet && <Comet />}
 
         {entries.map((entry) => (
           <FloatingStar
             key={entry.id}
             position={entry.position}
             color={entry.color}
-            size={0.35}
+            size={0.36}
             onPress={() => onStarPress(entry.id)}
           />
         ))}
@@ -299,18 +277,21 @@ export function UniverseScene({
   );
 }
 
-/** 3D 우주 화면. 드래그 회전은 UniverseScene 안의 DragPlane이 처리한다. */
+/** 3D 우주 화면. 배경이 비치도록 캔버스는 투명. 드래그 회전은 UniverseScene 안의 DragPlane이 처리한다. */
 export function UniverseCanvas({
   entries,
   onStarPress,
+  comet = false,
 }: {
   entries: DiaryEntry[];
   onStarPress: (id: string) => void;
+  comet?: boolean;
 }) {
   return (
-    <View style={{ flex: 1 }}>
-      <Canvas style={{ flex: 1 }}>
-        <UniverseScene entries={entries} onStarPress={onStarPress} />
+    // dataSet은 웹에서 data-universe-zoom 속성이 된다 (휠 줌 대상 판단용, 위 installWheelZoom 참고).
+    <View style={{ flex: 1 }} {...({ dataSet: { universeZoom: 'true' } } as object)}>
+      <Canvas style={{ flex: 1 }} gl={{ alpha: true }}>
+        <UniverseScene entries={entries} onStarPress={onStarPress} comet={comet} />
       </Canvas>
     </View>
   );

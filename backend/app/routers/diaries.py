@@ -115,17 +115,65 @@ def _tag_diary_groups(diary_id: str, group_ids: list[str]) -> None:
     ).execute()
 
 
-def _with_signed_photo_url(diary: dict) -> dict:
-    path = diary.get("photo_url")
-    if not path:
-        return diary
+# [MODIFIED 2026-11-05] 사진 여러 장(최대 5장) 지원.
+# DB의 photo_paths(text[]) 컬럼에 저장 경로 목록을 두고, photo_url에는 첫 번째 경로를 같이 넣는다
+# (예전 화면·관리자 화면이 photo_url 하나만 보기 때문).
+# photo_paths 컬럼은 diary_galaxy_schema.sql 맨 아래 migration을 Supabase에서 실행해야 생긴다.
+# 실행 전에도 서버가 죽지 않도록, 컬럼이 없으면 첫 장만 photo_url에 저장하는 예전 방식으로 동작한다.
+_photo_paths_column = True
+
+
+def _stored_photo_paths(diary: dict) -> list[str]:
+    paths = diary.get("photo_paths") or []
+    if paths:
+        return list(paths)
+    return [diary["photo_url"]] if diary.get("photo_url") else []
+
+
+def _sign(path: str) -> str | None:
     try:
-        signed = supabase.storage.from_(PHOTO_BUCKET).create_signed_url(
-            path, PHOTO_URL_TTL
-        )
-        return {**diary, "photo_url": signed.get("signedURL") or signed.get("signedUrl")}
+        signed = supabase.storage.from_(PHOTO_BUCKET).create_signed_url(path, PHOTO_URL_TTL)
+        return signed.get("signedURL") or signed.get("signedUrl")
     except Exception:
-        return {**diary, "photo_url": None}
+        return None
+
+
+def _with_signed_photo_url(diary: dict) -> dict:
+    paths = _stored_photo_paths(diary)
+    urls = [u for u in (_sign(p) for p in paths) if u]
+    return {
+        **diary,
+        "photo_url": urls[0] if urls else None,
+        "photo_urls": urls,
+        "photo_paths": paths,
+    }
+
+
+def _remove_photos(paths: list[str]) -> None:
+    if not paths:
+        return
+    try:
+        supabase.storage.from_(PHOTO_BUCKET).remove(paths)
+    except Exception:
+        pass
+
+
+def _is_missing_photo_paths_column(error: Exception) -> bool:
+    return "photo_paths" in str(error)
+
+
+def _write_diary(query_builder, row: dict):
+    """photo_paths 컬럼이 아직 없으면(마이그레이션 전) 그 값만 빼고 다시 저장한다."""
+    global _photo_paths_column
+    if not _photo_paths_column:
+        row = {k: v for k, v in row.items() if k != "photo_paths"}
+    try:
+        return query_builder(row).execute()
+    except Exception as e:
+        if "photo_paths" in row and _is_missing_photo_paths_column(e):
+            _photo_paths_column = False
+            return query_builder({k: v for k, v in row.items() if k != "photo_paths"}).execute()
+        raise
 
 
 def _get_owned_diary(diary_id: UUID, user_id: str) -> dict:
@@ -166,18 +214,15 @@ def get_diary(diary_id: UUID, user_id: str = Depends(get_current_user_id)):
 @router.post("", response_model=Diary)
 def create_diary(diary: DiaryCreate, user_id: str = Depends(get_current_user_id)):
     _assert_owns_groups(diary.group_ids, user_id)
-    result = (
-        supabase.table("diaries")
-        .insert(
-            {
-                "user_id": user_id,
-                "content": diary.content,
-                "photo_url": diary.photo_url,
-                "visibility": diary.visibility,
-            }
-        )
-        .execute()
-    )
+    paths = diary.photo_paths or ([diary.photo_url] if diary.photo_url else [])
+    row = {
+        "user_id": user_id,
+        "content": diary.content,
+        "photo_url": paths[0] if paths else None,
+        "photo_paths": paths,
+        "visibility": diary.visibility,
+    }
+    result = _write_diary(lambda r: supabase.table("diaries").insert(r), row)
     created = result.data[0]
     _create_star_for_diary(created["id"], diary.content, user_id)
     _tag_diary_groups(created["id"], diary.group_ids)
@@ -198,14 +243,23 @@ def update_diary(
     if not update_data:
         return _with_signed_photo_url(existing)
 
-    old_photo_path = existing.get("photo_url")
+    old_paths = _stored_photo_paths(existing)
+    new_paths = old_paths
+    if "photo_paths" in update_data:
+        new_paths = list(update_data["photo_paths"] or [])
+    elif "photo_url" in update_data:
+        new_paths = [update_data["photo_url"]] if update_data["photo_url"] else []
+    if "photo_paths" in update_data or "photo_url" in update_data:
+        update_data["photo_paths"] = new_paths
+        update_data["photo_url"] = new_paths[0] if new_paths else None
+
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
-    result = (
-        supabase.table("diaries")
-        .update(update_data)
+    result = _write_diary(
+        lambda r: supabase.table("diaries")
+        .update(r)
         .eq("id", str(diary_id))
-        .eq("user_id", user_id)
-        .execute()
+        .eq("user_id", user_id),
+        update_data,
     )
 
     if "content" in update_data:
@@ -213,12 +267,7 @@ def update_diary(
             {"size": _star_size_for_content(update_data["content"])}
         ).eq("diary_id", str(diary_id)).execute()
 
-    new_photo_path = update_data.get("photo_url", old_photo_path)
-    if old_photo_path and old_photo_path != new_photo_path:
-        try:
-            supabase.storage.from_(PHOTO_BUCKET).remove([old_photo_path])
-        except Exception:
-            pass
+    _remove_photos([p for p in old_paths if p not in new_paths])
 
     return _with_signed_photo_url(result.data[0])
 
@@ -229,9 +278,5 @@ def delete_diary(diary_id: UUID, user_id: str = Depends(get_current_user_id)):
     supabase.table("diaries").delete().eq("id", str(diary_id)).eq(
         "user_id", user_id
     ).execute()
-    if existing.get("photo_url"):
-        try:
-            supabase.storage.from_(PHOTO_BUCKET).remove([existing["photo_url"]])
-        except Exception:
-            pass
+    _remove_photos(_stored_photo_paths(existing))
     return Response(status_code=204)

@@ -1,9 +1,9 @@
 import { Platform } from 'react-native';
 
-// 기본값은 Railway 서버. 로컬 백엔드로 테스트할 때만 실행 시 EXPO_PUBLIC_API_URL로 바꾼다.
+// [MODIFIED 2026-11-05] 기본값은 Cloudtype에 올린 서버 (api.star2day.com → Cloudflare → Cloudtype).
+// 로컬 백엔드로 테스트할 때만 실행 시 EXPO_PUBLIC_API_URL로 바꾼다.
 // 예) $env:EXPO_PUBLIC_API_URL="http://localhost:8000"; npx expo start --web
-export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ?? 'https://diary-galaxy-backend-production-b42c.up.railway.app';
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://api.star2day.com';
 
 export type ApiVisibility = 'public' | 'friends' | 'private';
 
@@ -12,6 +12,10 @@ export type ApiDiary = {
   user_id: string;
   content: string;
   photo_url: string | null;
+  // [MODIFIED 2026-11-05] 사진 여러 장(최대 5장). photo_urls는 화면 표시용 서명 URL, photo_paths는 저장 경로.
+  // 서버가 예전 버전이면 없을 수 있어서 선택 값으로 둔다.
+  photo_urls?: string[];
+  photo_paths?: string[];
   visibility: ApiVisibility;
   created_at: string;
   updated_at: string;
@@ -92,7 +96,7 @@ export async function apiCreateDiary(
   accessToken: string,
   payload: {
     content: string;
-    photo_url: string | null;
+    photo_paths: string[];
     visibility: ApiVisibility;
     group_ids?: string[];
   }
@@ -242,7 +246,7 @@ export async function apiAdminDeleteDiary(adminToken: string, diaryId: string) {
 export async function apiUpdateDiary(
   accessToken: string,
   id: string,
-  payload: Partial<{ content: string; photo_url: string | null; visibility: ApiVisibility }>
+  payload: Partial<{ content: string; photo_paths: string[]; visibility: ApiVisibility }>
 ) {
   const res = await fetch(`${API_BASE_URL}/diaries/${id}`, {
     method: 'PATCH',

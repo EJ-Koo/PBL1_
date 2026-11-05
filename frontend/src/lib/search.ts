@@ -56,7 +56,7 @@ export function makeSnippet(text: string, keyword: string, radius = 18): Snippet
 }
 
 // 최근 검색어: 기기 저장소(AsyncStorage)에 남겨 새로고침·재실행 후에도 유지한다.
-// 서버로 보내지 않으므로 검색 기록은 이 기기에만 남는다. 로그아웃하면 지운다(menu-screen.tsx).
+// 서버로 보내지 않으므로 검색 기록은 이 기기에만 남는다. 로그아웃해도 지우지 않는다.
 const RECENT_KEY = 'search:recentKeywords';
 const MAX_RECENT = 10;
 let recentKeywords: string[] = [];

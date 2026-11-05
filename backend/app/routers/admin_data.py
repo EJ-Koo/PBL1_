@@ -3,7 +3,11 @@ from supabase import AuthApiError
 
 from app.db import supabase
 from app.dependencies import get_current_admin_id
-from app.routers.diaries import PHOTO_BUCKET, _with_signed_photo_url
+from app.routers.diaries import (
+    _remove_photos,
+    _stored_photo_paths,
+    _with_signed_photo_url,
+)
 from app.schemas.admin import AdminDiaryOut, AdminUserOut
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -45,14 +49,9 @@ def list_users(admin_id: str = Depends(get_current_admin_id)):
 @router.delete("/users/{user_id}", status_code=204)
 def delete_user(user_id: str, admin_id: str = Depends(get_current_admin_id)):
     diaries = (
-        supabase.table("diaries").select("photo_url").eq("user_id", user_id).execute().data
+        supabase.table("diaries").select("*").eq("user_id", user_id).execute().data
     )
-    photo_paths = [d["photo_url"] for d in diaries if d.get("photo_url")]
-    if photo_paths:
-        try:
-            supabase.storage.from_(PHOTO_BUCKET).remove(photo_paths)
-        except Exception:
-            pass
+    _remove_photos([p for d in diaries for p in _stored_photo_paths(d)])
     try:
         supabase.auth.admin.delete_user(user_id)
     except AuthApiError as e:
@@ -82,10 +81,5 @@ def delete_diary(diary_id: str, admin_id: str = Depends(get_current_admin_id)):
 
     supabase.table("diaries").delete().eq("id", diary_id).execute()
 
-    photo_path = existing.data[0].get("photo_url")
-    if photo_path:
-        try:
-            supabase.storage.from_(PHOTO_BUCKET).remove([photo_path])
-        except Exception:
-            pass
+    _remove_photos(_stored_photo_paths(existing.data[0]))
     return Response(status_code=204)
