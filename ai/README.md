@@ -17,7 +17,7 @@
 |---|---|---|---|
 | 확정 | KOTE 데이터 분석 (노트북 01) | 완료 | 없음 |
 | 확정 | 감정 분류 모델 학습·비교·개선 실험 (노트북 02·04·05) | 완료 (실험 기록) | 서비스에 앙상블을 쓸지는 배포 자원을 보고 결정 |
-| 초안 | 감정 후처리, 감정 → 색·밝기·행성 매핑 (노트북 03·06) | v0.1 동작함 | **수정 예정**: 그룹 묶기, 색·밝기 규칙, 부정 편향 보정 |
+| 초안 | 감정 후처리, 감정 → 색·밝기·행성 매핑 (노트북 03·06) | v0.1 동작함. 행성 외형 v0.2 시안(`planet_visual.py`)은 이 PC에서만 확인 | **수정 예정**: 그룹 묶기, 색·밝기 규칙, 부정 편향 보정, v0.2 기준값을 실제 일기로 보정 |
 | 로컬 완료 | 의미 임베딩·관련 기억·3D 위치 (노트북 07·08) | 가상 일기 76개로 검증 | 실제 데이터로 τ(관련 기억 기준값) 다시 정하기 |
 | 로컬 완료 | AI 서비스(`ai/service/`) ↔ 백엔드 ↔ 프론트 연동 | 이 PC에서 동작 확인 (실제 AI 서비스 + 가짜 DB, 백엔드 테스트 23개). 실제 DB로 앱 화면 확인은 진행 전 | **배포 위치 미정**(GPU 서버·Railway 등), 모델 가중치 공유 방법 미정 |
 | 미정 | 프론트 디자인 (관련 기억 표시, 별 모양) | 지금은 좌표·색·밝기만 반영, 화면 디자인 변경 없음 | 팀 논의 후 결정 |
@@ -33,6 +33,7 @@
 - [reports/improvement_experiments_ko.md](reports/improvement_experiments_ko.md): 성능 개선 실험(그룹 동시 학습, soft label, seed 앙상블)
 - [reports/postprocess_ax_ko.md](reports/postprocess_ax_ko.md): A.X Encoder 추가 실험, 감정 후처리(라벨 묶기·부정 편향 보정)
 - [reports/planet_mapping_design_ko.md](reports/planet_mapping_design_ko.md): 감정 → 행성 외형 매핑 설계
+- [reports/planet_visual_v02_ko.md](reports/planet_visual_v02_ko.md): 행성 외형 v0.2 시안(대표색표, 드문 감정 보조색, 애매·없음 표시, 크기 = 글 분량)
 - [reports/progress_2026-10-15_ko.md](reports/progress_2026-10-15_ko.md): 진행 현황 요약(2026-10-15 미팅용, 그 시점 기준)
 - [reports/step2_positioning_design_ko.md](reports/step2_positioning_design_ko.md): 2단계 설계(의미 임베딩 → 위치·군집·별자리)
 - [reports/step2_local_validation_ko.md](reports/step2_local_validation_ko.md): 2단계 로컬 검증(임베딩 모델 선택, 좌표 방식 선택)
