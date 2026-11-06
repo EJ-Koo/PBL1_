@@ -14,6 +14,7 @@ import {
   type ApiGroup,
   type ApiStar,
 } from '@/lib/api';
+import { fallbackVisual, type PlanetVisual } from '@/lib/planet-visual';
 
 export type Visibility = 'public' | 'friends' | 'private';
 
@@ -28,8 +29,13 @@ export type DiaryEntry = {
   photos: DiaryPhoto[];
   visibility: Visibility;
   createdAt: number;
+  /** 대표색(상세 화면 등 단색이 필요한 곳). 행성 렌더링은 planet을 쓴다. */
   color: string;
+  /** AI 감정 분석으로 정한 별 밝기. 1이면 기존과 같은 밝기. */
+  brightness: number;
   position: [number, number, number];
+  /** 행성 외형(감정). AI 분석 결과가 없으면 무채색 기본 행성. 크기는 text 분량으로 따로 계산한다. */
+  planet: PlanetVisual;
 };
 
 export type LoginResult = { ok: true } | { ok: false; error: string };
@@ -64,8 +70,6 @@ type DiaryContextValue = {
   groups: ApiGroup[];
   createGroup: (name: string) => Promise<SaveResult>;
 };
-
-const PLANET_COLORS = ['#7C6CF6', '#F6A96C', '#6CF6C1', '#F66C9E', '#6CB4F6'];
 
 function isSameDay(timestamp: number) {
   const a = new Date(timestamp);
@@ -103,6 +107,12 @@ async function uploadPhotos(accessToken: string, photos: DiaryPhoto[]): Promise<
   return paths;
 }
 
+// 행성 외형: 서버(AI 감정 분석)가 준 planet을 그대로 쓴다. 없으면 저장된 대표색만, 그것도 없으면(흰색 기본값)
+// 감정 색처럼 보이지 않는 무채색 기본 행성. 예전처럼 순서대로 돌아가는 팔레트 색은 쓰지 않는다(감정과 무관한 색이라서).
+function starVisual(star: ApiStar | undefined): PlanetVisual {
+  return star?.planet ?? fallbackVisual(star?.color ?? null);
+}
+
 function toEntry(diary: ApiDiary, colorIndex: number, star?: ApiStar): DiaryEntry {
   const photos = toPhotos(diary);
   return {
@@ -112,8 +122,10 @@ function toEntry(diary: ApiDiary, colorIndex: number, star?: ApiStar): DiaryEntr
     photos,
     visibility: diary.visibility,
     createdAt: new Date(diary.created_at).getTime(),
-    color: PLANET_COLORS[colorIndex % PLANET_COLORS.length],
+    color: starVisual(star).base_color,
+    brightness: star?.brightness ?? 1,
     position: star ? [star.x, star.y, star.z] : fallbackPosition(colorIndex),
+    planet: starVisual(star),
   };
 }
 
@@ -246,6 +258,18 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
                 : e
             )
           );
+          // 내용이 바뀌면 서버가 감정 분석을 다시 해 별 색·밝기·행성 외형이 바뀌므로 다시 받아온다.
+          // 행성 크기는 text(공백 제외 글자 수)로 그릴 때 계산하므로 위에서 text를 바꾼 것으로 이미 반영된다.
+          const starList = await apiListStars(accessToken).catch(() => []);
+          const star = starList.find((s) => s.diary_id === id);
+          if (star) {
+            const planet = starVisual(star);
+            setEntries((prev) =>
+              prev.map((e) =>
+                e.id === id ? { ...e, color: planet.base_color, brightness: star.brightness, planet } : e
+              )
+            );
+          }
           return { ok: true };
         } catch (err) {
           return {

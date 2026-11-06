@@ -1,0 +1,45 @@
+{
+  "version": "0.1",
+  "description": "AI 추론 서비스 설정. 일기 텍스트 → 감정 확률 → 후처리(그룹·정서) → 행성 매핑 → 별 색·밝기.",
+  "models": [
+    {
+      "name": "KcELECTRA-base (v2021) baseline_v2021_s42",
+      "checkpoint_dir": "checkpoints/emotion_baseline/baseline_v2021_s42",
+      "note": "ai/ 기준 상대경로. 가중치는 Git에 없으므로 배포 환경에는 따로 올려야 한다(ai/README.md 'AI 추론 서비스' 참고)."
+    }
+  ],
+  "model_note": "기본은 KcELECTRA 단일(약 0.5GB, CPU 일기 1개 약 10ms). 행성 매핑의 고리 기준(active_min)도 이 모델로 보정했다. 앙상블을 쓰려면 models에 KLUE-large(checkpoints/emotion_baseline/klue_roberta_large_s42)를 추가하고 03 노트북으로 매핑을 다시 보정한다.",
+  "star": {
+    "color_source": "planet.base_color",
+    "brightness_source": "planet.glow",
+    "brightness_range": [
+      0.5,
+      1.5
+    ],
+    "brightness_note": "glow(0~1, 긍정적이고 강한 감정일수록 큼)를 0.5~1.5로 옮긴다. glow 0.5 → 1.0(기존 기본값과 같은 밝기)."
+  },
+  "max_text_chars": 5000,
+  "positioning": {
+    "description": "2단계: 일기 의미 임베딩 → 관련 기억 검색 → 3D 좌표(방식 C: 의미 이웃 순차 삽입, 이웃 없으면 고정 PCA 위치). 근거: ai/reports/step2_local_validation_ko.md",
+    "embedding_model": "kure_v1",
+    "embedding_models_config": "embedding_models.json",
+    "tau": 0.5571,
+    "tau_note": "07 노트북에서 가상 일기 dev 쌍으로 정한 값(F1 최대). 합성 pilot 기준이라 test에서 무관 연결 약 36% — 실제 데이터로 다시 정해야 한다.",
+    "k_related": 3,
+    "neighbor": {
+      "k": 3,
+      "gap": 1.2
+    },
+    "min_dist": 0.8,
+    "target_radius": 10.0,
+    "scene_scale": 1.6,
+    "scene_scale_note": "저장소 좌표(반지름 약 0.7~7.4)에 곱하는 고정 배율. 프론트 장면의 기존 무작위 배치 범위(반지름 3~12)에 비슷하게 맞춘다. 고정 값이라 기존 별 위치가 바뀌지 않는다. 바꾸면 이미 저장된 별(DB stars.x/y/z)과 새 별의 배율이 달라진다.",
+    "reference": {
+      "dataset": "pilot_diaries.json",
+      "split": "dev",
+      "note": "고정 PCA 투영기를 처음 실행할 때 한 번 fit해 data_dir에 저장하고, 이후에는 다시 fit하지 않는다(실제 사용자 일기 사용 안 함)."
+    },
+    "data_dir": "data/service/positioning",
+    "data_note": "ai/ 기준. 사용자별 임베딩·좌표 저장소. 일기 원문에서 만든 민감 정보이므로 Git 제외(.gitignore)."
+  }
+}

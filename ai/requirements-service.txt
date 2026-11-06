@@ -1,0 +1,13 @@
+# 오늘의별일 AI 추론 서비스(ai/service) 실행에 필요한 패키지.
+# 학습·분석 패키지(matplotlib, pyarrow, nbclient 등)는 넣지 않았다.
+# 검증 환경: Python 3.13.5, Windows 11. 서버에 GPU가 없으면 torch는 CPU 빌드를 설치한다
+# (https://pytorch.org/get-started/locally/ 에서 OS·CPU에 맞는 torch==2.14.1 설치 명령 확인).
+
+numpy==2.5.3
+pandas==3.0.6
+transformers==5.19.0
+huggingface_hub==1.33.0
+torch==2.14.1
+
+fastapi==0.162.0
+uvicorn[standard]==0.54.0

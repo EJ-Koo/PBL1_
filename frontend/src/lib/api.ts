@@ -1,9 +1,15 @@
 import { Platform } from 'react-native';
 
+import type { PlanetVisual } from '@/lib/planet-visual';
+
 // [MODIFIED 2026-11-05] 기본값은 Cloudtype에 올린 서버 (api.star2day.com → Cloudflare → Cloudtype).
 // 로컬 백엔드로 테스트할 때만 실행 시 EXPO_PUBLIC_API_URL로 바꾼다.
 // 예) $env:EXPO_PUBLIC_API_URL="http://localhost:8000"; npx expo start --web
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://api.star2day.com';
+// (AI 브랜치에서 쓰던 이름 EXPO_PUBLIC_API_BASE_URL도 그대로 받는다.)
+export const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL ||
+  process.env.EXPO_PUBLIC_API_BASE_URL ||
+  'https://api.star2day.com';
 
 export type ApiVisibility = 'public' | 'friends' | 'private';
 
@@ -68,6 +74,8 @@ export type ApiStar = {
   color: string;
   size: number;
   brightness: number;
+  /** AI 감정 분석으로 정한 행성 외형. AI 서비스가 없으면 null/없음. */
+  planet?: PlanetVisual | null;
 };
 
 export async function apiListStars(accessToken: string) {

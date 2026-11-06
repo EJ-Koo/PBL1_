@@ -241,6 +241,7 @@ export default function HomeScreen() {
             resizeMode="cover"
             style={styles.fill}>
             <UniverseCanvas
+              sceneKey={`group-${activeGroup.id}`}
               entries={groupEntries(activeGroup.diary_ids)}
               onStarPress={(id) => {
                 setActiveGroupId(null);
