@@ -188,3 +188,6 @@ alter table admins enable row level security;
 -- Supabase 대시보드 → SQL Editor 에서 아래 한 줄을 실행한다. 여러 번 실행해도 안전하다.
 -- 실행 전에도 서버는 동작하지만(첫 장만 저장), 실행해야 2~5번째 사진이 저장된다.
 alter table diaries add column if not exists photo_paths text[] not null default '{}';
+
+-- migration (2026-11-07): 코인 · 상점 · 보유 아이템 · 설정값 ---------------------------
+-- 내용이 길어서 별도 파일로 둔다: migrations/2026-11-07_shop_coins.sql 전체를 SQL Editor에서 실행.

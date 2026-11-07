@@ -2,7 +2,8 @@
 //  - 화면: 가운데=나의 우주 / 왼쪽=일기 작성 / 오른쪽=그룹 우주 / 상점 (fffju 하단 네비·HUD·퀘스트 그대로)
 //  - 별·일기·그룹: 서버(useDiary). fffju의 기기 저장(useJournal)은 사용하지 않는다.
 //  - 별을 누르면 행성 상세(/planet/[id]), 메뉴의 검색·달력은 검색 화면(/search)으로 간다.
-//  - 서버 기능이 아직 없는 코인·상점·테마·소리·알림은 화면만 보여주고 반응하지 않는다(나중에 하나씩 연결).
+//  - 서버 기능이 아직 없는 테마·소리·알림은 화면만 보여주고 반응하지 않는다(나중에 하나씩 연결).
+//  - [MODIFIED 2026-11-07] 코인·상점은 서버 연결(useShop). HUD 코인을 누르면 상점, 장착한 배경·혜성이 나의 우주에 보인다.
 //  - 폰은 fffju 배율 그대로, 웹·PC는 폭 최대 520px 가운데 정렬(useDesignFrame).
 import { useEffect, useState, type ReactNode } from 'react';
 import { router } from 'expo-router';
@@ -10,7 +11,6 @@ import {
   ImageBackground,
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -20,6 +20,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DiaryComposer } from '@/components/diary-composer';
+import { BackgroundTint, CometLayer } from '@/components/item-effects';
+import { ShopScreen } from '@/components/shop-screen';
 import { GroupSpaceScreen } from '@/components/ui/group-space-screen';
 import { HomeHud } from '@/components/ui/home-hud';
 import { QuestPanel } from '@/components/ui/quest-panel';
@@ -31,18 +33,9 @@ import { showMessage } from '@/lib/feedback';
 import { localDateKey } from '@/lib/journal';
 import { getRotateSensitivity, loadSettings, setRotateSensitivity } from '@/lib/settings';
 import { useDiary } from '@/store/diary-context';
+import { useShop } from '@/store/shop-context';
 
 type Screen = 'home' | 'diary' | 'group' | 'shop';
-
-// 코인은 아직 서버에 없다 — fffju 기본값을 화면에만 보여준다.
-const COINS_PLACEHOLDER = 999;
-
-const SHOP_ITEMS = [
-  { id: 'prism', icon: '❄️', name: '프리즘', desc: '연속 출석 멈춤을 1회 방어할 수 있다.', price: 30 },
-  { id: 'blue', icon: '🌌', name: '배경 (blue)', desc: '나의 우주 배경을 바꿀 수 있다.', price: 50 },
-  { id: 'comet', icon: '☄️', name: '혜성', desc: '5초마다 나의 우주에 혜성이 떨어진다.', price: 30 },
-  { id: 'black', icon: '🌃', name: '배경 (black)', desc: '나의 우주 배경을 바꿀 수 있다.', price: 50 },
-];
 
 /** fffju 디자인 영역: 폰은 화면 전체 폭, 넓은 화면은 최대 520px로 가운데. */
 function Frame({ width, children, box = false }: { width: number; children: ReactNode; box?: boolean }) {
@@ -57,6 +50,7 @@ function Frame({ width, children, box = false }: { width: number; children: Reac
 
 export default function HomeScreen() {
   const { isLoggedIn, entries, groups, createGroup, logout } = useDiary();
+  const { coins, activeEffects, refresh: refreshShop } = useShop();
   const { frameWidth, scale } = useDesignFrame();
   const insets = useSafeAreaInsets();
 
@@ -123,7 +117,9 @@ export default function HomeScreen() {
           source={require('../../assets/images/night-sky.png')}
           resizeMode="cover"
           style={styles.fill}>
+          <BackgroundTint effects={activeEffects} />
           <UniverseCanvas entries={entries} onStarPress={(id) => router.push(`/planet/${id}`)} />
+          <CometLayer effects={activeEffects} />
 
           {entries.length === 0 && (
             <View style={styles.emptyState} pointerEvents="none">
@@ -135,9 +131,12 @@ export default function HomeScreen() {
             <HomeHud
               scale={scale}
               starCount={entries.length}
-              coinCount={COINS_PLACEHOLDER}
+              coinCount={coins ?? 0}
               checkCount={checkCount}
-              onStats={() => setScreen('shop')}
+              onStats={() => {
+                refreshShop();
+                setScreen('shop');
+              }}
               onQuest={() => setQuestVisible(true)}
               menuProps={{
                 onSearch: () => router.push('/search'),
@@ -180,29 +179,10 @@ export default function HomeScreen() {
         </Frame>
       )}
 
-      {/* ===== 상점 (코인 기능이 서버에 생기기 전까지 보기만 가능) ===== */}
+      {/* ===== 상점 (HUD 코인을 누르면 열림, 하단 탭 없음) ===== */}
       {screen === 'shop' && (
         <Frame width={frameWidth}>
-          <View style={styles.shopContainer}>
-            <View style={styles.shopHeader}>
-              <Text style={styles.shopTitle}>🛍️ 상점</Text>
-              <View style={styles.shopCoinPill}>
-                <Text style={styles.shopCoinText}>🪙 {COINS_PLACEHOLDER}</Text>
-              </View>
-            </View>
-            <ScrollView style={styles.shopScroll} showsVerticalScrollIndicator={false}>
-              <View style={styles.shopGrid}>
-                {SHOP_ITEMS.map((item) => (
-                  <View key={item.id} style={styles.shopItemCard}>
-                    <Text style={styles.shopItemIcon}>{item.icon}</Text>
-                    <Text style={styles.shopItemName}>{item.name}</Text>
-                    <Text style={styles.shopItemDesc}>{item.desc}</Text>
-                    <Text style={styles.shopPriceText}>🪙 {item.price}</Text>
-                  </View>
-                ))}
-              </View>
-            </ScrollView>
-          </View>
+          <ShopScreen />
         </Frame>
       )}
 
@@ -339,16 +319,4 @@ const styles = StyleSheet.create({
   inviteConfirmBtn: { backgroundColor: '#3498db', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
   inviteConfirmText: { color: '#fff', fontWeight: 'bold' },
 
-  shopContainer: { flex: 1, backgroundColor: '#000', paddingTop: 60, paddingHorizontal: 20 },
-  shopHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
-  shopTitle: { color: '#fff', fontSize: 26, fontWeight: 'bold' },
-  shopCoinPill: { backgroundColor: '#7f8c8d', paddingHorizontal: 18, paddingVertical: 8, borderRadius: 10 },
-  shopCoinText: { color: '#000', fontWeight: 'bold', fontSize: 16 },
-  shopScroll: { flex: 1, marginBottom: 80 },
-  shopGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  shopItemCard: { backgroundColor: '#b2bec3', width: '48%', borderRadius: 10, padding: 15, alignItems: 'center', marginBottom: 15 },
-  shopItemIcon: { fontSize: 50, marginBottom: 15 },
-  shopItemName: { fontSize: 16, fontWeight: 'bold', marginBottom: 8, color: '#000' },
-  shopItemDesc: { fontSize: 10, color: '#2d3436', textAlign: 'center', marginBottom: 20, minHeight: 30 },
-  shopPriceText: { fontWeight: 'bold', fontSize: 16, color: '#000' },
 });
