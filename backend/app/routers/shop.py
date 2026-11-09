@@ -46,9 +46,47 @@ def ensure_wallet(user_id: str) -> int:
     return int(call_db_function("ensure_wallet", {"p_user": user_id}))
 
 
+# [ADDED 2026-11-09] 관리자 화면에서 바꿀 수 있는 설정값. 새 설정은 여기에 한 줄 추가하면 된다.
+#   key: (설명, 종류, 표에 값이 없을 때 기본값, 값 검사 함수)
+def _is_int(v):
+    return isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= 100000
+
+
+CONFIG_KEYS = {
+    "start_coins": ("처음 가입한 사람이 받는 코인 (테스트 999, 배포 0)", "int", 0, _is_int),
+    "allow_test_reset": (
+        "상점의 '내 상점 초기화(테스트용)' 버튼 허용 (배포할 때 끄기)",
+        "bool",
+        True,
+        lambda v: isinstance(v, bool),
+    ),
+}
+
+
+def get_config(key: str):
+    rows = supabase.table("app_config").select("value").eq("key", key).execute().data
+    return rows[0]["value"] if rows else CONFIG_KEYS[key][2]
+
+
+def reset_user_shop(user_id: str) -> int:
+    """코인·보유 아이템·코인 기록을 지우고 시작 코인으로 새 지갑을 만든다 (테스트용)."""
+    supabase.table("user_items").delete().eq("user_id", user_id).execute()
+    supabase.table("coin_logs").delete().eq("user_id", user_id).execute()
+    supabase.table("wallets").delete().eq("user_id", user_id).execute()
+    return ensure_wallet(user_id)
+
+
 @router.get("/me/wallet", response_model=Wallet)
 def get_wallet(user_id: str = Depends(get_current_user_id)):
-    return Wallet(coins=ensure_wallet(user_id))
+    return Wallet(coins=ensure_wallet(user_id), reset_allowed=bool(get_config("allow_test_reset")))
+
+
+@router.post("/me/shop/reset", response_model=Wallet)
+def reset_my_shop(user_id: str = Depends(get_current_user_id)):
+    """[ADDED 2026-11-09] 테스트용: 내 코인을 시작 코인으로, 산 아이템·기록은 전부 삭제."""
+    if not get_config("allow_test_reset"):
+        raise HTTPException(status_code=403, detail="초기화가 꺼져 있습니다 (관리자 설정).")
+    return Wallet(coins=reset_user_shop(user_id), reset_allowed=True)
 
 
 @router.get("/shop/items", response_model=list[ShopItem])

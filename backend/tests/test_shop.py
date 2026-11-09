@@ -65,6 +65,10 @@ class _Query:
         self.op, self.payload = "upsert", payload
         return self
 
+    def delete(self):
+        self.op = "delete"
+        return self
+
     def execute(self):
         rows = self.db.tables.setdefault(self.name, [])
         match = [r for r in rows if all(r.get(k) == v for k, v in self.filters.items())]
@@ -73,6 +77,9 @@ class _Query:
         if self.op == "insert":
             rows.append(dict(self.payload))
             return _Result([dict(self.payload)])
+        if self.op == "delete":
+            rows[:] = [r for r in rows if r not in match]
+            return _Result(match)
         if self.op == "update":
             for r in match:
                 r.update(self.payload)
@@ -135,8 +142,32 @@ def fake(monkeypatch):
 
 
 def test_wallet_returns_coins_and_creates_wallet(fake):
-    assert shop.get_wallet(user_id="u1").coins == 999
+    wallet = shop.get_wallet(user_id="u1")
+    assert wallet.coins == 999
+    assert wallet.reset_allowed is True  # 설정이 없으면 기본값(허용)
     assert fake.rpc_calls == [("ensure_wallet", {"p_user": "u1"})]
+
+
+def test_reset_my_shop_clears_only_my_data(fake):
+    fake.tables["wallets"] = [{"user_id": "u1", "coins": 10}, {"user_id": "u2", "coins": 50}]
+    fake.tables["coin_logs"] = [{"user_id": "u1", "delta": 1}, {"user_id": "u2", "delta": 2}]
+
+    wallet = shop.reset_my_shop(user_id="u1")
+
+    assert wallet.coins == 999  # ensure_wallet 이 시작 코인으로 새로 만든다
+    assert [r["user_id"] for r in fake.tables["user_items"]] == ["u2"]
+    assert [r["user_id"] for r in fake.tables["wallets"]] == ["u2"]
+    assert [r["user_id"] for r in fake.tables["coin_logs"]] == ["u2"]
+
+
+def test_reset_blocked_when_admin_turns_it_off(fake):
+    fake.tables["app_config"].append({"key": "allow_test_reset", "value": False})
+
+    assert shop.get_wallet(user_id="u1").reset_allowed is False
+    with pytest.raises(HTTPException) as exc:
+        shop.reset_my_shop(user_id="u1")
+    assert exc.value.status_code == 403
+    assert len(fake.tables["user_items"]) == 3  # 아무것도 안 지움
 
 
 def test_shop_items_show_owned_state_and_hide_unowned_discontinued(fake):
@@ -235,7 +266,14 @@ def test_admin_update_item_price_and_sale(fake):
 
 def test_admin_config_start_coins(fake):
     entries = admin_shop.admin_list_config(admin_id="a")
-    assert [(e.key, e.value) for e in entries] == [("start_coins", 999)]
+    assert [(e.key, e.value, e.kind) for e in entries] == [
+        ("start_coins", 999, "int"),
+        ("allow_test_reset", True, "bool"),  # 표에 없으면 기본값
+    ]
+    assert admin_shop.admin_set_config("allow_test_reset", AdminConfigUpdate(value=False), admin_id="a").value is False
+    with pytest.raises(HTTPException):
+        admin_shop.admin_set_config("allow_test_reset", AdminConfigUpdate(value=0), admin_id="a")
+    fake.tables["app_config"] = [r for r in fake.tables["app_config"] if r["key"] == "start_coins"]
 
     assert admin_shop.admin_set_config("start_coins", AdminConfigUpdate(value=0), admin_id="a").value == 0
     assert fake.tables["app_config"] == [{"key": "start_coins", "value": 0, "updated_at": fake.tables["app_config"][0]["updated_at"]}]
@@ -268,3 +306,9 @@ def test_admin_adjust_coins(fake):
     with pytest.raises(HTTPException) as exc:
         admin_shop.admin_adjust_coins("nobody", AdminCoinAdjust(delta=5), admin_id="a")
     assert exc.value.status_code == 404
+
+
+def test_admin_reset_wallet_ignores_user_switch(fake):
+    fake.tables["app_config"].append({"key": "allow_test_reset", "value": False})
+    assert admin_shop.admin_reset_wallet("u2", admin_id="a").coins == 999
+    assert [r["user_id"] for r in fake.tables["user_items"]] == ["u1", "u1"]

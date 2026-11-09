@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
-import { showNotice } from '@/lib/notice';
+import { confirmChoice, showNotice } from '@/lib/notice';
 import {
   apiAdminAdjustCoins,
   apiAdminCoinLogs,
@@ -11,6 +11,7 @@ import {
   apiAdminListConfig,
   apiAdminListItems,
   apiAdminListWallets,
+  apiAdminResetWallet,
   apiAdminSetConfig,
   apiAdminUpdateItem,
   type AdminConfigEntry,
@@ -315,6 +316,31 @@ function WalletRow({ token, wallet, onChanged }: { token: string; wallet: AdminW
           <View style={styles.rowWrap}>
             <Button label="+ 지급" disabled={busy} onPress={() => apply(1)} testID="coin-add" />
             <Button label="- 차감" kind="danger" disabled={busy} onPress={() => apply(-1)} />
+            <Button
+              testID="wallet-reset"
+              label="↺ 초기화"
+              kind="ghost"
+              disabled={busy}
+              onPress={() =>
+                confirmChoice(
+                  '초기화 (테스트용)',
+                  '이 사용자의 코인을 시작 코인으로 되돌리고, 산 아이템과 코인 기록을 모두 지웁니다.',
+                  '초기화',
+                  async () => {
+                    setBusy(true);
+                    try {
+                      const res = await apiAdminResetWallet(token, wallet.user_id);
+                      onChanged(res.coins ?? 0);
+                      await loadLogs();
+                    } catch (err) {
+                      showNotice('초기화 실패', errText(err));
+                    } finally {
+                      setBusy(false);
+                    }
+                  }
+                )
+              }
+            />
           </View>
           <Text style={styles.fieldLabel}>최근 기록</Text>
           {logs === null ? (
@@ -358,31 +384,48 @@ export function AdminWalletsPanel({ token }: { token: string }) {
 function ConfigRow({ token, entry, onSaved }: { token: string; entry: AdminConfigEntry; onSaved: (e: AdminConfigEntry) => void }) {
   const [value, setValue] = useState(String(entry.value ?? ''));
   const [busy, setBusy] = useState(false);
+
+  const save = async (next: unknown) => {
+    setBusy(true);
+    try {
+      onSaved(await apiAdminSetConfig(token, entry.key, next));
+    } catch (err) {
+      showNotice('저장 실패', errText(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <View style={styles.card}>
+    <View style={styles.card} testID={`config-row-${entry.key}`}>
       <Text style={styles.rowTitle}>{entry.key}</Text>
       <Text style={styles.rowMeta}>{entry.description}</Text>
-      <Text style={styles.rowMeta}>현재 값: {JSON.stringify(entry.value)}</Text>
-      <View style={styles.rowWrap}>
-        <View style={styles.flex1}><Field label="새 값" value={value} onChange={setValue} numeric testID={`config-${entry.key}`} /></View>
-        <Button
-          testID={`config-save-${entry.key}`}
-          label={busy ? '저장 중…' : '저장'}
-          disabled={busy}
-          onPress={async () => {
-            // 지금 설정은 전부 숫자. 숫자가 아니면 문자열 그대로 보내 서버가 거부하게 한다.
-            const parsed = value.trim() !== '' && !Number.isNaN(Number(value)) ? Number(value) : value;
-            setBusy(true);
-            try {
-              onSaved(await apiAdminSetConfig(token, entry.key, parsed));
-            } catch (err) {
-              showNotice('저장 실패', errText(err));
-            } finally {
-              setBusy(false);
-            }
-          }}
-        />
-      </View>
+      {entry.kind === 'bool' ? (
+        // [ADDED 2026-11-09] 켜기/끄기 설정은 스위치로 바로 저장
+        <View style={styles.switchRow}>
+          <Text style={styles.rowMeta}>{entry.value ? '켜짐' : '꺼짐'}</Text>
+          <Switch
+            testID={`config-switch-${entry.key}`}
+            value={Boolean(entry.value)}
+            disabled={busy}
+            onValueChange={(v) => save(v)}
+          />
+        </View>
+      ) : (
+        <>
+          <Text style={styles.rowMeta}>현재 값: {JSON.stringify(entry.value)}</Text>
+          <View style={styles.rowWrap}>
+            <View style={styles.flex1}><Field label="새 값" value={value} onChange={setValue} numeric testID={`config-${entry.key}`} /></View>
+            <Button
+              testID={`config-save-${entry.key}`}
+              label={busy ? '저장 중…' : '저장'}
+              disabled={busy}
+              // 숫자가 아니면 문자열 그대로 보내 서버가 거부하게 한다.
+              onPress={() => save(value.trim() !== '' && !Number.isNaN(Number(value)) ? Number(value) : value)}
+            />
+          </View>
+        </>
+      )}
     </View>
   );
 }

@@ -31,7 +31,7 @@ export type AdminItem = Omit<ShopItem, 'on_sale' | 'quantity' | 'equipped'> & {
   sort_order: number;
 };
 
-export type AdminConfigEntry = { key: string; value: unknown; description: string };
+export type AdminConfigEntry = { key: string; value: unknown; description: string; kind: 'int' | 'bool' };
 export type AdminWallet = { user_id: string; email: string | null; nickname: string | null; coins: number | null };
 export type CoinLog = { delta: number; balance: number; reason: string; ref: string | null; created_at: string };
 
@@ -57,8 +57,13 @@ async function request<T>(path: string, token: string, init: RequestInit = {}, f
 
 // --- 사용자 ---------------------------------------------------------------------
 
-export const apiGetWallet = (token: string) =>
-  request<{ coins: number }>('/me/wallet', token, {}, '코인을 불러오지 못했습니다.');
+export type Wallet = { coins: number; reset_allowed: boolean };
+
+export const apiGetWallet = (token: string) => request<Wallet>('/me/wallet', token, {}, '코인을 불러오지 못했습니다.');
+
+// [ADDED 2026-11-09] 테스트용: 내 코인을 시작 코인으로, 산 아이템·기록 삭제
+export const apiResetMyShop = (token: string) =>
+  request<Wallet>('/me/shop/reset', token, { method: 'POST' }, '초기화에 실패했습니다.');
 
 export const apiListShopItems = (token: string) =>
   request<ShopItem[]>('/shop/items', token, {}, '상점을 불러오지 못했습니다.');
@@ -113,6 +118,9 @@ export const apiAdminAdjustCoins = (token: string, userId: string, delta: number
     { method: 'POST', body: JSON.stringify({ delta, memo }) },
     '코인 변경에 실패했습니다.'
   );
+
+export const apiAdminResetWallet = (token: string, userId: string) =>
+  request<AdminWallet>(`/admin/wallets/${userId}/reset`, token, { method: 'POST' }, '초기화에 실패했습니다.');
 
 export const apiAdminCoinLogs = (token: string, userId: string) =>
   request<CoinLog[]>(`/admin/wallets/${userId}/logs`, token);

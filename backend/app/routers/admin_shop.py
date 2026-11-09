@@ -12,7 +12,7 @@ from postgrest.exceptions import APIError
 from app.db import supabase
 from app.dependencies import get_current_admin_id
 from app.routers.admin_data import _list_all_auth_users, _nickname_by_user_id
-from app.routers.shop import call_db_function
+from app.routers.shop import CONFIG_KEYS, call_db_function, reset_user_shop
 from app.schemas.shop import (
     AdminCoinAdjust,
     AdminConfigEntry,
@@ -29,13 +29,6 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-# 관리자 화면에서 바꿀 수 있는 설정값. 새 설정은 여기에 한 줄 추가하면 된다.
-#   key: (설명, 값 검사 함수)
-CONFIG_KEYS = {
-    "start_coins": ("처음 가입한 사람이 받는 코인 (테스트 999, 배포 0)", lambda v: isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= 100000),
-}
-
 
 # --- 아이템 ---------------------------------------------------------------------
 
@@ -78,8 +71,8 @@ def admin_list_config(admin_id: str = Depends(get_current_admin_id)):
     rows = supabase.table("app_config").select("*").execute().data
     value_by_key = {r["key"]: r["value"] for r in rows}
     return [
-        AdminConfigEntry(key=key, value=value_by_key.get(key), description=desc)
-        for key, (desc, _check) in CONFIG_KEYS.items()
+        AdminConfigEntry(key=key, value=value_by_key.get(key, default), description=desc, kind=kind)
+        for key, (desc, kind, default, _check) in CONFIG_KEYS.items()
     ]
 
 
@@ -87,11 +80,11 @@ def admin_list_config(admin_id: str = Depends(get_current_admin_id)):
 def admin_set_config(key: str, payload: AdminConfigUpdate, admin_id: str = Depends(get_current_admin_id)):
     if key not in CONFIG_KEYS:
         raise HTTPException(status_code=404, detail="바꿀 수 없는 설정입니다.")
-    desc, check = CONFIG_KEYS[key]
+    desc, kind, _default, check = CONFIG_KEYS[key]
     if not check(payload.value):
         raise HTTPException(status_code=422, detail=f"값이 올바르지 않습니다: {desc}")
     supabase.table("app_config").upsert({"key": key, "value": payload.value, "updated_at": _now()}).execute()
-    return AdminConfigEntry(key=key, value=payload.value, description=desc)
+    return AdminConfigEntry(key=key, value=payload.value, description=desc, kind=kind)
 
 
 # --- 사용자 코인 ------------------------------------------------------------------
@@ -128,6 +121,18 @@ def admin_adjust_coins(user_id: str, payload: AdminCoinAdjust, admin_id: str = D
             raise HTTPException(status_code=404, detail="사용자가 없습니다.")
         raise
     return AdminWallet(user_id=user_id, coins=int(coins))
+
+
+@router.post("/wallets/{user_id}/reset", response_model=AdminWallet)
+def admin_reset_wallet(user_id: str, admin_id: str = Depends(get_current_admin_id)):
+    """[ADDED 2026-11-09] 테스트용: 이 사용자의 코인·보유 아이템·기록을 지우고 시작 코인으로."""
+    try:
+        coins = reset_user_shop(user_id)
+    except APIError as e:
+        if e.code == "23503":
+            raise HTTPException(status_code=404, detail="사용자가 없습니다.")
+        raise
+    return AdminWallet(user_id=user_id, coins=coins)
 
 
 @router.get("/wallets/{user_id}/logs", response_model=list[CoinLog])

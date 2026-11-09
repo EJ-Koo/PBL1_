@@ -21,8 +21,9 @@ function actionFor(item: ShopItem, coins: number) {
   return { label: '구매', kind: 'buy' as const, disabled: false };
 }
 
-export function ShopScreen() {
-  const { coins, items, loading, error, refresh, purchase, setEquipped } = useShop();
+// [MODIFIED 2026-11-09] 뒤로가기, 버튼 높이 고정(보유 중 표시), 테스트용 초기화 버튼
+export function ShopScreen({ onBack }: { onBack: () => void }) {
+  const { coins, items, loading, error, refresh, purchase, setEquipped, resetAllowed, resetShop } = useShop();
   const [busyId, setBusyId] = useState<string | null>(null);
   const balance = coins ?? 0;
 
@@ -44,10 +45,30 @@ export function ShopScreen() {
     run(item, action.kind);
   };
 
+  const onReset = () => {
+    if (busyId) return;
+    confirmChoice(
+      '내 상점 초기화 (테스트용)',
+      '코인이 시작 코인으로 돌아가고, 산 아이템과 코인 기록이 모두 지워집니다.',
+      '초기화',
+      async () => {
+        setBusyId('__reset__');
+        const result = await resetShop();
+        setBusyId(null);
+        if (!result.ok) showMessage('실패', result.error);
+      }
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>🛍️ 상점</Text>
+        <View style={styles.titleRow}>
+          <TouchableOpacity onPress={onBack} style={styles.back} accessibilityLabel="뒤로가기" testID="shop-back" hitSlop={10}>
+            <Text style={styles.backText}>‹</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>🛍️ 상점</Text>
+        </View>
         <View style={styles.coinPill} testID="shop-coins">
           <Text style={styles.coinText}>🪙 {coins ?? '…'}</Text>
         </View>
@@ -74,7 +95,8 @@ export function ShopScreen() {
                 <Text style={styles.icon}>{item.icon}</Text>
                 <Text style={styles.name}>{item.name}</Text>
                 <Text style={styles.desc}>{item.description}</Text>
-                {!(item.kind === 'equip' && owned) && <Text style={styles.price}>🪙 {item.price}</Text>}
+                {/* 가격 줄은 항상 같은 높이로 둔다 → 구매 후에도 버튼 위치가 그대로 */}
+                <Text style={styles.price}>{item.kind === 'equip' && owned ? '보유 중' : `🪙 ${item.price}`}</Text>
                 <TouchableOpacity
                   testID={`shop-action-${item.id}`}
                   accessibilityLabel={`${item.name} ${action.label}`}
@@ -95,6 +117,21 @@ export function ShopScreen() {
             );
           })}
         </View>
+
+        {resetAllowed && items.length > 0 ? (
+          <TouchableOpacity
+            style={styles.reset}
+            onPress={onReset}
+            disabled={busyId !== null}
+            testID="shop-reset"
+            accessibilityLabel="내 상점 초기화">
+            {busyId === '__reset__' ? (
+              <ActivityIndicator size="small" color="#F66C9E" />
+            ) : (
+              <Text style={styles.resetText}>↺ 내 상점 초기화 (테스트용)</Text>
+            )}
+          </TouchableOpacity>
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -103,6 +140,9 @@ export function ShopScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000', paddingTop: 60, paddingHorizontal: 20 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  back: { paddingRight: 4, paddingVertical: 2 },
+  backText: { color: '#fff', fontSize: 34, lineHeight: 34, fontWeight: '300' },
   title: { color: '#fff', fontSize: 26, fontWeight: 'bold' },
   coinPill: { backgroundColor: '#7f8c8d', paddingHorizontal: 18, paddingVertical: 8, borderRadius: 10 },
   coinText: { color: '#000', fontWeight: 'bold', fontSize: 16 },
@@ -139,7 +179,20 @@ const styles = StyleSheet.create({
   icon: { fontSize: 50, marginBottom: 15, marginTop: 6 },
   name: { fontSize: 16, fontWeight: 'bold', marginBottom: 8, color: '#000' },
   desc: { fontSize: 10, color: '#2d3436', textAlign: 'center', marginBottom: 14, minHeight: 30 },
-  price: { fontWeight: 'bold', fontSize: 16, color: '#000', marginBottom: 10 },
+  price: { fontWeight: 'bold', fontSize: 16, lineHeight: 22, color: '#000', marginBottom: 10 },
+  reset: {
+    marginTop: 10,
+    marginBottom: 20,
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: '#F66C9E',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    minWidth: 200,
+    alignItems: 'center',
+  },
+  resetText: { color: '#F66C9E', fontSize: 13, fontWeight: '600' },
   button: {
     backgroundColor: '#FED240',
     borderRadius: 8,

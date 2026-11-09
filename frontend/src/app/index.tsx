@@ -182,7 +182,7 @@ export default function HomeScreen() {
       {/* ===== 상점 (HUD 코인을 누르면 열림, 하단 탭 없음) ===== */}
       {screen === 'shop' && (
         <Frame width={frameWidth}>
-          <ShopScreen />
+          <ShopScreen onBack={() => setScreen('home')} />
         </Frame>
       )}
 
