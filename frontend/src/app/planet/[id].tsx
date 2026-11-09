@@ -1,3 +1,4 @@
+// [MODIFIED 2026-11-05] 사진 여러 장(최대 5장)을 가로로 넘겨 보기, 넓은 화면에서는 폭 최대 520px 가운데 정렬.
 import { router, useLocalSearchParams } from 'expo-router';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -31,7 +32,8 @@ export default function PlanetDetailScreen() {
   const editable = isEditableToday(entry.id);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.outer}>
+      <View style={styles.content}>
       <Pressable onPress={goBackSafe}>
         <Text style={styles.backLink}>← 우주로</Text>
       </Pressable>
@@ -44,8 +46,16 @@ export default function PlanetDetailScreen() {
         </View>
       </View>
 
-      {entry.photoUri && (
-        <Image source={{ uri: entry.photoUri }} style={styles.photo} />
+      {entry.photos.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.photoRow}>
+          {entry.photos.map((photo) => (
+            <Image
+              key={photo.id}
+              source={{ uri: photo.uri }}
+              style={[styles.photo, entry.photos.length === 1 && styles.photoSingle]}
+            />
+          ))}
+        </ScrollView>
       )}
 
       <Text style={styles.text}>{entry.text}</Text>
@@ -67,6 +77,7 @@ export default function PlanetDetailScreen() {
       {!editable && (
         <Text style={styles.editHint}>작성한 날에만 수정할 수 있어요.</Text>
       )}
+      </View>
     </ScrollView>
   );
 }
@@ -76,7 +87,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0B0B1A',
   },
+  outer: {
+    alignItems: 'center',
+  },
   content: {
+    width: '100%',
+    maxWidth: 520,
     paddingTop: 60,
     paddingHorizontal: 24,
     paddingBottom: 40,
@@ -112,10 +128,17 @@ const styles = StyleSheet.create({
     color: '#9C9CC0',
     fontSize: 11,
   },
+  photoRow: {
+    gap: 10,
+  },
   photo: {
-    width: '100%',
+    width: 220,
     height: 200,
     borderRadius: 12,
+  },
+  photoSingle: {
+    width: 472,
+    maxWidth: '100%',
   },
   text: {
     color: '#E4E4F0',

@@ -31,6 +31,7 @@ create table if not exists diaries (
   user_id uuid not null references auth.users (id) on delete cascade,
   content text not null,
   photo_url text,
+  photo_paths text[] not null default '{}',
   visibility text not null default 'private' check (visibility in ('public', 'friends', 'private')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -182,3 +183,11 @@ create table if not exists admins (
 alter table admins enable row level security;
 -- 의도적으로 정책을 추가하지 않음: PostgREST(anon/authenticated 롤)로는 아무도 접근 불가,
 -- 백엔드가 쓰는 서비스 롤 키만 RLS를 우회해 이 테이블을 다룰 수 있음.
+
+-- migration (2026-11-05): 일기 사진 여러 장(최대 5장) ------------------------------
+-- Supabase 대시보드 → SQL Editor 에서 아래 한 줄을 실행한다. 여러 번 실행해도 안전하다.
+-- 실행 전에도 서버는 동작하지만(첫 장만 저장), 실행해야 2~5번째 사진이 저장된다.
+alter table diaries add column if not exists photo_paths text[] not null default '{}';
+
+-- migration (2026-11-07): 코인 · 상점 · 보유 아이템 · 설정값 ---------------------------
+-- 내용이 길어서 별도 파일로 둔다: migrations/2026-11-07_shop_coins.sql 전체를 SQL Editor에서 실행.

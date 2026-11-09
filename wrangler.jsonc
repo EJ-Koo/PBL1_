@@ -1,0 +1,17 @@
+// Cloudflare(Workers) 웹 배포 설정 — star2day.com 에서 앱 화면을 띄운다.
+// Cloudflare 대시보드의 빌드 설정:
+//   Build command : cd frontend && npm ci && npx expo export -p web
+//   Deploy command: npx wrangler deploy
+//   Production branch: test   (test 에 push 하면 자동으로 다시 빌드·배포)
+// 화면만 올리는 것이고, 서버(api.star2day.com)는 Cloudtype 그대로다.
+{
+  "name": "star2day-web",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    // expo export -p web 결과 폴더
+    "directory": "./frontend/dist",
+    // /planet/<id> 처럼 미리 만들어 두지 않은 주소로 바로 들어오거나 새로고침해도
+    // index.html 을 돌려줘서 앱(expo-router)이 화면을 그리게 한다.
+    "not_found_handling": "single-page-application"
+  }
+}

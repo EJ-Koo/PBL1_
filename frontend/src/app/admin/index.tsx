@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { router } from 'expo-router';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { AdminConfigPanel, AdminItemsPanel, AdminWalletsPanel } from '@/components/admin/admin-shop-panels';
+
 import {
   apiAdminDeleteDiary,
   apiAdminDeleteUser,
@@ -13,7 +15,14 @@ import {
 import { confirmAction, showNotice } from '@/lib/notice';
 import { useAdmin } from '@/store/admin-context';
 
-type Tab = 'users' | 'diaries';
+// [MODIFIED 2026-11-07] 상점 아이템 · 사용자 코인 · 설정값 탭 추가
+type Tab = 'users' | 'diaries' | 'items' | 'wallets' | 'config';
+
+const EXTRA_TABS: { id: Tab; label: string }[] = [
+  { id: 'items', label: '상점' },
+  { id: 'wallets', label: '코인' },
+  { id: 'config', label: '설정' },
+];
 
 export default function AdminDashboardScreen() {
   const { isAdminLoggedIn, adminToken, adminUsername, adminLogout } = useAdmin();
@@ -102,9 +111,20 @@ export default function AdminDashboardScreen() {
             일기 ({diaries.length})
           </Text>
         </Pressable>
+        {EXTRA_TABS.map((t) => (
+          <Pressable key={t.id} testID={`admin-tab-${t.id}`} style={[styles.tab, tab === t.id && styles.tabActive]} onPress={() => setTab(t.id)}>
+            <Text style={[styles.tabText, tab === t.id && styles.tabTextActive]}>{t.label}</Text>
+          </Pressable>
+        ))}
       </View>
 
-      {tab === 'users' ? (
+      {tab === 'items' && adminToken ? (
+        <AdminItemsPanel token={adminToken} />
+      ) : tab === 'wallets' && adminToken ? (
+        <AdminWalletsPanel token={adminToken} />
+      ) : tab === 'config' && adminToken ? (
+        <AdminConfigPanel token={adminToken} />
+      ) : tab === 'users' ? (
         <FlatList
           data={users}
           keyExtractor={(item) => item.user_id}

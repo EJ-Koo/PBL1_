@@ -1,247 +1,284 @@
-// [MODIFIED 2026-09-29] 원본: back_end_wodnjs 브랜치의 mockup/src/app/index.tsx (평면 그리드 형태).
-// 여기에 front 브랜치 frontend/index.jsx의 3D 우주 디자인을 이식함. 자세한 변경 내용은
-// mockup/CHANGES_FRONTEND.md 참고. 변경된 부분은 아래에 [MODIFIED] 주석으로 표시함.
-import { useEffect, useRef, useState } from 'react';
+// [MODIFIED 2026-11-05] fffju 브랜치 index.jsx의 화면 구성·디자인으로 교체하고, 데이터는 서버(로그인)로 연결.
+//  - 화면: 가운데=나의 우주 / 왼쪽=일기 작성 / 오른쪽=그룹 우주 / 상점 (fffju 하단 네비·HUD·퀘스트 그대로)
+//  - 별·일기·그룹: 서버(useDiary). fffju의 기기 저장(useJournal)은 사용하지 않는다.
+//  - 별을 누르면 행성 상세(/planet/[id]), 메뉴의 검색·달력은 검색 화면(/search)으로 간다.
+//  - 서버 기능이 아직 없는 테마·소리·알림은 화면만 보여주고 반응하지 않는다(나중에 하나씩 연결).
+//  - [MODIFIED 2026-11-07] 코인·상점은 서버 연결(useShop). HUD 코인을 누르면 상점, 장착한 배경·혜성이 나의 우주에 보인다.
+//  - 폰은 fffju 배율 그대로, 웹·PC는 폭 최대 520px 가운데 정렬(useDesignFrame).
+import { useEffect, useState, type ReactNode } from 'react';
 import { router } from 'expo-router';
 import {
-  Dimensions,
+  ImageBackground,
   Modal,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import WriteScreen from '@/app/write';
-import { CommunityScreen } from '@/components/community-screen';
-import { GroupsScreen } from '@/components/groups-screen';
+import { DiaryComposer } from '@/components/diary-composer';
+import { BackgroundTint, CometLayer } from '@/components/item-effects';
 import { ShopScreen } from '@/components/shop-screen';
+import { GroupSpaceScreen } from '@/components/ui/group-space-screen';
+import { HomeHud } from '@/components/ui/home-hud';
+import { QuestPanel } from '@/components/ui/quest-panel';
+import { UniverseBottomNav } from '@/components/ui/universe-bottom-nav';
 import { UniverseCanvas } from '@/components/universe-scene';
+import { DesignPaint } from '@/constants/ui-design';
+import { useDesignFrame } from '@/hooks/use-design-frame';
+import { showMessage } from '@/lib/feedback';
+import { localDateKey } from '@/lib/journal';
+import { getRotateSensitivity, loadSettings, setRotateSensitivity } from '@/lib/settings';
 import { useDiary } from '@/store/diary-context';
+import { useShop } from '@/store/shop-context';
 
-const { width, height } = Dimensions.get('window');
-// fffju 디자인대로 스와이프 3면: 왼쪽=일기 작성 / 가운데=나의 우주 / 오른쪽=그룹.
-// 상점은 우주 화면 상단 stats 알약 탭, 커뮤니티는 상단 ☰ 버튼으로 각각 팝업으로 연다.
-const PAGE_LABELS = ['일기', '나의 우주', '그룹'];
+type Screen = 'home' | 'diary' | 'group' | 'shop';
 
-export default function HomeScreen() {
-  const { isLoggedIn } = useDiary();
-  const scrollRef = useRef<ScrollView>(null);
-  // 가운데(나의 우주 = index 1)에서 시작
-  const [pageIndex, setPageIndex] = useState(1);
-
-  useEffect(() => {
-    if (!isLoggedIn) {
-      router.replace('/login');
-    }
-  }, [isLoggedIn]);
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ x: width, y: 0, animated: false });
-  }, []);
-
-  if (!isLoggedIn) {
-    return <View style={styles.container} />;
-  }
-
-  const goToPage = (index: number) => {
-    scrollRef.current?.scrollTo({ x: width * index, y: 0, animated: true });
-    setPageIndex(index);
-  };
-
-  const handleScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const index = Math.round(e.nativeEvent.contentOffset.x / width);
-    setPageIndex(index);
-  };
-
+/** fffju 디자인 영역: 폰은 화면 전체 폭, 넓은 화면은 최대 520px로 가운데. */
+function Frame({ width, children, box = false }: { width: number; children: ReactNode; box?: boolean }) {
   return (
-    <View style={styles.pagerWrap}>
-      <ScrollView
-        ref={scrollRef}
-        style={styles.pager}
-        horizontal
-        pagingEnabled
-        scrollEnabled={false}
-        showsHorizontalScrollIndicator={false}
-        contentOffset={{ x: width, y: 0 }}
-        onMomentumScrollEnd={handleScrollEnd}
-        onScrollEndDrag={handleScrollEnd}
-      >
-        <View style={{ width, height }}>
-          <WriteScreen onComplete={() => goToPage(1)} />
-        </View>
-        <View style={{ width, height }}>
-          <UniversePage />
-        </View>
-        <View style={{ width, height }}>
-          <GroupsScreen />
-        </View>
-      </ScrollView>
-
-      {/* 화면 오른쪽 끝을 탭하면 다음 페이지로 넘어가는 보조 동작. 우주(가운데) 화면에서만 —
-          왼쪽 일기 작성 폼 위에 겹쳐 탭을 가로채지 않도록 가운데 페이지로 한정함. */}
-      {pageIndex === 1 && (
-        <Pressable
-          style={styles.nextZone}
-          onPress={() => goToPage(pageIndex + 1)}
-          pointerEvents="box-only"
-        />
-      )}
-
-      {/* fffju 하단 네비게이션: 글자 없는 회색 pill 3개 (왼쪽=일기 / 가운데 긴 pill=우주 / 오른쪽=그룹).
-          스와이프는 꺼두고(scrollEnabled=false) 이 pill로만 페이지 전환 — 우주 화면의 별 드래그와 겹침 방지 */}
-      <View style={styles.bottomNav} pointerEvents="box-none">
-        {PAGE_LABELS.map((label, index) => (
-          <Pressable
-            key={label}
-            accessibilityLabel={label}
-            style={[
-              styles.navPill,
-              index === 1 && styles.navPillLong,
-              pageIndex === index && styles.activePill,
-            ]}
-            onPress={() => goToPage(index)}
-          />
-        ))}
+    <View style={styles.frameOuter} pointerEvents={box ? 'box-none' : 'auto'}>
+      <View style={[styles.frameInner, { width }]} pointerEvents={box ? 'box-none' : 'auto'}>
+        {children}
       </View>
     </View>
   );
 }
 
-// [MODIFIED] 원본은 FlatList로 별을 3열 그리드에 평면 배치했음.
-// frontend/index.jsx의 3D 우주(react-three-fiber) 렌더링으로 통째로 교체.
-function UniversePage() {
-  const { entries } = useDiary();
+export default function HomeScreen() {
+  const { isLoggedIn, entries, groups, createGroup, logout } = useDiary();
+  const { coins, activeEffects, refresh: refreshShop } = useShop();
+  const { frameWidth, scale } = useDesignFrame();
+  const insets = useSafeAreaInsets();
+
+  const [screen, setScreen] = useState<Screen>('home');
   const [questVisible, setQuestVisible] = useState(false);
-  const [shopVisible, setShopVisible] = useState(false);
-  const [communityVisible, setCommunityVisible] = useState(false);
+  const [createGroupVisible, setCreateGroupVisible] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  const [sensitivity, setSensitivity] = useState(getRotateSensitivity());
+  const [today, setToday] = useState(() => localDateKey(new Date()));
+
+  useEffect(() => {
+    if (!isLoggedIn) router.replace('/login');
+  }, [isLoggedIn]);
+
+  // 기기에 저장된 회전 민감도를 불러와 메뉴 슬라이더에 반영한다.
+  useEffect(() => {
+    let alive = true;
+    loadSettings().then(() => {
+      if (alive) setSensitivity(getRotateSensitivity());
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // 자정이 지나면 퀘스트의 "오늘"을 갱신한다 (fffju 동작 유지).
+  useEffect(() => {
+    const timer = setInterval(() => setToday(localDateKey(new Date())), 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  if (!isLoggedIn) return <View style={styles.container} />;
+
+  const checkCount = new Set(entries.map((e) => localDateKey(new Date(e.createdAt)))).size;
+  const todayComplete = entries.some((e) => localDateKey(new Date(e.createdAt)) === today);
+  const groupEntries = (diaryIds: string[]) => entries.filter((e) => diaryIds.includes(e.id));
+  const activeGroup = groups.find((g) => g.id === activeGroupId) ?? null;
+
+  const handleLogout = () => {
+    logout();
+    router.replace('/login');
+  };
+
+  const handleCreateGroup = async () => {
+    if (creatingGroup) return;
+    setCreatingGroup(true);
+    const result = await createGroup(newGroupName.trim() || `그룹${groups.length + 1}`);
+    setCreatingGroup(false);
+    if (!result.ok) {
+      showMessage('그룹 생성 실패', result.error);
+      return;
+    }
+    setNewGroupName('');
+    setCreateGroupVisible(false);
+  };
 
   return (
-    <View style={styles.universeContainer}>
-      <UniverseCanvas entries={entries} onStarPress={(id) => router.push(`/planet/${id}`)} />
+    <View style={styles.container}>
+      {/* ===== 가운데: 나의 우주 ===== */}
+      {screen === 'home' && (
+        <ImageBackground
+          source={require('../../assets/images/night-sky.png')}
+          resizeMode="cover"
+          style={styles.fill}>
+          <BackgroundTint effects={activeEffects} />
+          <UniverseCanvas entries={entries} onStarPress={(id) => router.push(`/planet/${id}`)} />
+          <CometLayer effects={activeEffects} />
 
-      {entries.length === 0 && (
-        <View style={styles.emptyState} pointerEvents="none">
-          <Text style={styles.emptyText}>아직 기록이 없어요.{'\n'}왼쪽으로 넘겨 첫 별을 띄워보세요.</Text>
-        </View>
+          {entries.length === 0 && (
+            <View style={styles.emptyState} pointerEvents="none">
+              <Text style={styles.emptyText}>아직 기록이 없어요.{'\n'}아래 왼쪽 버튼으로 첫 별을 띄워보세요.</Text>
+            </View>
+          )}
+
+          <Frame width={frameWidth} box>
+            <HomeHud
+              scale={scale}
+              starCount={entries.length}
+              coinCount={coins ?? 0}
+              checkCount={checkCount}
+              onStats={() => {
+                refreshShop();
+                setScreen('shop');
+              }}
+              onQuest={() => setQuestVisible(true)}
+              menuProps={{
+                onSearch: () => router.push('/search'),
+                onCalendar: () => router.push('/search?calendar=1'),
+                onLogout: handleLogout,
+                sensitivity,
+                onSensitivity: (value) => setSensitivity(setRotateSensitivity(value)),
+              }}
+            />
+          </Frame>
+        </ImageBackground>
       )}
 
-      {/* 우주 위에 떠 있는 상단 바. fffju 디자인대로 ☰=커뮤니티, 가운데 stats 알약=상점, 오른쪽=퀘스트. */}
-      <View style={styles.topBar} pointerEvents="box-none">
-        <TouchableOpacity style={styles.iconButton} onPress={() => setCommunityVisible(true)}>
-          <Text style={styles.iconButtonText}>☰</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.statsPill} onPress={() => setShopVisible(true)}>
-          <Text style={styles.statsText}>★ {entries.length}   🪙 999   ✔️ 2</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.questButton} onPress={() => setQuestVisible(true)}>
-          <Text style={styles.questText}>퀘스트</Text>
-        </TouchableOpacity>
+      {/* ===== 왼쪽: 일기 작성 — 다른 탭에 갔다 와도 쓰던 내용이 남도록 화면을 숨기기만 한다 ===== */}
+      <View style={[styles.fill, screen !== 'diary' && styles.hidden]}>
+        <Frame width={frameWidth}>
+          <DiaryComposer scale={scale} onBack={() => setScreen('home')} onSaved={() => setScreen('home')} />
+        </Frame>
       </View>
 
-      {/* [MODIFIED] 원래 frontend/index.jsx의 퀘스트 패널(진행률 바 포함)을 그대로 복원함. */}
-      <Modal transparent visible={questVisible} animationType="fade">
-        <Pressable style={styles.modalOverlay} onPress={() => setQuestVisible(false)}>
-          <View style={styles.questCard}>
-            <Text style={styles.questCardTitle}>퀘스트</Text>
-            <Text style={styles.questSectionTitle}>진행 중</Text>
-            <View style={styles.questItem}>
-              <Text style={styles.whiteText}>오늘의 별 띄우기</Text>
-              <Text style={styles.whiteText}>★ 5</Text>
-            </View>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: '80%' }]} />
-            </View>
+      {/* ===== 오른쪽: 그룹 우주 ===== */}
+      {screen === 'group' && (
+        <Frame width={frameWidth}>
+          <GroupSpaceScreen
+            scale={scale}
+            groups={groups.map((g) => ({
+              id: g.id,
+              name: g.name,
+              stars: groupEntries(g.diary_ids).map((e) => ({
+                color: e.color,
+                size: 0.36,
+                // 카드 미리보기 위치: 3D 위치(x, y)를 카드 안 비율로 옮긴다 (별 배치 반경 최대 약 12).
+                previewX: `${Math.round(50 + Math.max(-1, Math.min(1, e.position[0] / 12)) * 40)}%`,
+                previewY: `${Math.round(50 - Math.max(-1, Math.min(1, e.position[1] / 12)) * 40)}%`,
+              })),
+            }))}
+            onSelectGroup={(g) => setActiveGroupId(g.id)}
+            onAddGroup={() => setCreateGroupVisible(true)}
+          />
+        </Frame>
+      )}
 
-            <View style={styles.questItem}>
-              <Text style={styles.whiteText}>운석 3개 치우기</Text>
-              <Text style={styles.whiteText}>★ 3</Text>
-            </View>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: '40%' }]} />
-            </View>
+      {/* ===== 상점 (HUD 코인을 누르면 열림, 하단 탭 없음) ===== */}
+      {screen === 'shop' && (
+        <Frame width={frameWidth}>
+          <ShopScreen onBack={() => setScreen('home')} />
+        </Frame>
+      )}
 
-            <Text style={styles.questSectionTitle}>진행 완료</Text>
-            <View style={styles.questItem}>
-              <Text style={styles.grayText}>친구 우주에 편지 보내기</Text>
-              <Text style={styles.grayText}>★ 3</Text>
+      {/* ===== 새 그룹 만들기 ===== */}
+      <Modal transparent visible={createGroupVisible} animationType="fade" onRequestClose={() => setCreateGroupVisible(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setCreateGroupVisible(false)}>
+          <TouchableOpacity activeOpacity={1} style={[styles.inviteModalCard, { width: Math.min(frameWidth * 0.82, 420) }]}>
+            <Text style={styles.inviteModalTitle}>🪐 새로운 그룹 우주 만들기</Text>
+            <Text style={styles.inviteModalDesc}>
+              일기를 작성할 때 그룹을 선택하면 내 우주와 그룹 우주에 함께 별이 떠요!
+            </Text>
+            <TextInput
+              style={styles.inviteInput}
+              placeholder={`그룹 이름 (비워두면 '그룹${groups.length + 1}')`}
+              placeholderTextColor="#888"
+              value={newGroupName}
+              onChangeText={setNewGroupName}
+            />
+            <View style={styles.inviteModalButtonRow}>
+              <TouchableOpacity style={styles.inviteCancelBtn} onPress={() => setCreateGroupVisible(false)}>
+                <Text style={styles.whiteText}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.inviteConfirmBtn} onPress={handleCreateGroup} disabled={creatingGroup}>
+                <Text style={styles.inviteConfirmText}>{creatingGroup ? '만드는 중…' : '생성하기'}</Text>
+              </TouchableOpacity>
             </View>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: '100%', backgroundColor: '#80e03e' }]} />
-            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ===== 그룹 카드를 눌렀을 때: 그 그룹의 우주를 3D로 크게 보기 ===== */}
+      <Modal transparent={false} visible={activeGroup !== null} animationType="slide" onRequestClose={() => setActiveGroupId(null)}>
+        {activeGroup && (
+          <ImageBackground
+            source={require('../../assets/images/night-sky.png')}
+            resizeMode="cover"
+            style={styles.fill}>
+            <UniverseCanvas
+              sceneKey={`group-${activeGroup.id}`}
+              entries={groupEntries(activeGroup.diary_ids)}
+              onStarPress={(id) => {
+                setActiveGroupId(null);
+                router.push(`/planet/${id}`);
+              }}
+            />
+            {activeGroup.diary_ids.length === 0 && (
+              <View style={styles.emptyState} pointerEvents="none">
+                <Text style={styles.emptyText}>아직 이 그룹에 공유된 별이 없어요.</Text>
+              </View>
+            )}
+            <Frame width={frameWidth} box>
+              <View style={[styles.topBar, { top: insets.top + 20 }]} pointerEvents="box-none">
+                <TouchableOpacity style={styles.questButton} onPress={() => setActiveGroupId(null)}>
+                  <Text style={styles.questText}>{'< 목록으로'}</Text>
+                </TouchableOpacity>
+                <View style={styles.statsPill}>
+                  <Text style={styles.statsText}>
+                    {activeGroup.name}의 우주 (★ {groupEntries(activeGroup.diary_ids).length})
+                  </Text>
+                </View>
+                <View style={{ width: 60 }} />
+              </View>
+            </Frame>
+          </ImageBackground>
+        )}
+      </Modal>
+
+      {/* ===== 퀘스트 (진행률은 오늘 일기 작성 여부만 실제 값) ===== */}
+      <Modal transparent visible={questVisible} animationType="fade" onRequestClose={() => setQuestVisible(false)}>
+        <Pressable style={styles.frameOuter} onPress={() => setQuestVisible(false)}>
+          <View style={[styles.frameInner, { width: frameWidth }]}>
+            <QuestPanel scale={scale} todayComplete={todayComplete} onClose={() => setQuestVisible(false)} />
           </View>
         </Pressable>
       </Modal>
 
-      {/* 상점: 상단 stats 알약으로 여는 전체화면 팝업 */}
-      <Modal visible={shopVisible} animationType="slide" onRequestClose={() => setShopVisible(false)}>
-        <ShopScreen onClose={() => setShopVisible(false)} />
-      </Modal>
-
-      {/* 커뮤니티: 상단 ☰ 버튼으로 여는 전체화면 팝업 (fffju 디자인) */}
-      <Modal
-        visible={communityVisible}
-        animationType="slide"
-        onRequestClose={() => setCommunityVisible(false)}
-      >
-        <CommunityScreen onClose={() => setCommunityVisible(false)} />
-      </Modal>
+      {/* ===== 공통: 하단 네비게이션 (왼쪽=일기 / 가운데=나의 우주 / 오른쪽=그룹) ===== */}
+      <Frame width={frameWidth} box>
+        <UniverseBottomNav
+          scale={scale}
+          onDiary={() => setScreen('diary')}
+          onHome={() => setScreen('home')}
+          onGroup={() => setScreen('group')}
+        />
+      </Frame>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  pagerWrap: {
-    flex: 1,
-    backgroundColor: '#05050A',
-  },
-  pager: {
-    flex: 1,
-    backgroundColor: '#05050A',
-  },
-  nextZone: {
-    // 우주 화면 오른쪽 가장자리 중간 구간만 탭 영역으로 사용 (상단바/하단 네비와 안 겹치게)
-    position: 'absolute',
-    top: 110,
-    bottom: 130,
-    right: 0,
-    width: 50,
-  },
-  // fffju 하단 네비게이션
-  bottomNav: {
-    position: 'absolute',
-    bottom: 40,
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-  },
-  navPill: {
-    width: 38,
-    height: 18,
-    backgroundColor: '#7f8c8d',
-    borderRadius: 10,
-  },
-  navPillLong: {
-    width: 115,
-  },
-  activePill: {
-    backgroundColor: '#dcdde1',
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#05050A',
-    paddingTop: 60,
-  },
-  universeContainer: {
-    flex: 1,
-    backgroundColor: '#05050A',
-  },
+  container: { flex: 1, backgroundColor: DesignPaint.background },
+  fill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  hidden: { display: 'none' },
+  frameOuter: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center' },
+  frameInner: { flex: 1 },
+  whiteText: { color: '#fff' },
   emptyState: {
     position: 'absolute',
     top: 0,
@@ -252,101 +289,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 40,
   },
-  emptyText: {
-    color: '#6E6E90',
-    fontSize: 15,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
+  emptyText: { color: '#A4B0BE', fontSize: 15, textAlign: 'center', lineHeight: 22 },
+
   topBar: {
-    position: 'absolute',
-    top: 60,
-    left: 20,
-    right: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    position: 'absolute', left: 20, right: 20,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 10,
   },
-  iconButton: {
-    backgroundColor: '#7f8c8d',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-  },
-  iconButtonText: {
-    color: '#111',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  statsPill: {
-    backgroundColor: '#7f8c8d',
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-  statsText: {
-    fontWeight: 'bold',
-    color: '#111',
-    fontSize: 14,
-  },
-  questButton: {
-    backgroundColor: '#7f8c8d',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
-  },
-  questText: {
-    fontWeight: 'bold',
-    color: '#111',
-    fontSize: 14,
-  },
-  whiteText: {
-    color: '#FFFFFF',
-  },
-  grayText: {
-    color: '#A4B0BE',
-  },
-  progressBar: {
-    height: 4,
-    backgroundColor: '#444',
-    borderRadius: 2,
-    marginBottom: 10,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#80e03e',
-    borderRadius: 2,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
-  questCard: {
-    position: 'absolute',
-    top: 120,
-    right: 20,
-    width: 220,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+  statsPill: { backgroundColor: '#7f8c8d', paddingHorizontal: 18, paddingVertical: 8, borderRadius: 12 },
+  statsText: { fontWeight: 'bold', color: '#111', fontSize: 14 },
+  questButton: { backgroundColor: '#7f8c8d', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+  questText: { fontWeight: 'bold', color: '#111', fontSize: 14 },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  inviteModalCard: {
+    backgroundColor: '#1E1E24',
     borderRadius: 20,
-    padding: 20,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: '#333',
   },
-  questCardTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 15,
+  inviteModalTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginBottom: 8 },
+  inviteModalDesc: { color: '#a4b0be', fontSize: 13, marginBottom: 16, lineHeight: 18 },
+  inviteInput: {
+    backgroundColor: '#111115', color: '#fff', borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, marginBottom: 16,
   },
-  questSectionTitle: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-    marginTop: 15,
-    marginBottom: 10,
-  },
-  questItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
+  inviteModalButtonRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
+  inviteCancelBtn: { backgroundColor: '#444', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
+  inviteConfirmBtn: { backgroundColor: '#3498db', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
+  inviteConfirmText: { color: '#fff', fontWeight: 'bold' },
+
 });

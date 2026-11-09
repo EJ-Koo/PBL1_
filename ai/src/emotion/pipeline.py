@@ -3,8 +3,9 @@
 결과(dict, JSON 직렬화 가능)
     {
       "emotion": {"top_labels", "dominant_valence", "valence", "groups"},   # 후처리(postprocess.summarize)
-      "planet": {...},                                                     # 행성 외형 파라미터(planet_mapping)
-      "star": {"color": "#RRGGBB", "brightness": float}                    # stars 테이블에 저장할 값
+      "planet": {...},                                                     # v0.1 행성 파라미터(planet_mapping, 기록용)
+      "visual": {...},                                                     # v0.2 행성 외형(planet_visual) → 프론트 렌더링
+      "star": {"color": "#RRGGBB", "brightness": float}                    # stars 테이블에 저장할 값 (visual 기준)
     }
 """
 from __future__ import annotations
@@ -16,6 +17,7 @@ import numpy as np
 from src.data.labels import load_label_names
 from src.data.paths import load_json
 from src.emotion.planet_mapping import compute_planet, load_mapping
+from src.emotion.planet_visual import compute_visual, load_visual
 from src.emotion.postprocess import apply_postprocess, hierarchy, load_postprocess, summarize
 from src.emotion.predict import EmotionPredictor
 
@@ -27,6 +29,7 @@ class DiaryEmotionPipeline:
         self.cfg = service_cfg or load_json(cfg_dir / "service.json")
         self.labels = load_label_names(cfg_dir / "kote_labels.json")
         self.mapping = load_mapping(cfg_dir / "planet_mapping.json")
+        self.visual = load_visual(cfg_dir / "planet_visual.json")
         self.pp_cfg = load_postprocess(cfg_dir / "emotion_postprocess.json")
         self.H = hierarchy(self.pp_cfg, self.labels)
         self.predictors = []
@@ -38,6 +41,9 @@ class DiaryEmotionPipeline:
             if p.labels != self.labels:
                 raise ValueError(f"{ckpt}의 라벨 순서가 kote_labels.json과 다릅니다.")
             self.predictors.append(p)
+        # 라벨별 판정 기준값(validation에서 정함). 행성 외형에서 '모델이 판정한 감정'을 가르는 데 쓴다.
+        # 앙상블이면 평균을 쓰지만, 앙상블 확률에 맞춘 기준값은 따로 정해야 한다(03·06 노트북 방식).
+        self.thresholds = np.mean([p.thresholds for p in self.predictors], 0)
         lo, hi = self.cfg["star"]["brightness_range"]
         self._brightness = lambda glow: round(lo + (hi - lo) * float(glow), 4)
 
@@ -55,10 +61,11 @@ class DiaryEmotionPipeline:
         out = []
         for p in self.predict_proba(texts):
             planet = compute_planet(p, self.labels, self.mapping)
+            visual = compute_visual(p, self.labels, self.mapping, self.visual, self.thresholds)
             out.append({
                 "emotion": summarize(p, self.H, self.labels),
                 "planet": planet["planet"] | {"summary": planet["summary"]},
-                "star": {"color": planet["planet"]["base_color"],
-                         "brightness": self._brightness(planet["planet"]["glow"])},
+                "visual": visual,
+                "star": {"color": visual["base_color"], "brightness": self._brightness(visual["glow"])},
             })
         return out

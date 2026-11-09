@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { GoogleAuthButton } from '@/components/google-auth-button';
 import { showNotice } from '@/lib/notice';
 import { useDiary } from '@/store/diary-context';
 
@@ -81,6 +82,8 @@ export default function SignupScreen() {
           {isSubmitting ? '가입 중...' : '회원가입'}
         </Text>
       </Pressable>
+
+      <GoogleAuthButton />
 
       <Pressable onPress={() => router.back()}>
         <Text style={styles.loginLink}>이미 계정이 있으신가요? 로그인</Text>

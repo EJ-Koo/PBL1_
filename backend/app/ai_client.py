@@ -4,10 +4,12 @@
 - place_diary: 일기 → 별의 3D 좌표 (2단계, 의미가 비슷한 기억 근처에 배치)
 - update_diary_layout / forget_diary: 일기 수정·삭제를 AI 서비스 저장소에 알림 (좌표는 바뀌지 않음)
 - related_diaries: 관련 기억 목록
+- planet_visuals: 별 목록 조회 때 행성 외형(대표색·보조색·무늬·고리) 계산 (저장하지 않음)
 
 AI 서비스 주소가 설정되지 않았거나 호출에 실패하면 None을 돌려주고, 호출한 쪽은 기존 방식
 (무작위 위치, stars 테이블 기본 색·밝기)으로 처리한다. 일기 저장은 AI 서비스 상태와 관계없이 항상 성공해야 한다.
 """
+import hashlib
 import logging
 import math
 import re
@@ -50,6 +52,35 @@ def analyze_diary(content: str) -> dict | None:
         return None
     low, high = BRIGHTNESS_RANGE
     return {"color": color.upper(), "brightness": min(max(brightness, low), high)}
+
+
+_VISUAL_CACHE: dict[str, dict] = {}
+_VISUAL_CACHE_MAX = 2000
+_VISUAL_BATCH = 64
+
+
+def planet_visuals(contents: list[str]) -> list[dict | None] | None:
+    """일기 내용 목록 → 행성 외형(감정 대표색·보조색·무늬·고리 등) 목록. AI 서비스가 없거나 실패하면 None.
+
+    DB 스키마를 바꾸지 않기 위해 저장하지 않고 조회할 때 계산한다. 같은 내용은 이 프로세스 메모리에
+    캐시한다(키 = 내용 해시, 서버를 다시 띄우면 비워짐). 크기는 여기서 정하지 않는다(프론트가 글자 수로 계산).
+    """
+    if not settings.ai_service_url or not contents:
+        return None
+    keys = [hashlib.sha256(c.encode("utf-8")).hexdigest() for c in contents]
+    missing = sorted({(k, c) for k, c in zip(keys, contents) if k not in _VISUAL_CACHE})
+    try:
+        for i in range(0, len(missing), _VISUAL_BATCH):
+            chunk = missing[i:i + _VISUAL_BATCH]
+            results = _post("/analyze/batch", {"texts": [c for _, c in chunk]}).json()["results"]
+            for (k, _), r in zip(chunk, results):
+                if len(_VISUAL_CACHE) >= _VISUAL_CACHE_MAX:
+                    _VISUAL_CACHE.pop(next(iter(_VISUAL_CACHE)))
+                _VISUAL_CACHE[k] = r["visual"]
+    except Exception as exc:
+        logger.warning("행성 외형 조회 실패, 별 색만 사용합니다: %s", exc)
+        return None
+    return [_VISUAL_CACHE.get(k) for k in keys]
 
 
 def place_diary(user_id: str, diary_id: str, content: str) -> dict | None:

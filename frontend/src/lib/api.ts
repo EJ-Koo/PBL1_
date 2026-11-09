@@ -1,8 +1,15 @@
 import { Platform } from 'react-native';
 
-// 기본은 운영 백엔드. 로컬 백엔드로 확인할 때만 EXPO_PUBLIC_API_BASE_URL(예: http://127.0.0.1:8000)을 지정한다.
+import type { PlanetVisual } from '@/lib/planet-visual';
+
+// [MODIFIED 2026-11-05] 기본값은 Cloudtype에 올린 서버 (api.star2day.com → Cloudflare → Cloudtype).
+// 로컬 백엔드로 테스트할 때만 실행 시 EXPO_PUBLIC_API_URL로 바꾼다.
+// 예) $env:EXPO_PUBLIC_API_URL="http://localhost:8000"; npx expo start --web
+// (AI 브랜치에서 쓰던 이름 EXPO_PUBLIC_API_BASE_URL도 그대로 받는다.)
 export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL || 'https://port-0-pbl1-mw35b8zm30b323af.sel3.cloudtype.app';
+  process.env.EXPO_PUBLIC_API_URL ||
+  process.env.EXPO_PUBLIC_API_BASE_URL ||
+  'https://api.star2day.com';
 
 export type ApiVisibility = 'public' | 'friends' | 'private';
 
@@ -11,6 +18,10 @@ export type ApiDiary = {
   user_id: string;
   content: string;
   photo_url: string | null;
+  // [MODIFIED 2026-11-05] 사진 여러 장(최대 5장). photo_urls는 화면 표시용 서명 URL, photo_paths는 저장 경로.
+  // 서버가 예전 버전이면 없을 수 있어서 선택 값으로 둔다.
+  photo_urls?: string[];
+  photo_paths?: string[];
   visibility: ApiVisibility;
   created_at: string;
   updated_at: string;
@@ -54,6 +65,20 @@ export async function apiSignup(email: string, password: string) {
   };
 }
 
+// 구글에서 받은 ID 토큰을 백엔드에 넘겨 Supabase 세션으로 교환한다. 가입/로그인 공용.
+export async function apiGoogleAuth(idToken: string) {
+  const res = await fetch(`${API_BASE_URL}/auth/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id_token: idToken }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail ?? 'Google 로그인에 실패했습니다.');
+  }
+  return data as { access_token: string; refresh_token: string; user_id: string };
+}
+
 export type ApiStar = {
   id: string;
   diary_id: string;
@@ -63,6 +88,8 @@ export type ApiStar = {
   color: string;
   size: number;
   brightness: number;
+  /** AI 감정 분석으로 정한 행성 외형. AI 서비스가 없으면 null/없음. */
+  planet?: PlanetVisual | null;
 };
 
 export async function apiListStars(accessToken: string) {
@@ -91,7 +118,7 @@ export async function apiCreateDiary(
   accessToken: string,
   payload: {
     content: string;
-    photo_url: string | null;
+    photo_paths: string[];
     visibility: ApiVisibility;
     group_ids?: string[];
   }
@@ -241,7 +268,7 @@ export async function apiAdminDeleteDiary(adminToken: string, diaryId: string) {
 export async function apiUpdateDiary(
   accessToken: string,
   id: string,
-  payload: Partial<{ content: string; photo_url: string | null; visibility: ApiVisibility }>
+  payload: Partial<{ content: string; photo_paths: string[]; visibility: ApiVisibility }>
 ) {
   const res = await fetch(`${API_BASE_URL}/diaries/${id}`, {
     method: 'PATCH',

@@ -101,7 +101,7 @@ def _load_models() -> None:
 def health():
     p = get_pipeline()
     out = {"status": "ok", "models": p.model_names, "num_labels": len(p.labels),
-           "mapping_version": p.mapping["version"]}
+           "mapping_version": p.mapping["version"], "visual_version": p.visual["version"]}
     if layout_enabled():
         lay = get_layout()
         out["layout"] = {"embedding_version": lay.embedding_version, "layout_version": lay.layout_version,
