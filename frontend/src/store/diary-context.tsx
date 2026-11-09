@@ -3,6 +3,7 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from 're
 import {
   apiCreateDiary,
   apiCreateGroup,
+  apiGoogleAuth,
   apiListDiaries,
   apiListGroups,
   apiListStars,
@@ -50,6 +51,7 @@ type DiaryContextValue = {
   // 로그인한 이메일 (일기 작성 화면의 작성자 표시용)
   userEmail: string | null;
   login: (email: string, password: string) => Promise<LoginResult>;
+  loginWithGoogle: (idToken: string) => Promise<LoginResult>;
   signup: (email: string, password: string) => Promise<SignupResult>;
   logout: () => void;
   entries: DiaryEntry[];
@@ -129,6 +131,37 @@ function toEntry(diary: ApiDiary, colorIndex: number, star?: ApiStar): DiaryEntr
   };
 }
 
+// JWT(ID 토큰) payload에서 email 클레임만 꺼낸다. 표시용이라 실패하면 null로 둔다.
+function emailFromIdToken(idToken: string): string | null {
+  try {
+    const payload = idToken.split('.')[1];
+    const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+    return (JSON.parse(json).email as string) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// 로그인/구글로그인 후 공통: 일기(핵심)·별·그룹을 불러온다. 별/그룹은 보조라 실패해도
+// 일기를 비우지 않도록 각각 격리한다. (그룹 API 미배포 시 /groups 404가 나도 일기·별은 그대로)
+async function loadUserData(
+  token: string,
+  setEntries: (entries: DiaryEntry[]) => void,
+  setGroups: (groups: ApiGroup[]) => void
+) {
+  try {
+    const diaryList = await apiListDiaries(token);
+    const starList = await apiListStars(token).catch(() => []);
+    const groupList = await apiListGroups(token).catch(() => []);
+    const starByDiaryId = new Map(starList.map((s) => [s.diary_id, s]));
+    setEntries(diaryList.map((d, i) => toEntry(d, i, starByDiaryId.get(d.id))));
+    setGroups(groupList);
+  } catch {
+    setEntries([]);
+    setGroups([]);
+  }
+}
+
 const DiaryContext = createContext<DiaryContextValue | null>(null);
 
 export function DiaryProvider({ children }: { children: ReactNode }) {
@@ -149,24 +182,28 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           setAccessToken(result.access_token);
           setUserEmail(email);
           setIsLoggedIn(true);
-          try {
-            // 일기가 핵심. 별/그룹 조회는 보조라 실패해도 일기를 비우지 않도록 각각 격리한다.
-            // (그룹 API 미배포 시 /groups 404가 나도 일기·별은 그대로 보여야 함)
-            const diaryList = await apiListDiaries(result.access_token);
-            const starList = await apiListStars(result.access_token).catch(() => []);
-            const groupList = await apiListGroups(result.access_token).catch(() => []);
-            const starByDiaryId = new Map(starList.map((s) => [s.diary_id, s]));
-            setEntries(diaryList.map((d, i) => toEntry(d, i, starByDiaryId.get(d.id))));
-            setGroups(groupList);
-          } catch {
-            setEntries([]);
-            setGroups([]);
-          }
+          await loadUserData(result.access_token, setEntries, setGroups);
           return { ok: true };
         } catch (err) {
           return {
             ok: false,
             error: err instanceof Error ? err.message : '로그인에 실패했습니다.',
+          };
+        }
+      },
+      loginWithGoogle: async (idToken: string): Promise<LoginResult> => {
+        try {
+          const result = await apiGoogleAuth(idToken);
+          setAccessToken(result.access_token);
+          // 구글 계정 이메일은 ID 토큰(JWT) payload의 email 클레임에서 꺼낸다.
+          setUserEmail(emailFromIdToken(idToken));
+          setIsLoggedIn(true);
+          await loadUserData(result.access_token, setEntries, setGroups);
+          return { ok: true };
+        } catch (err) {
+          return {
+            ok: false,
+            error: err instanceof Error ? err.message : 'Google 로그인에 실패했습니다.',
           };
         }
       },

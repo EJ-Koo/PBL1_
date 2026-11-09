@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { router } from 'expo-router';
 import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { GoogleAuthButton } from '@/components/google-auth-button';
 import { showNotice } from '@/lib/notice';
 import { useDiary } from '@/store/diary-context';
 
@@ -140,6 +141,8 @@ export default function LoginScreen() {
           {isLoggingIn ? '로그인 중...' : '로그인'}
         </Text>
       </Pressable>
+
+      <GoogleAuthButton />
 
       <Pressable onPress={handleSignup}>
         <Text style={styles.signupLink}>계정이 없으신가요? 회원가입</Text>

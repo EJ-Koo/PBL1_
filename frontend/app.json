@@ -12,6 +12,7 @@
       "bundleIdentifier": "com.jwo916.starex-926-app"
     },
     "android": {
+      "package": "com.jwo916.starex926app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

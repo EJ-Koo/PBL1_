@@ -65,6 +65,20 @@ export async function apiSignup(email: string, password: string) {
   };
 }
 
+// 구글에서 받은 ID 토큰을 백엔드에 넘겨 Supabase 세션으로 교환한다. 가입/로그인 공용.
+export async function apiGoogleAuth(idToken: string) {
+  const res = await fetch(`${API_BASE_URL}/auth/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id_token: idToken }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail ?? 'Google 로그인에 실패했습니다.');
+  }
+  return data as { access_token: string; refresh_token: string; user_id: string };
+}
+
 export type ApiStar = {
   id: string;
   diary_id: string;
