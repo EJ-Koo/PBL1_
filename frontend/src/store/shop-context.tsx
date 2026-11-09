@@ -5,6 +5,7 @@ import {
   apiGetWallet,
   apiListShopItems,
   apiPurchaseItem,
+  apiResetMyShop,
   apiSetEquipped,
   type ItemEffect,
   type ShopItem,
@@ -23,6 +24,10 @@ type ShopContextValue = {
   refresh: () => Promise<void>;
   purchase: (itemId: string) => Promise<ShopResult>;
   setEquipped: (itemId: string, equipped: boolean) => Promise<ShopResult>;
+  /** 테스트용 초기화 버튼을 보여줄지 (관리자 설정) */
+  resetAllowed: boolean;
+  /** 테스트용: 코인을 시작 코인으로, 산 아이템 삭제 */
+  resetShop: () => Promise<ShopResult>;
   /** 장착 중인 아이템의 효과 목록 (홈 화면이 읽어서 배경·혜성 등을 그린다) */
   activeEffects: ItemEffect[];
 };
@@ -36,10 +41,11 @@ const message = (err: unknown, fallback: string) => (err instanceof Error ? err.
 export function ShopProvider({ children }: { children: ReactNode }) {
   const { accessToken } = useDiary();
   // 받은 값에 "어느 로그인의 값인지"를 같이 저장해, 로그아웃·계정 변경 시 이전 계정 값이 보이지 않게 한다.
-  const [state, setState] = useState<{ token: string | null; coins: number | null; items: ShopItem[] }>({
+  const [state, setState] = useState<{ token: string | null; coins: number | null; items: ShopItem[]; resetAllowed: boolean }>({
     token: null,
     coins: null,
     items: [],
+    resetAllowed: false,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<{ token: string | null; message: string } | null>(null);
@@ -48,7 +54,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     if (!accessToken) return;
     try {
       const [wallet, list] = await Promise.all([apiGetWallet(accessToken), apiListShopItems(accessToken)]);
-      setState({ token: accessToken, coins: wallet.coins, items: list });
+      setState({ token: accessToken, coins: wallet.coins, items: list, resetAllowed: wallet.reset_allowed });
       setError(null);
     } catch (err) {
       setError({ token: accessToken, message: message(err, '상점을 불러오지 못했습니다.') });
@@ -67,7 +73,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     let alive = true;
     Promise.all([apiGetWallet(accessToken), apiListShopItems(accessToken)])
       .then(([wallet, list]) => {
-        if (alive) setState({ token: accessToken, coins: wallet.coins, items: list });
+        if (alive) setState({ token: accessToken, coins: wallet.coins, items: list, resetAllowed: wallet.reset_allowed });
       })
       .catch((err) => {
         if (alive) setError({ token: accessToken, message: message(err, '상점을 불러오지 못했습니다.') });
@@ -123,6 +129,17 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     [accessToken, refresh]
   );
 
+  const resetShop = useCallback(async (): Promise<ShopResult> => {
+    if (!accessToken) return { ok: false, error: '로그인이 필요합니다.' };
+    try {
+      await apiResetMyShop(accessToken);
+      await fetchAll();
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: message(err, '초기화에 실패했습니다.') };
+    }
+  }, [accessToken, fetchAll]);
+
   const value = useMemo<ShopContextValue>(
     () => ({
       coins,
@@ -132,9 +149,11 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       refresh,
       purchase,
       setEquipped,
+      resetAllowed: current && state.resetAllowed,
+      resetShop,
       activeEffects: items.filter((i) => i.equipped && i.quantity > 0).map((i) => i.effect ?? {}),
     }),
-    [coins, items, loading, current, accessToken, error, refresh, purchase, setEquipped]
+    [coins, items, loading, current, accessToken, error, refresh, purchase, setEquipped, state.resetAllowed, resetShop]
   );
 
   return <ShopContext.Provider value={value}>{children}</ShopContext.Provider>;

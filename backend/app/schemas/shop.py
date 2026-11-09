@@ -7,6 +7,8 @@ ItemKind = Literal["consumable", "equip"]
 
 class Wallet(BaseModel):
     coins: int
+    # 테스트용 '내 상점 초기화'를 쓸 수 있는지 (관리자 설정 allow_test_reset)
+    reset_allowed: bool = False
 
 
 class ShopItem(BaseModel):
@@ -89,6 +91,7 @@ class AdminConfigEntry(BaseModel):
     key: str
     value: Any
     description: str
+    kind: Literal["int", "bool"] = "int"  # 관리자 화면 입력 방식 (숫자칸 / 켜기·끄기)
 
 
 class AdminConfigUpdate(BaseModel):
