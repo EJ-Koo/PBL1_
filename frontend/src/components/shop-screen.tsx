@@ -1,5 +1,5 @@
 // [MODIFIED 2026-11-10] 상점 팝업 (fffju 상점 카드 디자인 + 서버 코인·구매·장착).
-//  - 아래에서 올라오는 창. ✕ 버튼, 창 바깥 누르기, 안드로이드 뒤로가기로 닫힘
+//  - 화면 가운데 뜨는 창 (2026-11-10 아래 → 가운데로 변경). ✕ 버튼, 창 바깥 누르기, 안드로이드 뒤로가기로 닫힘
 //  - 탭: 배경(이펙트 줄 / 테마 줄) · 음악 · 소모품
 //  - 각 줄은 가로로 넘겨 보는 카드 목록. 산 것은 장착/해제, 안 산 것은 구매
 //  - 어느 탭·줄에 들어갈지는 아이템의 slot 으로 정한다 → 관리자 화면에서 slot 만 맞추면 새 아이템이 바로 나타남
@@ -17,7 +17,6 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { showMessage } from '@/lib/feedback';
 import { confirmChoice } from '@/lib/notice';
@@ -139,7 +138,6 @@ function Card({
 export function ShopSheet({ visible, width, onClose }: { visible: boolean; width: number; onClose: () => void }) {
   const { coins, items, loading, error, refresh, purchase, setEquipped, resetAllowed, resetShop } = useShop();
   const { height } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
   const [tabId, setTabId] = useState(TABS[0].id);
   const [busyId, setBusyId] = useState<string | null>(null);
   const balance = coins ?? 0;
@@ -184,15 +182,15 @@ export function ShopSheet({ visible, width, onClose }: { visible: boolean; width
   };
 
   return (
-    <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
+    <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        {/* 창 바깥(위쪽 어두운 부분)을 누르면 닫힘 */}
+        {/* 창 바깥(어두운 부분)을 누르면 닫힘 */}
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="상점 닫기" testID="shop-backdrop" />
         <View
           testID="shop-sheet"
           style={[
             styles.sheet,
-            { width, height: Math.min(height * 0.82, 760), paddingBottom: Math.max(insets.bottom, 12) },
+            { width: width - 24, height: Math.min(height * 0.72, 680), paddingBottom: 12 },
           ]}>
           <View style={styles.header}>
             {/* 왼쪽 칸은 나중에 넣을 기능 자리 (예전 뒤로가기 위치) */}
@@ -310,13 +308,11 @@ export function ShopSheet({ visible, width, onClose }: { visible: boolean; width
 const CARD_WIDTH = 140;
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end', alignItems: 'center' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center' },
   sheet: {
     backgroundColor: '#000',
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    borderRadius: 18,
     borderWidth: 1,
-    borderBottomWidth: 0,
     borderColor: '#3A3A4A',
     paddingTop: 14,
     paddingHorizontal: 16,
