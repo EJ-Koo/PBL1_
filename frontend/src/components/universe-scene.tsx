@@ -41,7 +41,10 @@ import {
   type PlanetQuality,
   type PlanetVisual,
 } from '@/lib/planet-visual';
+import { SPECIAL_EFFECT_SETTINGS, specialTypeOf, type EffectTier, type SpecialType } from '@/lib/special-planet';
 import type { DiaryEntry } from '@/store/diary-context';
+
+import { EFFECT_TIERS, LIGHT_DIR_GLSL, SpecialEffect } from './planet-effects';
 
 // pointsMaterial은 텍스처가 없으면 각 점을 네모로 그린다. 중심은 불투명, 가장자리는
 // 투명한 작은 원형 텍스처를 입혀서 동그란 별점으로 보이게 한다.
@@ -171,7 +174,7 @@ let targetCameraZ = 5;
 //  - 먼 행성은 조금 어둡게 그려 겹쳤을 때 앞뒤가 구별되게 한다(좌표는 그대로).
 // 톤 매핑을 쓰지 않아 대표색의 색상이 바뀌지 않는다. 규칙: ai/reports/planet_visual_v02_ko.md
 // 빛 방향(화면 기준): 오른쪽 위, 옆에서 비스듬히. 왼쪽 아래 가장자리에 어두운 면이 보여 둥근 형태가 드러난다.
-const LIGHT_DIR_GLSL = 'const vec3 LIGHT_DIR = vec3(0.88, 0.36, 0.31);';
+// (LIGHT_DIR_GLSL은 특수 효과와 함께 쓰려고 planet-effects.tsx에 둔다)
 
 /** 모든 행성이 함께 쓰는 값. 카메라 거리에 따라 '멀리 있는 행성' 기준을 매 프레임 갱신한다. */
 const SCENE_UNIFORMS = {
@@ -412,6 +415,9 @@ function Planet({
   brightness = 1,
   quality,
   selected = false,
+  special = null,
+  effectIntensity = 0.8,
+  effectSpeed = 1,
   onPress,
   onPressStart,
   registerMesh,
@@ -425,6 +431,10 @@ function Planet({
   quality: PlanetQuality;
   /** 마우스를 올렸거나 누르고 있는 행성 */
   selected?: boolean;
+  /** 특수 행성 유형(서버 설계). null이면 일반 행성. 본체(색·무늬·크기)는 같고 바깥 효과만 더한다. */
+  special?: SpecialType | null;
+  effectIntensity?: number;
+  effectSpeed?: number;
   onPress?: () => void;
   onPressStart?: () => void;
   /** 웹 마우스 올림 판정(UniverseScene의 광선 검사)에 쓸 본체 메시를 알려 준다 */
@@ -439,6 +449,11 @@ function Planet({
   const rand = useMemo(() => seededRandoms(id, 16), [id]);
   const [r0, r1, r2, r3, r4, r5, r6, r7, r8] = rand;
   const palette = useMemo(() => planetPalette(visual), [visual]);
+  // 특수 효과 색: 대표색 계열 + 첫 보조 감정 색(대표색과 어울리게 조정). 고정 색(바다=파랑 등)은 쓰지 않는다.
+  const effectPalette = useMemo(
+    () => ({ ...palette, accent: harmonizeAccent(visual.accents[0]?.color ?? palette.light, palette.base) }),
+    [palette, visual.accents]
+  );
 
   // 색 줄(일기마다 고정): 층 배치·보조 감정 층 위치. 보조 감정 층 면적 = 서버가 정한 weight
   const bandTexture = useMemo(() => createBandTexture(visual, rand.slice(9)), [visual, rand]);
@@ -593,6 +608,19 @@ function Planet({
           />
         </mesh>
       )}
+      {special && (
+        <SpecialEffect
+          id={id}
+          type={special}
+          radius={radius}
+          palette={effectPalette}
+          intensity={effectIntensity}
+          speed={effectSpeed}
+          quality={quality}
+          highlight={highlight}
+          shared={SCENE_UNIFORMS}
+        />
+      )}
     </group>
   );
 }
@@ -681,16 +709,33 @@ function DragPlane() {
 
 // @react-three/fiber/native의 포인터 이벤트는 터치/드래그는 잘 잡지만(DragPlane 참고),
 // 웹 마우스 휠(wheel) 이벤트는 전달하지 않는다 — RN용 이벤트 매니저라 DOM wheel을 안 다룸.
-// 그래서 캔버스에 기대지 않고 window에 직접 wheel 리스너를 붙여서 웹 줌을 구현한다.
-function useWheelZoom() {
-  useEffect(() => {
-    if (Platform.OS !== 'web') return;
-    const handleWheel = (e: WheelEvent) => {
-      targetCameraZ = Math.min(Math.max(targetCameraZ + e.deltaY * 0.0015, ZOOM_MIN), zoomMax);
-    };
-    window.addEventListener('wheel', handleWheel, { passive: true });
-    return () => window.removeEventListener('wheel', handleWheel);
-  }, []);
+// 그래서 window에 직접 wheel 리스너를 붙여서 웹 줌을 구현한다.
+// 휠 줌이 잘 안 먹던 문제 대응 (test 브랜치 2026-11-05 수정과 같은 방식):
+//  1) 휠 한 칸(약 100px)에 거리 0.15만 움직였다. 처음 화면 거리가 행성 배치에 따라 15~30이라 끝까지 가려면 100칸 넘게 굴려야 했다
+//     → 현재 거리에 비례해 움직인다(휠 한 칸에 약 16%). 가까이서도 멀리서도 같은 느낌.
+//  2) 브라우저·마우스에 따라 deltaY가 줄(1)·페이지(2) 단위로 오면 값이 작아 거의 안 움직였다 → 픽셀로 환산.
+//  3) 화면(컴포넌트)마다 붙였다 떼던 리스너 → 앱 전체에서 한 번만 붙이고 떼지 않는다.
+//  4) 우주 화면(UniverseCanvas, data-universe-zoom) 위에서 굴린 휠만 줌으로 쓴다. 일기 쓰기 등 다른 화면 스크롤과 분리.
+const WHEEL_PIXELS_PER_LINE = 16;
+const WHEEL_STEP_LIMIT = 300;
+let wheelZoomInstalled = false;
+
+function installWheelZoom() {
+  if (Platform.OS !== 'web' || wheelZoomInstalled || typeof window === 'undefined') return;
+  wheelZoomInstalled = true;
+  window.addEventListener(
+    'wheel',
+    (e: WheelEvent) => {
+      // 캔버스 위에는 r3f가 이벤트용 div를 덧씌우므로 대상이 캔버스 자체가 아닐 수 있다.
+      if (!(e.target as Element | null)?.closest?.('[data-universe-zoom]')) return;
+      const unit =
+        e.deltaMode === 1 ? WHEEL_PIXELS_PER_LINE : e.deltaMode === 2 ? window.innerHeight : 1;
+      const dy = Math.min(Math.max(e.deltaY * unit, -WHEEL_STEP_LIMIT), WHEEL_STEP_LIMIT);
+      const next = targetCameraZ * Math.exp(dy * 0.0015);
+      targetCameraZ = Math.min(Math.max(next, ZOOM_MIN), zoomMax);
+    },
+    { passive: true }
+  );
 }
 
 type Framing = { center: [number, number, number]; spread: number; distance: number };
@@ -720,7 +765,9 @@ export function UniverseScene({
   const { width } = useWindowDimensions();
   const quality = choosePlanetQuality(entries.length, width);
   const size = useThree((s) => s.size);
-  useWheelZoom();
+  useEffect(() => {
+    installWheelZoom();
+  }, []);
 
   // 처음 화면 맞추기: 행성들의 중심을 회전 중심으로 삼고, 대부분의 행성이 화면에 들어오는 거리에서 시작한다.
   // 좌표(일기 의미로 정한 위치)는 그대로이고, 전체를 함께 옮겨 '카메라가 행성 무리를 보게' 할 뿐이다.
@@ -797,7 +844,36 @@ export function UniverseScene({
     };
   }, [camera, raycaster, glElement]);
 
+  // 특수 효과 단계(LOD): 0.3초마다 카메라와 특수 행성 사이 거리를 재서, 가까운 순서로 maxNear개까지만 '가까이'(1).
+  // 나머지는 '멀리'(0, 바탕 층만 멈춘 채). 선택한 행성(2)은 효과 쪽에서 바로 판단한다. 좌표는 바꾸지 않는다.
+  const specialEntries = useMemo(() => entries.filter((e) => specialTypeOf(e.design)), [entries]);
+  const lodClock = useRef(0);
+  const centerRef = useRef<[number, number, number]>([0, 0, 0]);
+  useEffect(() => {
+    centerRef.current = framing?.center ?? [0, 0, 0];
+  }, [framing]);
+  useEffect(() => () => EFFECT_TIERS.clear(), []);
+
   useFrame((state, delta) => {
+    lodClock.current += delta;
+    if (lodClock.current > 0.3 && groupRef.current) {
+      lodClock.current = 0;
+      const [cx, cy, cz] = centerRef.current;
+      const m = groupRef.current.matrixWorld;
+      const tmp = new Vector3();
+      const ranked = specialEntries
+        .map((e) => {
+          tmp.set(e.position[0] - cx, e.position[1] - cy, e.position[2] - cz).applyMatrix4(m);
+          return { id: e.id, d: tmp.distanceTo(state.camera.position) };
+        })
+        .sort((a, b) => a.d - b.d);
+      const maxNear = SPECIAL_EFFECT_SETTINGS.maxNear[quality];
+      EFFECT_TIERS.clear();
+      ranked.forEach((r, i) => {
+        const tier: EffectTier = i < maxNear && r.d < SPECIAL_EFFECT_SETTINGS.nearDistance ? 1 : 0;
+        EFFECT_TIERS.set(r.id, tier);
+      });
+    }
     if (groupRef.current) {
       groupRef.current.rotation.y += (targetRotX - groupRef.current.rotation.y) * 0.1;
       groupRef.current.rotation.x += (targetRotY - groupRef.current.rotation.x) * 0.1;
@@ -828,6 +904,9 @@ export function UniverseScene({
               brightness={entry.brightness}
               quality={quality}
               selected={entry.id === selectedId}
+              special={specialTypeOf(entry.design)}
+              effectIntensity={entry.design?.effectParameters?.intensity}
+              effectSpeed={entry.design?.effectParameters?.speed}
               onPress={() => onStarPress(entry.id)}
               registerMesh={(mesh) => {
                 if (mesh) {
@@ -859,7 +938,8 @@ export function UniverseCanvas({
   onStarPress: (id: string) => void;
 }) {
   return (
-    <View style={{ flex: 1 }}>
+    // dataSet은 웹에서 data-universe-zoom 속성이 된다 (휠 줌 대상 판단용, installWheelZoom 참고).
+    <View style={{ flex: 1 }} {...({ dataSet: { universeZoom: 'true' } } as object)}>
       {/* 시야각 50도(기본 75도): 화면 가장자리 행성이 타원처럼 늘어나는 왜곡과 가까운 행성만 크게 보이는 차이를 줄인다 */}
       <Canvas style={{ flex: 1 }} camera={{ fov: CAMERA_FOV, position: [0, 0, 5] }}>
         <UniverseScene entries={entries} onStarPress={onStarPress} />

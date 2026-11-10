@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 
 import type { PlanetVisual } from '@/lib/planet-visual';
+import type { DiaryTopic, PlanetDesign } from '@/lib/special-planet';
 
 // 기본은 운영 백엔드. 로컬 백엔드로 확인할 때만 EXPO_PUBLIC_API_BASE_URL(예: http://127.0.0.1:8000)을 지정한다.
 export const API_BASE_URL =
@@ -67,6 +68,8 @@ export type ApiStar = {
   brightness: number;
   /** AI 감정 분석으로 정한 행성 외형. AI 서비스가 없으면 null/없음. */
   planet?: PlanetVisual | null;
+  /** 행성 설계(특수 행성 여부·효과·선택 이유). AI 서비스가 없으면 null/없음. */
+  design?: PlanetDesign | null;
 };
 
 export async function apiListStars(accessToken: string) {
@@ -98,6 +101,8 @@ export async function apiCreateDiary(
     photo_url: string | null;
     visibility: ApiVisibility;
     group_ids?: string[];
+    /** 일기 주제(선택). AI가 특수 행성을 고를 때 보조 정보로만 쓴다. */
+    topic?: DiaryTopic;
   }
 ) {
   const res = await fetch(`${API_BASE_URL}/diaries`, {

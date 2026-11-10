@@ -5,6 +5,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 
 import { goBackSafe } from '@/lib/navigation';
 import { showNotice } from '@/lib/notice';
+import { DIARY_TOPICS, type DiaryTopic } from '@/lib/special-planet';
 import { useDiary, type Visibility } from '@/store/diary-context';
 
 function toggleId(ids: string[], id: string): string[] {
@@ -29,6 +30,8 @@ export default function WriteScreen({ onComplete }: { onComplete?: () => void } 
   // fffju 디자인엔 공개범위 3종(public/friends/private) UI가 없고 "비공개 ↔ 그룹 공유"만 있다.
   // 그래서 그룹을 하나도 안 고르면 private, 하나라도 고르면 friends(공유)로 매핑한다.
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+  // 주제는 선택 사항(고르지 않아도 저장된다). AI가 특수 행성을 고를 때 보조 정보로만 쓴다.
+  const [topic, setTopic] = useState<DiaryTopic | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -45,6 +48,7 @@ export default function WriteScreen({ onComplete }: { onComplete?: () => void } 
     setText('');
     setPhotoUri(null);
     setSelectedGroupIds([]);
+    setTopic(null);
   };
 
   const finish = () => {
@@ -78,7 +82,7 @@ export default function WriteScreen({ onComplete }: { onComplete?: () => void } 
     const result =
       isEditMode && id
         ? await updateEntry(id, text.trim(), photoUri, visibility)
-        : await addEntry(text.trim(), photoUri, visibility, selectedGroupIds);
+        : await addEntry(text.trim(), photoUri, visibility, selectedGroupIds, topic);
     setIsSaving(false);
 
     if (result.ok) {
@@ -113,6 +117,33 @@ export default function WriteScreen({ onComplete }: { onComplete?: () => void } 
           />
 
           <View style={styles.divider} />
+
+          {/* 오늘의 주제(선택): 다시 누르면 선택 해제. 수정 모드에서는 바꾸지 않는다. */}
+          {!isEditMode && (
+            <>
+              <View style={styles.photoHeaderRow}>
+                <Text style={styles.photoSectionTitle}>오늘의 주제</Text>
+                <Text style={styles.photoCountText}>선택 안 해도 돼요</Text>
+              </View>
+              <View style={styles.topicRow}>
+                {DIARY_TOPICS.map((t) => {
+                  const selected = topic === t.id;
+                  return (
+                    <Pressable
+                      key={t.id}
+                      style={[styles.topicChip, selected && styles.sharePillSelected]}
+                      onPress={() => setTopic(selected ? null : t.id)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                    >
+                      <Text style={styles.sharePillText}>{t.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <View style={styles.divider} />
+            </>
+          )}
 
           <View style={styles.photoHeaderRow}>
             <Text style={styles.photoSectionTitle}>오늘의 장면</Text>
@@ -237,6 +268,15 @@ const styles = StyleSheet.create({
   },
   sharePillSelected: { backgroundColor: '#d9d9d9', borderColor: '#d9d9d9' },
   sharePillText: { color: '#000', fontSize: 13, fontWeight: '600' },
+  topicRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
+  topicChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 18,
+    backgroundColor: '#9e9e9e',
+    borderWidth: 1,
+    borderColor: '#444',
+  },
   submitButton: {
     backgroundColor: '#bdbdbd',
     paddingVertical: 15,
