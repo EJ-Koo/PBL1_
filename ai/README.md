@@ -8,6 +8,7 @@
 | 의미 임베딩 | 관련 기억 검색 | KURE-v1로 로컬 구현·연동 완료 (가상 일기로만 평가) |
 | 공간 알고리즘 | 별 3D 위치 | 관련 기억 근처 배치(기존 별 고정)로 로컬 구현·연동 완료 |
 | 군집·별자리 | 비슷한 기억 묶기, 선 잇기 | 미구현 (설계만) |
+| 특수 행성 | 주제·감정·문맥이 맞을 때 행성 바깥 효과(Ocean·Cloud·Crystal·Nebula·Lava) | **시안 v0.1**, 이 PC에서만 확인 (기존 감정 행성 규칙은 그대로) |
 
 ## 현재 진행 상황 (2026-10-27 기준)
 
@@ -21,6 +22,7 @@
 | 로컬 완료 | 의미 임베딩·관련 기억·3D 위치 (노트북 07·08) | 가상 일기 76개로 검증 | 실제 데이터로 τ(관련 기억 기준값) 다시 정하기 |
 | 로컬 완료 | AI 서비스(`ai/service/`) ↔ 백엔드 ↔ 프론트 연동 | 이 PC에서 동작 확인 (실제 AI 서비스 + 가짜 DB, 백엔드 테스트 23개). 실제 DB로 앱 화면 확인은 진행 전 | **배포 위치 미정**(GPU 서버·Railway 등), 모델 가중치 공유 방법 미정 |
 | 미정 | 프론트 디자인 (관련 기억 표시, 별 모양) | 지금은 좌표·색·밝기만 반영, 화면 디자인 변경 없음 | 팀 논의 후 결정 |
+| 시안 (로컬) | 특수 행성 선택기 v0.1 + 선택 주제 입력 + 효과 5종 (2026-11-09) | 가상 일기 22개 사례·88개 참조 일기로만 확인, 이 PC에서만 동작 (커밋 전) | 임계값·가중치를 실제 일기·사용자 반응으로 다시 정하기, 주제 저장 위치(DB 컬럼) 결정 |
 | 미구현 | 군집(HDBSCAN)·별자리 선·LLM 이름 붙이기 | 설계만 | 다음 단계 |
 
 - 운영 서버(Railway)와 운영 앱은 아직 AI 서비스를 모른다. 백엔드는 `AI_SERVICE_URL`이 비어 있으면 **예전과 똑같이** 동작한다(무작위 위치, 흰색 별).
@@ -38,6 +40,7 @@
 - [reports/step2_positioning_design_ko.md](reports/step2_positioning_design_ko.md): 2단계 설계(의미 임베딩 → 위치·군집·별자리)
 - [reports/step2_local_validation_ko.md](reports/step2_local_validation_ko.md): 2단계 로컬 검증(임베딩 모델 선택, 좌표 방식 선택)
 - [reports/step2_integration_local_ko.md](reports/step2_integration_local_ko.md): AI 서비스 ↔ 백엔드 ↔ DB ↔ 프론트 로컬 연동·실행 방법
+- [reports/special_planet_v01_ko.md](reports/special_planet_v01_ko.md): 특수 행성 선택기 시안 v0.1(주제·감정·문맥 점수, 임계값, 효과 5종, 회귀·성능 확인)
 
 ## 폴더 구성
 
@@ -244,7 +247,8 @@ AI 서비스는 백엔드와 분리된 별도 서버다. 주소가 설정되지 
 | 구성 | 파일 |
 |---|---|
 | 파이프라인 | `ai/src/emotion/pipeline.py` (`DiaryEmotionPipeline`) |
-| 서버 | `ai/service/app.py` — `GET /health`, `POST /analyze` (`{"text"}`), `POST /analyze/batch` (`{"texts"}`), 2단계 `POST /layout/add·update·remove·related` (`{"user_id", "diary_id", "text"}`) |
+| 서버 | `ai/service/app.py` — `GET /health`, `POST /analyze` (`{"text"}`, 선택 `topic`·`design`), `POST /analyze/batch` (`{"texts"}`, 선택 `topics`·`design`), 2단계 `POST /layout/add·update·remove·related` (`{"user_id", "diary_id", "text"}`, add만 선택 `topic`), 별 목록용 `POST /design/batch` (`{"user_id", "items": [{"diary_id", "text"}]}`) |
+| 특수 행성 | `ai/src/special/` — `selector.py`(주제·감정·문맥 점수 → 유형 또는 일반), `design.py`(감정 행성 + 특수 효과 → 행성 설계), `topics.py`(사용자가 고른 주제 저장, `ai/data/service/topics/`, Git 제외). 설정 `ai/configs/special_planet.json`, 정규화 범위 `special_planet_normalization.json`(`scripts/calibrate_special_planet.py`로 생성), 확인 `scripts/special_planet_check.py`·`tests/test_special_selector.py`, 회귀 확인 `scripts/planet_regression.py` |
 | 2단계 좌표 | `ai/src/positioning/service_layout.py` — 사용자별 임베딩·좌표 저장소(`ai/data/service/`, Git 제외), 연동 안내: `ai/reports/step2_integration_local_ko.md` |
 | 설정 | `ai/configs/service.json` — 사용할 모델 체크포인트, 밝기 범위(0.5~1.5), `positioning`(임베딩 모델 KURE-v1, τ, 장면 배율) |
 | 의존성 | `ai/requirements-service.txt` |

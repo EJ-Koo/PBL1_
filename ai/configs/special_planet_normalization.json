@@ -1,0 +1,52 @@
+{
+  "embedding_version": "kure_v1:nlpai-lab/KURE-v1@8b418a584146:cls:l2",
+  "reference": "pilot_diaries.json 76 + demo_diaries.json 12 (가상 일기 88개)",
+  "percentiles": [
+    50,
+    97
+  ],
+  "topic": {
+    "ocean": [
+      0.4956,
+      0.6444
+    ],
+    "cloud": [
+      0.523,
+      0.6657
+    ],
+    "crystal": [
+      0.4717,
+      0.6352
+    ],
+    "nebula": [
+      0.5526,
+      0.6565
+    ],
+    "lava": [
+      0.5233,
+      0.607
+    ]
+  },
+  "context": {
+    "ocean": [
+      0.511,
+      0.6479
+    ],
+    "cloud": [
+      0.5611,
+      0.6887
+    ],
+    "crystal": [
+      0.5246,
+      0.6657
+    ],
+    "nebula": [
+      0.5343,
+      0.6931
+    ],
+    "lava": [
+      0.5245,
+      0.6698
+    ]
+  }
+}
