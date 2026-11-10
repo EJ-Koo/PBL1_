@@ -15,12 +15,10 @@ import { MenuSlider } from './menu-slider';
 import { DesignFonts, DesignPaint } from '@/constants/ui-design';
 import { ROTATE_SENSITIVITY_MAX, ROTATE_SENSITIVITY_MIN } from '@/lib/settings';
 
-type AccordionId = 'music' | 'theme' | 'logout' | 'delete-account';
+type AccordionId = 'logout' | 'delete-account';
 
 // 서버 기능이 생기기 전까지 화면에 보여줄 고정값 (fffju 기본 설정과 동일)
 const PLACEHOLDER = {
-  music: 'space',
-  theme: 'original',
   backgroundVolume: 60,
   effectVolume: 40,
   notifications: false,
@@ -73,11 +71,6 @@ export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, 
   const toggle = (id: AccordionId) => setExpanded((value) => ({ ...value, [id]: !value[id] }));
   const heading = (text: string) => <Text style={[styles.label, styles.heading, { marginLeft: 10 * scale, marginBottom: 4 * scale }, type(20, 28)]}>{text}</Text>;
   const divider = <View style={{ height: 1.5 * scale, marginVertical: 8 * scale, backgroundColor: DesignPaint.menuText }} />;
-  const radio = (checked: boolean, label: string) => (
-    <View key={label} style={{ minHeight: 36 * scale, justifyContent: 'center', paddingHorizontal: 8 * scale }}>
-      <Text style={[styles.label, type(14, 22)]}>{checked ? '●' : '○'}  {label}</Text>
-    </View>
-  );
   const volumeRow = (label: string, value: number) => (
     <Inactive>
       <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 34 * scale, marginLeft: 10 * scale }}>
@@ -118,21 +111,7 @@ export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, 
             </Pressable>
           </View>
 
-          <MenuAccordion scale={scale} title="배경음악" expanded={!!expanded.music} onToggle={() => toggle('music')}>
-            <Inactive>
-              {radio(PLACEHOLDER.music === 'space', '우주 산책')}
-              {radio(false, '고요한 밤')}
-              {radio(false, '음악 끄기')}
-            </Inactive>
-          </MenuAccordion>
-          <MenuAccordion scale={scale} title="테마" expanded={!!expanded.theme} onToggle={() => toggle('theme')}>
-            <Inactive>
-              {radio(PLACEHOLDER.theme === 'original', '기본 우주')}
-              {radio(false, '푸른 우주 · 50 코인')}
-              {radio(false, '검은 우주 · 50 코인')}
-            </Inactive>
-          </MenuAccordion>
-
+          {/* [MODIFIED 2026-11-10] 배경음악·테마는 상점(배경·음악 탭)으로 옮김 */}
           {divider}
           {heading('소리')}
           {volumeRow('배경음', PLACEHOLDER.backgroundVolume)}

@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DiaryComposer } from '@/components/diary-composer';
 import { BackgroundTint, CometLayer } from '@/components/item-effects';
-import { ShopScreen } from '@/components/shop-screen';
+import { ShopSheet } from '@/components/shop-screen';
 import { GroupSpaceScreen } from '@/components/ui/group-space-screen';
 import { HomeHud } from '@/components/ui/home-hud';
 import { QuestPanel } from '@/components/ui/quest-panel';
@@ -35,7 +35,7 @@ import { getRotateSensitivity, loadSettings, setRotateSensitivity } from '@/lib/
 import { useDiary } from '@/store/diary-context';
 import { useShop } from '@/store/shop-context';
 
-type Screen = 'home' | 'diary' | 'group' | 'shop';
+type Screen = 'home' | 'diary' | 'group';
 
 /** fffju 디자인 영역: 폰은 화면 전체 폭, 넓은 화면은 최대 520px로 가운데. */
 function Frame({ width, children, box = false }: { width: number; children: ReactNode; box?: boolean }) {
@@ -56,6 +56,8 @@ export default function HomeScreen() {
 
   const [screen, setScreen] = useState<Screen>('home');
   const [questVisible, setQuestVisible] = useState(false);
+  // [MODIFIED 2026-11-10] 상점은 별도 화면이 아니라 아래에서 올라오는 팝업
+  const [shopVisible, setShopVisible] = useState(false);
   const [createGroupVisible, setCreateGroupVisible] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [creatingGroup, setCreatingGroup] = useState(false);
@@ -135,7 +137,7 @@ export default function HomeScreen() {
               checkCount={checkCount}
               onStats={() => {
                 refreshShop();
-                setScreen('shop');
+                setShopVisible(true);
               }}
               onQuest={() => setQuestVisible(true)}
               menuProps={{
@@ -179,12 +181,8 @@ export default function HomeScreen() {
         </Frame>
       )}
 
-      {/* ===== 상점 (HUD 코인을 누르면 열림, 하단 탭 없음) ===== */}
-      {screen === 'shop' && (
-        <Frame width={frameWidth}>
-          <ShopScreen onBack={() => setScreen('home')} />
-        </Frame>
-      )}
+      {/* ===== 상점 팝업 (HUD 코인을 누르면 열림, ✕ 또는 바깥을 누르면 닫힘) ===== */}
+      <ShopSheet visible={shopVisible} width={frameWidth} onClose={() => setShopVisible(false)} />
 
       {/* ===== 새 그룹 만들기 ===== */}
       <Modal transparent visible={createGroupVisible} animationType="fade" onRequestClose={() => setCreateGroupVisible(false)}>

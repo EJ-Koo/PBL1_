@@ -17,7 +17,9 @@ export function MenuSlider({ scale, label, value, min = 0, max = 100, onPreview,
   const clamp = (next: number) => Math.max(min, Math.min(max, next));
   const fromX = (x: number) => clamp(Math.round(min + (x - 6 * scale) / Math.max(1, width.current - 12 * scale) * (max - min)));
   const preview = (pageX: number) => {
-    latest.current = fromX(pageX - start.current.left);
+    const next = fromX(pageX - start.current.left);
+    if (!Number.isFinite(next)) return;
+    latest.current = next;
     onPreview(latest.current);
   };
   const horizontalDrag = (event: GestureResponderEvent) => {
@@ -25,8 +27,16 @@ export function MenuSlider({ scale, label, value, min = 0, max = 100, onPreview,
     const dy = Math.abs(event.nativeEvent.pageY - start.current.y);
     return dx > 4 && dx > dy;
   };
-  const adjust = (next: number) => { const result = clamp(next); onPreview(result); onChange(result); };
-  const thumb = 6 + 106 * (value - min) / (max - min);
+  // [FIXED 2026-11-10] 웹에서 그냥 클릭하면 위치값(locationX)이 비어 NaN 이 들어가던 문제:
+  // 숫자가 아닌 값은 무시하고, 화면에 그릴 때도 범위 안의 숫자로만 그린다.
+  const adjust = (next: number) => {
+    if (!Number.isFinite(next)) return;
+    const result = clamp(next);
+    onPreview(result);
+    onChange(result);
+  };
+  const safeValue = Number.isFinite(value) ? clamp(value) : min;
+  const thumb = 6 + 106 * (safeValue - min) / Math.max(1, max - min);
 
   return (
     <View
@@ -58,7 +68,12 @@ export function MenuSlider({ scale, label, value, min = 0, max = 100, onPreview,
       } }}
       style={{ flex: 1, height: 34 * scale }}>
       <Pressable accessible={false} focusable={false} style={StyleSheet.absoluteFill}
-        onPress={(event) => { if (!dragging.current) adjust(fromX(event.nativeEvent.locationX)); }}>
+        onPress={(event) => {
+          if (dragging.current) return;
+          // 웹 클릭 이벤트에는 locationX 가 없을 수 있어, 누를 때 기록한 슬라이더 왼쪽 끝(start.left)으로 계산한다.
+          const { locationX, pageX } = event.nativeEvent;
+          adjust(fromX(Number.isFinite(locationX) ? locationX : pageX - start.current.left));
+        }}>
         <Svg width="100%" height={34 * scale} viewBox="0 0 118 34" preserveAspectRatio="none" pointerEvents="none">
           <Path d="M6 17H112" stroke={DesignColors.black} strokeWidth={3} />
           <Path d="M6 17H112" stroke={DesignPaint.menuSliderTrack} strokeWidth={3} />

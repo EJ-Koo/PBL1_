@@ -34,6 +34,8 @@ export async function loadSettings(): Promise<void> {
 }
 
 export function setRotateSensitivity(value: number): number {
+  // [FIXED 2026-11-10] 숫자가 아니면 무시 (NaN 이 저장되면 우주 회전이 멈춘다)
+  if (!Number.isFinite(value)) return rotateSensitivity;
   rotateSensitivity = clamp(value);
   AsyncStorage.setItem(ROTATE_KEY, String(rotateSensitivity)).catch(() => {});
   return rotateSensitivity;
