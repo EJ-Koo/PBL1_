@@ -7,6 +7,7 @@ import { Inter_700Bold } from '@expo-google-fonts/inter/700Bold';
 import { AdminProvider } from '@/store/admin-context';
 import { DiaryProvider } from '@/store/diary-context';
 import { ShopProvider } from '@/store/shop-context';
+import { ShopMusic } from '@/components/shop-music';
 
 export default function RootLayout() {
   // fffju 디자인 글꼴(Inter). 불러오기에 실패해도 기본 글꼴로 화면은 띄운다.
@@ -17,6 +18,8 @@ export default function RootLayout() {
     <AdminProvider>
       <DiaryProvider>
         <ShopProvider>
+          {/* [ADDED 2026-11-10] 상점에서 장착한 배경음악 (모든 화면에서 이어서 재생) */}
+          <ShopMusic />
           <StatusBar style="light" />
           <Stack initialRouteName="login" screenOptions={{ headerShown: false }}>
             <Stack.Screen name="login" />
