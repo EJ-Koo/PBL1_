@@ -40,8 +40,9 @@ def _star_size_for_content(content: str) -> float:
     return min_size + (max_size - min_size) * ratio
 
 
-def _create_star_for_diary(diary_id: str, content: str, user_id: str) -> None:
-    position = ai_client.place_diary(user_id, diary_id, content)
+def _create_star_for_diary(diary_id: str, content: str, user_id: str, topic: str | None = None) -> None:
+    # 주제는 DB에 저장하지 않고 AI 서비스에만 넘긴다(스키마 변경 없음). 고르지 않았으면 예전과 같은 호출.
+    position = ai_client.place_diary(user_id, diary_id, content, **({"topic": topic} if topic else {}))
     if position is None:
         x, y, z = _random_star_position()
         position = {"x": x, "y": y, "z": z}
@@ -170,7 +171,7 @@ def create_diary(diary: DiaryCreate, user_id: str = Depends(get_current_user_id)
         .execute()
     )
     created = result.data[0]
-    _create_star_for_diary(created["id"], diary.content, user_id)
+    _create_star_for_diary(created["id"], diary.content, user_id, diary.topic)
     _tag_diary_groups(created["id"], diary.group_ids)
     return _with_signed_photo_url(created)
 
