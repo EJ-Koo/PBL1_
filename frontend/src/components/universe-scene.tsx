@@ -4,6 +4,10 @@
 // 이게 웹 브라우저 마우스 드래그를 못 받는 문제가 있어서, react-three-fiber 자체 포인터
 // 이벤트(DragPlane, 아래)로 교체함 — 모바일 터치/웹 마우스 둘 다 이 방식으로 통일해서 받음.
 // 자세한 이유는 mockup/CHANGES_FRONTEND.md 참고.
+// [MODIFIED 2026-11-06] AI 감정 행성 디자인(feature/ai-service-draft)에 test 브랜치의 조작 개선을 합침:
+//  - 휠 줌: 앱 전체에서 리스너 1번만 등록, deltaMode 보정, 우주 화면 위에서만, 거리 비례(배율) 줌
+//  - 회전 민감도: 메뉴 설정값(lib/settings.ts)을 드래그 회전에 곱함
+//  - 화면 복귀: 상세·검색에 갔다 오면 보던 각도·거리 그대로(처음 맞춘 화면 위치는 화면별로 기억)
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber/native';
 import { Platform, View, useWindowDimensions } from 'react-native';
@@ -42,6 +46,7 @@ import {
   type PlanetVisual,
 } from '@/lib/planet-visual';
 import { SPECIAL_EFFECT_SETTINGS, specialTypeOf, type EffectTier, type SpecialType } from '@/lib/special-planet';
+import { getRotateSensitivity, loadSettings } from '@/lib/settings';
 import type { DiaryEntry } from '@/store/diary-context';
 
 import { EFFECT_TIERS, LIGHT_DIR_GLSL, SpecialEffect } from './planet-effects';
@@ -633,7 +638,8 @@ function Planet({
  */
 const CAMERA_FOV = 50;
 const ZOOM_MIN = 1.2;
-const ZOOM_MAX_DEFAULT = 10;
+// [MODIFIED 2026-11-03] 최대 축소 거리 10 → 25 (휠·핀치로 더 멀리 볼 수 있게)
+const ZOOM_MAX_DEFAULT = 25;
 // 행성이 넓게 퍼져 있으면 처음 화면 거리가 10보다 멀 수 있어 최대 축소 거리도 함께 늘린다(아래 UniverseScene)
 let zoomMax = ZOOM_MAX_DEFAULT;
 
@@ -679,8 +685,9 @@ function DragPlane() {
         if (!dragging.current) return;
         const deltaX = e.nativeEvent.pageX - lastPoint.current.x;
         const deltaY = e.nativeEvent.pageY - lastPoint.current.y;
-        targetRotX += deltaX * 0.01;
-        targetRotY += deltaY * 0.01;
+        const speed = 0.01 * getRotateSensitivity();
+        targetRotX += deltaX * speed;
+        targetRotY += deltaY * speed;
         lastPoint.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
       }}
       onPointerUp={(e: ThreeEvent<PointerEvent>) => {
@@ -710,12 +717,11 @@ function DragPlane() {
 // @react-three/fiber/native의 포인터 이벤트는 터치/드래그는 잘 잡지만(DragPlane 참고),
 // 웹 마우스 휠(wheel) 이벤트는 전달하지 않는다 — RN용 이벤트 매니저라 DOM wheel을 안 다룸.
 // 그래서 window에 직접 wheel 리스너를 붙여서 웹 줌을 구현한다.
-// 휠 줌이 잘 안 먹던 문제 대응 (test 브랜치 2026-11-05 수정과 같은 방식):
-//  1) 휠 한 칸(약 100px)에 거리 0.15만 움직였다. 처음 화면 거리가 행성 배치에 따라 15~30이라 끝까지 가려면 100칸 넘게 굴려야 했다
-//     → 현재 거리에 비례해 움직인다(휠 한 칸에 약 16%). 가까이서도 멀리서도 같은 느낌.
+// [MODIFIED 2026-11-05] 휠 줌이 가끔 안 먹던 문제 대응:
+//  1) 화면(컴포넌트)마다 붙였다 떼던 리스너 → 앱 전체에서 한 번만 붙이고 떼지 않는다.
 //  2) 브라우저·마우스에 따라 deltaY가 줄(1)·페이지(2) 단위로 오면 값이 작아 거의 안 움직였다 → 픽셀로 환산.
-//  3) 화면(컴포넌트)마다 붙였다 떼던 리스너 → 앱 전체에서 한 번만 붙이고 떼지 않는다.
-//  4) 우주 화면(UniverseCanvas, data-universe-zoom) 위에서 굴린 휠만 줌으로 쓴다. 일기 쓰기 등 다른 화면 스크롤과 분리.
+//  3) 우주 화면(UniverseCanvas, data-universe-zoom) 위에서 굴린 휠만 줌으로 쓴다. 메뉴·목록 스크롤과 분리.
+//  4) 현재 거리에 비례해 움직인다(휠 한 칸에 약 16%) — 가까이서도 멀리서도 같은 느낌.
 const WHEEL_PIXELS_PER_LINE = 16;
 const WHEEL_STEP_LIMIT = 300;
 let wheelZoomInstalled = false;
@@ -741,6 +747,10 @@ function installWheelZoom() {
 type Framing = { center: [number, number, number]; spread: number; distance: number };
 
 /** 행성 무리의 중심과, 75%의 행성이 화면(가로·세로 중 좁은 쪽)에 들어오는 카메라 거리. */
+// 화면별로 처음 맞춘 화면 위치를 기억한다(홈 우주, 그룹 우주마다 따로).
+// 상세·검색 화면에 갔다 돌아와 우주 화면이 다시 만들어져도 처음 위치로 되돌아가지 않게 하기 위함.
+const framingCache = new Map<string, Framing>();
+
 function computeFraming(entries: DiaryEntry[], aspect: number): Framing {
   const n = entries.length;
   const center = [0, 1, 2].map((k) => entries.reduce((s, e) => s + e.position[k], 0) / n) as [number, number, number];
@@ -757,29 +767,40 @@ function computeFraming(entries: DiaryEntry[], aspect: number): Framing {
 export function UniverseScene({
   entries,
   onStarPress,
+  sceneKey = 'home',
 }: {
   entries: DiaryEntry[];
   onStarPress: (id: string) => void;
+  /** 화면 위치를 기억할 이름 (홈 'home', 그룹 우주는 그룹 id) */
+  sceneKey?: string;
 }) {
-  const groupRef = useRef<import('three').Group>(null);
+  const groupRef = useRef<Group>(null);
+  // 화면이 다시 만들어졌을 때 첫 프레임은 저장된 각도·거리로 바로 맞춘다(서서히 돌아가며 초기화되는 것처럼 보이지 않게).
+  const synced = useRef(false);
   const { width } = useWindowDimensions();
   const quality = choosePlanetQuality(entries.length, width);
   const size = useThree((s) => s.size);
+
   useEffect(() => {
     installWheelZoom();
+    loadSettings();
   }, []);
 
   // 처음 화면 맞추기: 행성들의 중심을 회전 중심으로 삼고, 대부분의 행성이 화면에 들어오는 거리에서 시작한다.
   // 좌표(일기 의미로 정한 위치)는 그대로이고, 전체를 함께 옮겨 '카메라가 행성 무리를 보게' 할 뿐이다.
   // (전에는 원점 기준이라 행성이 카메라 바로 앞이나 뒤에 놓여 크게 가리거나 안 보이는 일이 있었다.)
   // 처음 일기 목록이 들어왔을 때 한 번만 정한다(일기를 추가해도 화면이 갑자기 옮겨 가지 않게).
-  const [framing, setFraming] = useState<Framing | null>(null);
+  const [framing, setFraming] = useState<Framing | null>(() => framingCache.get(sceneKey) ?? null);
   if (!framing && entries.length > 0) setFraming(computeFraming(entries, size.width / Math.max(size.height, 1)));
   useEffect(() => {
     if (!framing) return;
     zoomMax = Math.max(ZOOM_MAX_DEFAULT, framing.distance * 1.6);
-    targetCameraZ = framing.distance;
-  }, [framing]);
+    // 이 화면을 처음 열 때만 카메라 거리를 맞춘다. 다시 돌아온 경우에는 사용자가 확대·축소한 거리를 유지한다.
+    if (!framingCache.has(sceneKey)) {
+      framingCache.set(sceneKey, framing);
+      targetCameraZ = framing.distance;
+    }
+  }, [framing, sceneKey]);
 
   // 선택: 웹은 마우스를 올린 행성, 터치는 누른 행성. 누른 강조는 잠깐 보였다가(일기 화면으로 넘어가는 동안) 서서히 꺼진다.
   const [hoverId, setHoverId] = useState<string | null>(null);
@@ -855,6 +876,12 @@ export function UniverseScene({
   useEffect(() => () => EFFECT_TIERS.clear(), []);
 
   useFrame((state, delta) => {
+    if (!synced.current && groupRef.current) {
+      groupRef.current.rotation.y = targetRotX;
+      groupRef.current.rotation.x = targetRotY;
+      state.camera.position.z = targetCameraZ;
+      synced.current = true;
+    }
     lodClock.current += delta;
     if (lodClock.current > 0.3 && groupRef.current) {
       lodClock.current = 0;
@@ -933,16 +960,18 @@ export function UniverseScene({
 export function UniverseCanvas({
   entries,
   onStarPress,
+  sceneKey,
 }: {
   entries: DiaryEntry[];
   onStarPress: (id: string) => void;
+  sceneKey?: string;
 }) {
   return (
     // dataSet은 웹에서 data-universe-zoom 속성이 된다 (휠 줌 대상 판단용, installWheelZoom 참고).
     <View style={{ flex: 1 }} {...({ dataSet: { universeZoom: 'true' } } as object)}>
       {/* 시야각 50도(기본 75도): 화면 가장자리 행성이 타원처럼 늘어나는 왜곡과 가까운 행성만 크게 보이는 차이를 줄인다 */}
       <Canvas style={{ flex: 1 }} camera={{ fov: CAMERA_FOV, position: [0, 0, 5] }}>
-        <UniverseScene entries={entries} onStarPress={onStarPress} />
+        <UniverseScene entries={entries} onStarPress={onStarPress} sceneKey={sceneKey} />
       </Canvas>
     </View>
   );

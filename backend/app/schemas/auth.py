@@ -11,6 +11,11 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class GoogleAuthRequest(BaseModel):
+    # 프론트(expo-auth-session)가 구글에서 받은 ID 토큰. 회원가입·로그인 공용.
+    id_token: str
+
+
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str

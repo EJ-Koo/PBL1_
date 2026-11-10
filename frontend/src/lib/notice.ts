@@ -24,3 +24,17 @@ export function confirmAction(title: string, message: string, onConfirm: () => v
     ]);
   }
 }
+
+// [ADDED 2026-11-07] 확인 버튼 이름을 정할 수 있는 확인창 (예: 상점 '구매').
+export function confirmChoice(title: string, message: string, okLabel: string, onConfirm: () => void) {
+  if (Platform.OS === 'web') {
+    if (window.confirm(`${title}\n${message}`)) {
+      onConfirm();
+    }
+  } else {
+    Alert.alert(title, message, [
+      { text: '취소', style: 'cancel' },
+      { text: okLabel, onPress: onConfirm },
+    ]);
+  }
+}
