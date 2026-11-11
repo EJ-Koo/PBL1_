@@ -277,7 +277,24 @@ AI_SERVICE_TOKEN=<직접 정한 긴 임의 문자열>
 
 ### 배포 시 주의
 
-아직 배포하지 않았다. 배포 위치와 방법은 팀 협의로 정한다.
+현재(2026-11-11) AI 서비스는 **AI 담당 PC에서 실행하고 Cloudflare Tunnel로 `https://ai.star2day.com`에 공개**한다. 백엔드(Cloudtype)는 `AI_SERVICE_URL`로 이 주소를 호출한다. PC가 꺼져 있는 동안 저장한 일기는 기본 색·무작위 위치로 저장된다(앱은 계속 동작).
+
+#### AI 서비스 자동 실행 (Windows 작업 스케줄러)
+
+- 작업 이름 `star2day-ai-service`: Windows 로그인 시 [`scripts/run_ai_service.ps1`](scripts/run_ai_service.ps1)을 창 없이 실행한다(관리자 권한 불필요).
+- 스크립트는 토큰을 실행할 때마다 `backend/.env`의 `AI_SERVICE_TOKEN`에서 읽는다. 토큰이 없으면 실행하지 않는다. 서버가 종료되면 10초 뒤 다시 실행하고, 8100 포트가 이미 쓰이고 있으면 새로 띄우지 않는다.
+- 로그: `ai/data/service/logs/` (`ai_service.out.log`, `ai_service.err.log`, `ai_service.runner.log`)
+- 터널(`cloudflared`)은 Windows 서비스로 따로 설치되어 PC가 켜지면 자동으로 연결된다.
+
+```powershell
+Get-ScheduledTask -TaskName star2day-ai-service              # 상태 확인 (Running이면 실행 중)
+Start-ScheduledTask -TaskName star2day-ai-service            # 지금 바로 실행
+Disable-ScheduledTask -TaskName star2day-ai-service          # 자동 실행 끄기 (Enable-ScheduledTask로 다시 켜기)
+Unregister-ScheduledTask -TaskName star2day-ai-service -Confirm:$false   # 등록 삭제
+# 실행 중인 서비스 완전히 멈추기: 작업을 멈춘 뒤 8100 포트의 python도 종료
+Stop-ScheduledTask -TaskName star2day-ai-service
+Get-NetTCPConnection -LocalPort 8100 -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess }
+```
 
 - **감정 모델 가중치는 Git에 없다**(약 0.5GB). 배포 서버에 따로 올려야 한다. 예: Hugging Face Hub 비공개 저장소, 서버 볼륨. 그 위치를 `service.json`의 `checkpoint_dir`에 맞춘다. 임베딩 모델(KURE-v1, 약 2.3GB)은 처음 실행 때 Hugging Face에서 받는다.
 - 이 PC(RTX 4060 Ti) 기준 GPU 메모리는 KURE 약 2.3GB, 일기 1개당 임베딩 약 10ms. GPU 없는 서버에서는 CPU 빌드 torch를 설치하고 `AI_DEVICE=cpu`로 실행한다(KURE 일기 1개 약 57ms).
