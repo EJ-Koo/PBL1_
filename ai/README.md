@@ -8,6 +8,7 @@
 | 의미 임베딩 | 관련 기억 검색 | KURE-v1로 로컬 구현·연동 완료 (가상 일기로만 평가) |
 | 공간 알고리즘 | 별 3D 위치 | 관련 기억 근처 배치(기존 별 고정)로 로컬 구현·연동 완료 |
 | 군집·별자리 | 비슷한 기억 묶기, 선 잇기 | 미구현 (설계만) |
+| 특수 행성 | 주제·감정·문맥이 맞을 때 행성 바깥 효과(Ocean·Cloud·Crystal·Nebula·Lava) | **시안 v0.1**, 이 PC에서만 확인 (기존 감정 행성 규칙은 그대로) |
 
 ## 현재 진행 상황 (2026-10-27 기준)
 
@@ -21,6 +22,7 @@
 | 로컬 완료 | 의미 임베딩·관련 기억·3D 위치 (노트북 07·08) | 가상 일기 76개로 검증 | 실제 데이터로 τ(관련 기억 기준값) 다시 정하기 |
 | 로컬 완료 | AI 서비스(`ai/service/`) ↔ 백엔드 ↔ 프론트 연동 | 이 PC에서 동작 확인 (실제 AI 서비스 + 가짜 DB, 백엔드 테스트 23개). 실제 DB로 앱 화면 확인은 진행 전 | **배포 위치 미정**(GPU 서버·Railway 등), 모델 가중치 공유 방법 미정 |
 | 미정 | 프론트 디자인 (관련 기억 표시, 별 모양) | 지금은 좌표·색·밝기만 반영, 화면 디자인 변경 없음 | 팀 논의 후 결정 |
+| 시안 (로컬) | 특수 행성 선택기 v0.1 + 선택 주제 입력 + 효과 5종 (2026-11-09) | 가상 일기 22개 사례·88개 참조 일기로만 확인, 이 PC에서만 동작 (커밋 전) | 임계값·가중치를 실제 일기·사용자 반응으로 다시 정하기, 주제 저장 위치(DB 컬럼) 결정 |
 | 미구현 | 군집(HDBSCAN)·별자리 선·LLM 이름 붙이기 | 설계만 | 다음 단계 |
 
 - 운영 서버(Railway)와 운영 앱은 아직 AI 서비스를 모른다. 백엔드는 `AI_SERVICE_URL`이 비어 있으면 **예전과 똑같이** 동작한다(무작위 위치, 흰색 별).
@@ -38,6 +40,7 @@
 - [reports/step2_positioning_design_ko.md](reports/step2_positioning_design_ko.md): 2단계 설계(의미 임베딩 → 위치·군집·별자리)
 - [reports/step2_local_validation_ko.md](reports/step2_local_validation_ko.md): 2단계 로컬 검증(임베딩 모델 선택, 좌표 방식 선택)
 - [reports/step2_integration_local_ko.md](reports/step2_integration_local_ko.md): AI 서비스 ↔ 백엔드 ↔ DB ↔ 프론트 로컬 연동·실행 방법
+- [reports/special_planet_v01_ko.md](reports/special_planet_v01_ko.md): 특수 행성 선택기 시안 v0.1(주제·감정·문맥 점수, 임계값, 효과 5종, 회귀·성능 확인)
 
 ## 폴더 구성
 
@@ -244,7 +247,8 @@ AI 서비스는 백엔드와 분리된 별도 서버다. 주소가 설정되지 
 | 구성 | 파일 |
 |---|---|
 | 파이프라인 | `ai/src/emotion/pipeline.py` (`DiaryEmotionPipeline`) |
-| 서버 | `ai/service/app.py` — `GET /health`, `POST /analyze` (`{"text"}`), `POST /analyze/batch` (`{"texts"}`), 2단계 `POST /layout/add·update·remove·related` (`{"user_id", "diary_id", "text"}`) |
+| 서버 | `ai/service/app.py` — `GET /health`, `POST /analyze` (`{"text"}`, 선택 `topic`·`design`), `POST /analyze/batch` (`{"texts"}`, 선택 `topics`·`design`), 2단계 `POST /layout/add·update·remove·related` (`{"user_id", "diary_id", "text"}`, add만 선택 `topic`), 별 목록용 `POST /design/batch` (`{"user_id", "items": [{"diary_id", "text"}]}`) |
+| 특수 행성 | `ai/src/special/` — `selector.py`(주제·감정·문맥 점수 → 유형 또는 일반), `design.py`(감정 행성 + 특수 효과 → 행성 설계), `topics.py`(사용자가 고른 주제 저장, `ai/data/service/topics/`, Git 제외). 설정 `ai/configs/special_planet.json`, 정규화 범위 `special_planet_normalization.json`(`scripts/calibrate_special_planet.py`로 생성), 확인 `scripts/special_planet_check.py`·`tests/test_special_selector.py`, 회귀 확인 `scripts/planet_regression.py` |
 | 2단계 좌표 | `ai/src/positioning/service_layout.py` — 사용자별 임베딩·좌표 저장소(`ai/data/service/`, Git 제외), 연동 안내: `ai/reports/step2_integration_local_ko.md` |
 | 설정 | `ai/configs/service.json` — 사용할 모델 체크포인트, 밝기 범위(0.5~1.5), `positioning`(임베딩 모델 KURE-v1, τ, 장면 배율) |
 | 의존성 | `ai/requirements-service.txt` |
@@ -273,7 +277,24 @@ AI_SERVICE_TOKEN=<직접 정한 긴 임의 문자열>
 
 ### 배포 시 주의
 
-아직 배포하지 않았다. 배포 위치와 방법은 팀 협의로 정한다.
+현재(2026-11-11) AI 서비스는 **AI 담당 PC에서 실행하고 Cloudflare Tunnel로 `https://ai.star2day.com`에 공개**한다. 백엔드(Cloudtype)는 `AI_SERVICE_URL`로 이 주소를 호출한다. PC가 꺼져 있는 동안 저장한 일기는 기본 색·무작위 위치로 저장된다(앱은 계속 동작).
+
+#### AI 서비스 자동 실행 (Windows 작업 스케줄러)
+
+- 작업 이름 `star2day-ai-service`: Windows 로그인 시 [`scripts/run_ai_service.ps1`](scripts/run_ai_service.ps1)을 창 없이 실행한다(관리자 권한 불필요).
+- 스크립트는 토큰을 실행할 때마다 `backend/.env`의 `AI_SERVICE_TOKEN`에서 읽는다. 토큰이 없으면 실행하지 않는다. 서버가 종료되면 10초 뒤 다시 실행하고, 8100 포트가 이미 쓰이고 있으면 새로 띄우지 않는다.
+- 로그: `ai/data/service/logs/` (`ai_service.out.log`, `ai_service.err.log`, `ai_service.runner.log`)
+- 터널(`cloudflared`)은 Windows 서비스로 따로 설치되어 PC가 켜지면 자동으로 연결된다.
+
+```powershell
+Get-ScheduledTask -TaskName star2day-ai-service              # 상태 확인 (Running이면 실행 중)
+Start-ScheduledTask -TaskName star2day-ai-service            # 지금 바로 실행
+Disable-ScheduledTask -TaskName star2day-ai-service          # 자동 실행 끄기 (Enable-ScheduledTask로 다시 켜기)
+Unregister-ScheduledTask -TaskName star2day-ai-service -Confirm:$false   # 등록 삭제
+# 실행 중인 서비스 완전히 멈추기: 작업을 멈춘 뒤 8100 포트의 python도 종료
+Stop-ScheduledTask -TaskName star2day-ai-service
+Get-NetTCPConnection -LocalPort 8100 -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess }
+```
 
 - **감정 모델 가중치는 Git에 없다**(약 0.5GB). 배포 서버에 따로 올려야 한다. 예: Hugging Face Hub 비공개 저장소, 서버 볼륨. 그 위치를 `service.json`의 `checkpoint_dir`에 맞춘다. 임베딩 모델(KURE-v1, 약 2.3GB)은 처음 실행 때 Hugging Face에서 받는다.
 - 이 PC(RTX 4060 Ti) 기준 GPU 메모리는 KURE 약 2.3GB, 일기 1개당 임베딩 약 10ms. GPU 없는 서버에서는 CPU 빌드 torch를 설치하고 `AI_DEVICE=cpu`로 실행한다(KURE 일기 1개 약 57ms).

@@ -16,6 +16,7 @@ import {
   type ApiStar,
 } from '@/lib/api';
 import { fallbackVisual, type PlanetVisual } from '@/lib/planet-visual';
+import type { DiaryTopic, PlanetDesign } from '@/lib/special-planet';
 
 export type Visibility = 'public' | 'friends' | 'private';
 
@@ -37,6 +38,8 @@ export type DiaryEntry = {
   position: [number, number, number];
   /** 행성 외형(감정). AI 분석 결과가 없으면 무채색 기본 행성. 크기는 text 분량으로 따로 계산한다. */
   planet: PlanetVisual;
+  /** 행성 설계(감정 행성 + 특수 행성 여부·효과·선택 이유). AI 분석 결과가 없으면 null(일반 행성으로 그림). */
+  design: PlanetDesign | null;
 };
 
 export type LoginResult = { ok: true } | { ok: false; error: string };
@@ -59,7 +62,8 @@ type DiaryContextValue = {
     text: string,
     photos: DiaryPhoto[],
     visibility: Visibility,
-    groupIds?: string[]
+    groupIds?: string[],
+    topic?: DiaryTopic | null
   ) => Promise<SaveResult>;
   updateEntry: (
     id: string,
@@ -128,6 +132,7 @@ function toEntry(diary: ApiDiary, colorIndex: number, star?: ApiStar): DiaryEntr
     brightness: star?.brightness ?? 1,
     position: star ? [star.x, star.y, star.z] : fallbackPosition(colorIndex),
     planet: starVisual(star),
+    design: star?.design ?? null,
   };
 }
 
@@ -237,7 +242,8 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
         text: string,
         photos: DiaryPhoto[],
         visibility: Visibility,
-        groupIds: string[] = []
+        groupIds: string[] = [],
+        topic: DiaryTopic | null = null
       ): Promise<SaveResult> => {
         if (!accessToken) {
           return { ok: false, error: '로그인이 필요합니다.' };
@@ -249,6 +255,8 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
             photo_paths,
             visibility,
             group_ids: groupIds,
+            // 주제는 선택 사항. 고르지 않으면 보내지 않는다(예전 요청과 같음)
+            ...(topic ? { topic } : {}),
           });
           // 별/그룹 재조회는 보조. 하나가 실패(예: /groups 미배포)해도 일기 추가는 진행한다.
           const starList = await apiListStars(accessToken).catch(() => []);
@@ -303,7 +311,9 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
             const planet = starVisual(star);
             setEntries((prev) =>
               prev.map((e) =>
-                e.id === id ? { ...e, color: planet.base_color, brightness: star.brightness, planet } : e
+                e.id === id
+                  ? { ...e, color: planet.base_color, brightness: star.brightness, planet, design: star.design ?? null }
+                  : e
               )
             );
           }

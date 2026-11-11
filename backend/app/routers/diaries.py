@@ -72,11 +72,12 @@ def _free_star_position(size: float, others: list[dict]) -> tuple[float, float, 
     return best
 
 
-def _create_star_for_diary(diary_id: str, content: str, user_id: str) -> None:
+def _create_star_for_diary(diary_id: str, content: str, user_id: str, topic: str | None = None) -> None:
     size = _star_size_for_content(content)
     # [MODIFIED 2026-11-06] 위치: AI 서비스가 일기 의미로 정한 좌표를 우선 쓴다(비슷한 기억 근처).
     # AI 서비스가 없거나 실패하면, 내 기존 별들과 겹치지 않는 무작위 자리(최소 간격)로 둔다.
-    position = ai_client.place_diary(user_id, diary_id, content)
+    # 주제(선택)는 DB에 저장하지 않고 AI 서비스에만 넘긴다(스키마 변경 없음). 고르지 않았으면 예전과 같은 호출.
+    position = ai_client.place_diary(user_id, diary_id, content, **({"topic": topic} if topic else {}))
     if position is None:
         existing = (
             supabase.table("stars")
@@ -259,7 +260,7 @@ def create_diary(diary: DiaryCreate, user_id: str = Depends(get_current_user_id)
     }
     result = _write_diary(lambda r: supabase.table("diaries").insert(r), row)
     created = result.data[0]
-    _create_star_for_diary(created["id"], diary.content, user_id)
+    _create_star_for_diary(created["id"], diary.content, user_id, diary.topic)
     _tag_diary_groups(created["id"], diary.group_ids)
     return _with_signed_photo_url(created)
 

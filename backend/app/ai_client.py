@@ -5,6 +5,7 @@
 - update_diary_layout / forget_diary: 일기 수정·삭제를 AI 서비스 저장소에 알림 (좌표는 바뀌지 않음)
 - related_diaries: 관련 기억 목록
 - planet_visuals: 별 목록 조회 때 행성 외형(대표색·보조색·무늬·고리) 계산 (저장하지 않음)
+- planet_designs: 별 목록 조회 때 행성 외형 + 행성 설계(특수 행성 여부·효과·이유) 계산 (저장하지 않음)
 
 AI 서비스 주소가 설정되지 않았거나 호출에 실패하면 None을 돌려주고, 호출한 쪽은 기존 방식
 (무작위 위치, stars 테이블 기본 색·밝기)으로 처리한다. 일기 저장은 AI 서비스 상태와 관계없이 항상 성공해야 한다.
@@ -83,12 +84,44 @@ def planet_visuals(contents: list[str]) -> list[dict | None] | None:
     return [_VISUAL_CACHE.get(k) for k in keys]
 
 
-def place_diary(user_id: str, diary_id: str, content: str) -> dict | None:
-    """{"x", "y", "z"} 또는 None. 같은 diary_id를 다시 보내면 AI 서비스가 저장된 좌표를 그대로 돌려준다."""
+_DESIGN_CACHE: dict[tuple[str, str, str], dict] = {}
+
+
+def planet_designs(user_id: str, items: list[tuple[str, str]]) -> list[dict | None] | None:
+    """[(diary_id, 내용)] → [{"visual", "design"}] (행성 외형 + 행성 설계). AI 서비스가 없거나 실패하면 None.
+
+    주제는 AI 서비스가 일기를 처음 받을 때(/layout/add) 저장한 값을 쓴다. 저장하지 않고 조회할 때 계산하며,
+    (사용자, 일기, 내용 해시)로 이 프로세스 메모리에 캐시한다.
+    """
+    if not settings.ai_service_url or not items:
+        return None
+    keys = [(user_id, did, hashlib.sha256(c.encode("utf-8")).hexdigest()) for did, c in items]
+    missing = [(k, did, c) for k, (did, c) in zip(keys, items) if k not in _DESIGN_CACHE]
+    try:
+        for i in range(0, len(missing), _VISUAL_BATCH):
+            chunk = missing[i:i + _VISUAL_BATCH]
+            payload = {"user_id": user_id, "items": [{"diary_id": did, "text": c} for _, did, c in chunk]}
+            results = _post("/design/batch", payload).json()["results"]
+            for (k, _, _), r in zip(chunk, results):
+                if len(_DESIGN_CACHE) >= _VISUAL_CACHE_MAX:
+                    _DESIGN_CACHE.pop(next(iter(_DESIGN_CACHE)))
+                _DESIGN_CACHE[k] = {"visual": r["visual"], "design": r["design"]}
+    except Exception as exc:
+        logger.warning("행성 설계 조회 실패: %s", exc)
+        return None
+    return [_DESIGN_CACHE.get(k) for k in keys]
+
+
+def place_diary(user_id: str, diary_id: str, content: str, topic: str | None = None) -> dict | None:
+    """{"x", "y", "z"} 또는 None. 같은 diary_id를 다시 보내면 AI 서비스가 저장된 좌표를 그대로 돌려준다.
+    topic(사용자가 고른 주제, 선택)은 AI 서비스가 특수 행성 선택용으로 저장한다. 좌표에는 쓰지 않는다."""
     if not settings.ai_service_url:
         return None
+    payload = {"user_id": user_id, "diary_id": diary_id, "text": content}
+    if topic:
+        payload["topic"] = topic
     try:
-        star = _post("/layout/add", {"user_id": user_id, "diary_id": diary_id, "text": content}).json()["star"]
+        star = _post("/layout/add", payload).json()["star"]
         xyz = {k: float(star[k]) for k in ("x", "y", "z")}
     except Exception as exc:
         logger.warning("AI 좌표 생성 실패, 무작위 위치를 사용합니다: %s", exc)

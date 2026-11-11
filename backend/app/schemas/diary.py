@@ -3,6 +3,8 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 Visibility = Literal["public", "friends", "private"]
+# 일기 주제(선택). 고르지 않아도 된다. AI가 특수 행성을 고를 때 보조 정보로만 쓴다(ai/configs/special_planet.json).
+Topic = Literal["travel", "relationship", "study_achievement", "rest_daily", "challenge_activity", "other"]
 
 # [MODIFIED 2026-11-05] 일기 한 개에 사진 최대 5장 (fffju 일기 작성 화면 기준).
 MAX_PHOTOS = 5
@@ -16,6 +18,7 @@ class DiaryCreate(BaseModel):
     photo_paths: list[str] = Field(default_factory=list, max_length=MAX_PHOTOS)
     visibility: Visibility = "private"
     group_ids: list[str] = []
+    topic: Topic | None = None
 
 
 class DiaryUpdate(BaseModel):

@@ -45,8 +45,11 @@ import {
   type PlanetQuality,
   type PlanetVisual,
 } from '@/lib/planet-visual';
+import { SPECIAL_EFFECT_SETTINGS, specialTypeOf, type EffectTier, type SpecialType } from '@/lib/special-planet';
 import { getRotateSensitivity, loadSettings } from '@/lib/settings';
 import type { DiaryEntry } from '@/store/diary-context';
+
+import { EFFECT_TIERS, LIGHT_DIR_GLSL, SpecialEffect } from './planet-effects';
 
 // pointsMaterial은 텍스처가 없으면 각 점을 네모로 그린다. 중심은 불투명, 가장자리는
 // 투명한 작은 원형 텍스처를 입혀서 동그란 별점으로 보이게 한다.
@@ -176,7 +179,7 @@ let targetCameraZ = 5;
 //  - 먼 행성은 조금 어둡게 그려 겹쳤을 때 앞뒤가 구별되게 한다(좌표는 그대로).
 // 톤 매핑을 쓰지 않아 대표색의 색상이 바뀌지 않는다. 규칙: ai/reports/planet_visual_v02_ko.md
 // 빛 방향(화면 기준): 오른쪽 위, 옆에서 비스듬히. 왼쪽 아래 가장자리에 어두운 면이 보여 둥근 형태가 드러난다.
-const LIGHT_DIR_GLSL = 'const vec3 LIGHT_DIR = vec3(0.88, 0.36, 0.31);';
+// (LIGHT_DIR_GLSL은 특수 효과와 함께 쓰려고 planet-effects.tsx에 둔다)
 
 /** 모든 행성이 함께 쓰는 값. 카메라 거리에 따라 '멀리 있는 행성' 기준을 매 프레임 갱신한다. */
 const SCENE_UNIFORMS = {
@@ -417,6 +420,9 @@ function Planet({
   brightness = 1,
   quality,
   selected = false,
+  special = null,
+  effectIntensity = 0.8,
+  effectSpeed = 1,
   onPress,
   onPressStart,
   registerMesh,
@@ -430,6 +436,10 @@ function Planet({
   quality: PlanetQuality;
   /** 마우스를 올렸거나 누르고 있는 행성 */
   selected?: boolean;
+  /** 특수 행성 유형(서버 설계). null이면 일반 행성. 본체(색·무늬·크기)는 같고 바깥 효과만 더한다. */
+  special?: SpecialType | null;
+  effectIntensity?: number;
+  effectSpeed?: number;
   onPress?: () => void;
   onPressStart?: () => void;
   /** 웹 마우스 올림 판정(UniverseScene의 광선 검사)에 쓸 본체 메시를 알려 준다 */
@@ -444,6 +454,11 @@ function Planet({
   const rand = useMemo(() => seededRandoms(id, 16), [id]);
   const [r0, r1, r2, r3, r4, r5, r6, r7, r8] = rand;
   const palette = useMemo(() => planetPalette(visual), [visual]);
+  // 특수 효과 색: 대표색 계열 + 첫 보조 감정 색(대표색과 어울리게 조정). 고정 색(바다=파랑 등)은 쓰지 않는다.
+  const effectPalette = useMemo(
+    () => ({ ...palette, accent: harmonizeAccent(visual.accents[0]?.color ?? palette.light, palette.base) }),
+    [palette, visual.accents]
+  );
 
   // 색 줄(일기마다 고정): 층 배치·보조 감정 층 위치. 보조 감정 층 면적 = 서버가 정한 weight
   const bandTexture = useMemo(() => createBandTexture(visual, rand.slice(9)), [visual, rand]);
@@ -597,6 +612,19 @@ function Planet({
             blendDstAlpha={OneFactor}
           />
         </mesh>
+      )}
+      {special && (
+        <SpecialEffect
+          id={id}
+          type={special}
+          radius={radius}
+          palette={effectPalette}
+          intensity={effectIntensity}
+          speed={effectSpeed}
+          quality={quality}
+          highlight={highlight}
+          shared={SCENE_UNIFORMS}
+        />
       )}
     </group>
   );
@@ -837,12 +865,41 @@ export function UniverseScene({
     };
   }, [camera, raycaster, glElement]);
 
+  // 특수 효과 단계(LOD): 0.3초마다 카메라와 특수 행성 사이 거리를 재서, 가까운 순서로 maxNear개까지만 '가까이'(1).
+  // 나머지는 '멀리'(0, 바탕 층만 멈춘 채). 선택한 행성(2)은 효과 쪽에서 바로 판단한다. 좌표는 바꾸지 않는다.
+  const specialEntries = useMemo(() => entries.filter((e) => specialTypeOf(e.design)), [entries]);
+  const lodClock = useRef(0);
+  const centerRef = useRef<[number, number, number]>([0, 0, 0]);
+  useEffect(() => {
+    centerRef.current = framing?.center ?? [0, 0, 0];
+  }, [framing]);
+  useEffect(() => () => EFFECT_TIERS.clear(), []);
+
   useFrame((state, delta) => {
     if (!synced.current && groupRef.current) {
       groupRef.current.rotation.y = targetRotX;
       groupRef.current.rotation.x = targetRotY;
       state.camera.position.z = targetCameraZ;
       synced.current = true;
+    }
+    lodClock.current += delta;
+    if (lodClock.current > 0.3 && groupRef.current) {
+      lodClock.current = 0;
+      const [cx, cy, cz] = centerRef.current;
+      const m = groupRef.current.matrixWorld;
+      const tmp = new Vector3();
+      const ranked = specialEntries
+        .map((e) => {
+          tmp.set(e.position[0] - cx, e.position[1] - cy, e.position[2] - cz).applyMatrix4(m);
+          return { id: e.id, d: tmp.distanceTo(state.camera.position) };
+        })
+        .sort((a, b) => a.d - b.d);
+      const maxNear = SPECIAL_EFFECT_SETTINGS.maxNear[quality];
+      EFFECT_TIERS.clear();
+      ranked.forEach((r, i) => {
+        const tier: EffectTier = i < maxNear && r.d < SPECIAL_EFFECT_SETTINGS.nearDistance ? 1 : 0;
+        EFFECT_TIERS.set(r.id, tier);
+      });
     }
     if (groupRef.current) {
       groupRef.current.rotation.y += (targetRotX - groupRef.current.rotation.y) * 0.1;
@@ -874,6 +931,9 @@ export function UniverseScene({
               brightness={entry.brightness}
               quality={quality}
               selected={entry.id === selectedId}
+              special={specialTypeOf(entry.design)}
+              effectIntensity={entry.design?.effectParameters?.intensity}
+              effectSpeed={entry.design?.effectParameters?.speed}
               onPress={() => onStarPress(entry.id)}
               registerMesh={(mesh) => {
                 if (mesh) {

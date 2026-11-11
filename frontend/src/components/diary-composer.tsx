@@ -9,6 +9,7 @@ import { DiaryWriteScreen } from '@/components/ui/diary-write-screen';
 import { showMessage } from '@/lib/feedback';
 import { MAX_PHOTOS } from '@/lib/journal';
 import { pickPhotos, recoverPendingPhotos } from '@/lib/photos';
+import { DIARY_TOPICS, type DiaryTopic } from '@/lib/special-planet';
 import { useDiary, type DiaryPhoto, type Visibility } from '@/store/diary-context';
 
 type Props = {
@@ -32,6 +33,8 @@ export function DiaryComposer({ scale, editId, onBack, onSaved }: Props) {
   const [text, setText] = useState(editing?.text ?? '');
   const [photos, setPhotos] = useState<DiaryPhoto[]>(editing?.photos ?? []);
   const [groupIds, setGroupIds] = useState<string[]>([]);
+  // 오늘의 주제는 선택 사항(안 골라도 저장). AI가 특수 행성을 고를 때 보조 정보로만 쓴다.
+  const [topic, setTopic] = useState<DiaryTopic | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [openedAt] = useState(() => Date.now());
@@ -77,7 +80,7 @@ export function DiaryComposer({ scale, editId, onBack, onSaved }: Props) {
       : groupIds.length > 0 ? 'friends' : 'private';
     const result = editing
       ? await updateEntry(editing.id, content, photos, visibility)
-      : await addEntry(content, photos, visibility, groupIds);
+      : await addEntry(content, photos, visibility, groupIds, topic);
     busy.current = false;
     setSaving(false);
     if (!result.ok) {
@@ -88,6 +91,7 @@ export function DiaryComposer({ scale, editId, onBack, onSaved }: Props) {
       setText('');
       setPhotos([]);
       setGroupIds([]);
+      setTopic(null);
     }
     onSaved();
   };
@@ -114,6 +118,10 @@ export function DiaryComposer({ scale, editId, onBack, onSaved }: Props) {
       }
       onBack={onBack}
       onSubmit={submit}
+      // 수정할 때는 주제를 바꾸지 않는다(서버에 주제 수정 경로 없음).
+      topics={editing ? undefined : DIARY_TOPICS}
+      selectedTopic={topic}
+      onToggleTopic={(id) => setTopic((prev) => (prev === id ? null : (id as DiaryTopic)))}
     />
   );
 }
