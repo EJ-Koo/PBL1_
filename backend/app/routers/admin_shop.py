@@ -44,8 +44,8 @@ def admin_create_item(payload: AdminItemCreate, admin_id: str = Depends(get_curr
     if exists:
         raise HTTPException(status_code=409, detail="같은 id의 아이템이 이미 있습니다.")
     row = payload.model_dump()
-    if row["kind"] == "consumable":
-        row["slot"] = None
+    # [MODIFIED 2026-11-12] 소모품도 칸(slot)을 가질 수 있다(행성 효과 = planet_effect). 비어 있으면 없음
+    row["slot"] = (row.get("slot") or "").strip() or None
     return supabase.table("items").insert(row).execute().data[0]
 
 

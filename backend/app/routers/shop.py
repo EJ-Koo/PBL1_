@@ -2,24 +2,48 @@
 
 코인 계산(구매, 지급)은 DB 함수(migrations/2026-11-07_shop_coins.sql)가 한 번에 처리한다.
 여기서는 그 함수를 부르고, 실패 메시지를 HTTP 오류로 바꾸기만 한다.
+
+[ADDED 2026-11-12] 행성 특수 효과(migrations/2026-11-12_planet_effects.sql)
+  - 효과 아이템 = 소모품 종류 + 칸 planet_effect. 1개 = 행성 1개. 여러 행성에 쓰려면 그 수만큼 산다.
+  - 적용·변경·해제는 DB 함수 apply_planet_effect 가 일기 주인·남은 개수를 확인하고 한 번에 처리한다.
+    해제하거나 다른 효과로 바꾸면 그 1개는 다시 남은 개수로 돌아온다.
 """
+
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from postgrest.exceptions import APIError
 
 from app.db import supabase
 from app.dependencies import get_current_user_id
-from app.schemas.shop import EquipRequest, PurchaseRequest, PurchaseResult, ShopItem, Wallet
+from app.schemas.shop import (
+    EquipRequest,
+    PlanetEffectRequest,
+    PlanetEffectResult,
+    PurchaseRequest,
+    PurchaseResult,
+    ShopItem,
+    Wallet,
+)
 
 router = APIRouter(tags=["shop"])
 
 # DB 함수가 raise 하는 메시지 → (상태 코드, 화면에 보여줄 문장)
+# (위에서부터 찾는다: effect_not_owned 가 not_owned 를 포함하므로 더 긴 이름을 먼저 둔다)
 _DB_ERRORS = {
+    "effect_not_owned": (403, "가지고 있는 행성 효과가 아닙니다. 상점에서 먼저 구매해 주세요."),
+    "effect_all_used": (409, "이 효과를 모두 다른 행성에 쓰고 있어요. 하나 더 구매하거나 다른 행성에서 해제해 주세요."),
+    "diary_not_found": (404, "내 일기의 행성이 아닙니다."),
     "item_not_found": (404, "판매 중인 아이템이 아닙니다."),
     "already_owned": (409, "이미 가지고 있는 아이템입니다."),
     "not_enough_coins": (400, "코인이 부족합니다."),
     "not_owned": (404, "가지고 있는 장착 아이템이 아닙니다."),
 }
+
+# 행성 효과 아이템의 칸(slot)과 앱이 그릴 수 있는 효과 종류
+PLANET_EFFECT_SLOT = "planet_effect"
+SPECIAL_TYPES = ("ocean", "cloud", "crystal", "nebula", "lava")
+_MISSING_TABLE_CODES = ("PGRST205", "42P01")
 
 _MISSING_TABLE_HINT = (
     "상점 표가 아직 없습니다. Supabase SQL Editor에서 "
@@ -69,7 +93,13 @@ def get_config(key: str):
 
 
 def reset_user_shop(user_id: str) -> int:
-    """코인·보유 아이템·코인 기록을 지우고 시작 코인으로 새 지갑을 만든다 (테스트용)."""
+    """코인·보유 아이템·코인 기록을 지우고 시작 코인으로 새 지갑을 만든다 (테스트용).
+    산 효과가 없어지므로 행성에 적용한 효과도 함께 지운다(행성 본체·일기는 그대로)."""
+    try:
+        supabase.table("planet_effects").delete().eq("user_id", user_id).execute()
+    except APIError as e:
+        if e.code not in _MISSING_TABLE_CODES:  # 행성 효과 마이그레이션 전이면 지울 것도 없다
+            raise
     supabase.table("user_items").delete().eq("user_id", user_id).execute()
     supabase.table("coin_logs").delete().eq("user_id", user_id).execute()
     supabase.table("wallets").delete().eq("user_id", user_id).execute()
@@ -96,7 +126,7 @@ def list_shop_items(user_id: str = Depends(get_current_user_id)):
         items = supabase.table("items").select("*").order("sort_order").execute().data
         owned = supabase.table("user_items").select("*").eq("user_id", user_id).execute().data
     except APIError as e:
-        if e.code in ("PGRST205", "42P01"):
+        if e.code in _MISSING_TABLE_CODES:
             raise HTTPException(status_code=503, detail=_MISSING_TABLE_HINT)
         raise
 
@@ -134,3 +164,53 @@ def purchase(payload: PurchaseRequest, user_id: str = Depends(get_current_user_i
 @router.post("/me/items/{item_id}/equip", status_code=204)
 def set_equipped(item_id: str, payload: EquipRequest, user_id: str = Depends(get_current_user_id)):
     call_db_function("equip_item", {"p_user": user_id, "p_item": item_id, "p_on": payload.equipped})
+
+
+# --- 행성 특수 효과 (2026-11-12) ---------------------------------------------------------
+
+
+def special_of(effect: dict | None) -> str | None:
+    """아이템 effect JSON → 화면이 그릴 효과 종류. 행성 효과 아이템이 아니거나 모르는 값이면 None."""
+    if not isinstance(effect, dict) or effect.get("type") != PLANET_EFFECT_SLOT:
+        return None
+    special = effect.get("special")
+    return special if special in SPECIAL_TYPES else None
+
+
+def applied_effects(user_id: str) -> dict[str, dict]:
+    """내 행성에 적용한 효과: {diary_id: {"item_id", "effect"}}.
+    별 목록 조회 때 쓴다. 행성 효과 표가 아직 없으면(마이그레이션 전) 빈 값 → 모든 행성이 일반 행성."""
+    try:
+        rows = supabase.table("planet_effects").select("diary_id, item_id").eq("user_id", user_id).execute().data
+        if not rows:
+            return {}
+        items = supabase.table("items").select("id, effect").eq("slot", PLANET_EFFECT_SLOT).execute().data
+    except APIError as e:
+        if e.code in _MISSING_TABLE_CODES:
+            return {}
+        raise
+    special_by_item = {i["id"]: special_of(i.get("effect")) for i in items}
+    result = {}
+    for row in rows:
+        special = special_by_item.get(row["item_id"])
+        if special:
+            result[str(row["diary_id"])] = {"item_id": row["item_id"], "effect": special}
+    return result
+
+
+@router.put("/diaries/{diary_id}/effect", response_model=PlanetEffectResult)
+def set_planet_effect(
+    diary_id: UUID, payload: PlanetEffectRequest, user_id: str = Depends(get_current_user_id)
+):
+    """내 일기 행성에 산 효과를 적용(또는 다른 효과로 변경). item_id 가 null 이면 효과 해제.
+    일기 주인·남은 개수 확인과 저장은 DB 함수가 한 번에 한다
+    (남의 행성, 사지 않은 효과, 산 개수를 모두 다른 행성에 쓰고 있는 효과는 거절)."""
+    data = call_db_function(
+        "apply_planet_effect", {"p_user": user_id, "p_diary": str(diary_id), "p_item": payload.item_id}
+    )
+    item_id = (data or {}).get("item_id")
+    effect = None
+    if item_id:
+        rows = supabase.table("items").select("effect").eq("id", item_id).execute().data
+        effect = special_of(rows[0].get("effect")) if rows else None
+    return PlanetEffectResult(diary_id=str(diary_id), item_id=item_id, effect=effect)

@@ -5,7 +5,7 @@ export type ItemKind = 'consumable' | 'equip';
 
 /** 아이템 효과. 앱이 아는 type 만 동작하고, 모르는 type 은 무시한다. */
 export type ItemEffect = {
-  type?: 'background' | 'comet' | 'streak_shield' | string;
+  type?: 'background' | 'comet' | 'streak_shield' | 'planet_effect' | string;
   tint?: string;
   opacity?: number;
   interval_sec?: number;
@@ -82,6 +82,18 @@ export const apiSetEquipped = (token: string, itemId: string, equipped: boolean)
     token,
     { method: 'POST', body: JSON.stringify({ equipped }) },
     '장착에 실패했습니다.'
+  );
+
+// [ADDED 2026-11-12] 산 행성 효과를 내 일기 행성에 적용·변경. itemId 가 null 이면 해제(일반 행성).
+// 일기 주인·효과 보유는 서버가 확인한다(남의 행성, 사지 않은 효과는 거절).
+export type PlanetEffectResult = { diary_id: string; item_id: string | null; effect: string | null };
+
+export const apiSetPlanetEffect = (token: string, diaryId: string, itemId: string | null) =>
+  request<PlanetEffectResult>(
+    `/diaries/${encodeURIComponent(diaryId)}/effect`,
+    token,
+    { method: 'PUT', body: JSON.stringify({ item_id: itemId }) },
+    '행성 효과를 적용하지 못했습니다.'
   );
 
 // --- 관리자 ---------------------------------------------------------------------
