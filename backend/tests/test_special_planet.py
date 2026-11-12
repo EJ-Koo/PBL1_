@@ -123,29 +123,51 @@ _ROWS = [{"id": "s1", "diary_id": "d1", "x": 0, "y": 0, "z": 0, "color": "#FFFFF
           "diaries": {"user_id": "user-1", "content": "바다"}}]
 
 
-def test_list_stars_attaches_design_with_existing_size(monkeypatch):
+def _no_applied_effects(monkeypatch, effects=None):
+    # 별 목록은 사용자가 적용한 효과(planet_effects)를 읽는다. 테스트에서는 실제 DB 대신 이 값을 쓴다.
+    monkeypatch.setattr(stars, "applied_effects", lambda user_id: dict(effects or {}))
+
+
+def test_list_stars_no_longer_auto_selects_special_planets(monkeypatch):
+    """[2026-11-12] AI 자동 특수 행성 선택(/design/batch)을 부르지 않는다. 감정 외형만 붙고 design 은 비어 있다."""
     monkeypatch.setattr(stars, "supabase", _StarsDB(_ROWS))
-    monkeypatch.setattr(stars.ai_client, "planet_designs", lambda uid, items: [{"visual": _VISUAL, "design": _DESIGN}])
+    _no_applied_effects(monkeypatch)
+
+    def _must_not_call(*_a, **_k):
+        raise AssertionError("planet_designs 를 부르면 안 된다")
+
+    monkeypatch.setattr(stars.ai_client, "planet_designs", _must_not_call)
+    monkeypatch.setattr(stars.ai_client, "planet_visuals", lambda contents: [_VISUAL])
 
     rows = stars.list_stars(user_id="user-1")
-
     assert rows[0]["planet"] == _VISUAL
-    assert rows[0]["design"]["specialType"] == "ocean"
-    assert rows[0]["design"]["emotionCore"]["size"] == 0.7  # 크기 = 기존 규칙(일기 분량)으로 저장된 값
+    assert "design" not in rows[0] and "effect" not in rows[0]  # 바다 일기여도 자동으로 특수 행성이 되지 않는다
     assert rows[0]["size"] == 0.7 and rows[0]["color"] == "#FFFFFF"  # 기존 필드는 그대로
+
+
+def test_list_stars_attaches_user_applied_effect(monkeypatch):
+    monkeypatch.setattr(stars, "supabase", _StarsDB(_ROWS))
+    _no_applied_effects(monkeypatch, {"d1": {"item_id": "fx_nebula", "effect": "nebula"}})
+    monkeypatch.setattr(stars.ai_client, "planet_visuals", lambda contents: [_VISUAL])
+
+    rows = stars.list_stars(user_id="user-1")
+    assert rows[0]["effect"] == "nebula" and rows[0]["effect_item_id"] == "fx_nebula"
+    assert rows[0]["planet"] == _VISUAL  # 효과를 적용해도 감정 외형(색·무늬)은 그대로
+    assert rows[0]["size"] == 0.7 and rows[0]["color"] == "#FFFFFF"
 
 
 def test_list_stars_falls_back_to_visual_only(monkeypatch):
     monkeypatch.setattr(stars, "supabase", _StarsDB(_ROWS))
-    monkeypatch.setattr(stars.ai_client, "planet_designs", lambda uid, items: None)
-    monkeypatch.setattr(stars.ai_client, "planet_visuals", lambda contents: [_VISUAL])
+    _no_applied_effects(monkeypatch)
+    monkeypatch.setattr(stars.ai_client, "planet_visuals", lambda contents: None)
 
     rows = stars.list_stars(user_id="user-1")
-    assert rows[0]["planet"] == _VISUAL and "design" not in rows[0]
+    assert "planet" not in rows[0] and "design" not in rows[0]
 
 
 def test_list_stars_without_ai_has_no_planet(monkeypatch):
     monkeypatch.setattr(stars, "supabase", _StarsDB(_ROWS))
+    _no_applied_effects(monkeypatch)
     monkeypatch.setattr(ai_client.settings, "ai_service_url", "")
 
     rows = stars.list_stars(user_id="user-1")
