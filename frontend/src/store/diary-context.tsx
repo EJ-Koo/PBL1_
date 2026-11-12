@@ -4,6 +4,7 @@ import {
   apiCreateDiary,
   apiCreateGroup,
   apiGoogleAuth,
+  apiJoinGroup,
   apiListDiaries,
   apiListGroups,
   apiListStars,
@@ -71,6 +72,7 @@ type DiaryContextValue = {
   isEditableToday: (id: string) => boolean;
   groups: ApiGroup[];
   createGroup: (name: string) => Promise<SaveResult>;
+  joinGroup: (inviteCode: string) => Promise<SaveResult>;
 };
 
 function isSameDay(timestamp: number) {
@@ -333,6 +335,22 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           return {
             ok: false,
             error: err instanceof Error ? err.message : '그룹 생성에 실패했습니다.',
+          };
+        }
+      },
+      joinGroup: async (inviteCode: string): Promise<SaveResult> => {
+        if (!accessToken) {
+          return { ok: false, error: '로그인이 필요합니다.' };
+        }
+        try {
+          const joined = await apiJoinGroup(accessToken, inviteCode);
+          // 이미 멤버인 그룹을 다시 참여하면 최신 정보로 교체(중복 방지).
+          setGroups((prev) => [joined, ...prev.filter((g) => g.id !== joined.id)]);
+          return { ok: true };
+        } catch (err) {
+          return {
+            ok: false,
+            error: err instanceof Error ? err.message : '그룹 참여에 실패했습니다.',
           };
         }
       },

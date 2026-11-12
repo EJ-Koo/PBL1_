@@ -122,8 +122,8 @@ begin
 end $$;
 
 -- groups ----------------------------------------------------------------------
--- 일기를 작성할 때 선택적으로 공유할 수 있는, 유저 소유의 "그룹 우주" 묶음.
--- (다른 유저와의 멤버십/초대는 아직 미정 — diary_groups는 자기 자신의 일기만 그룹에 태그함)
+-- 일기를 작성할 때 선택적으로 공유할 수 있는 "그룹 우주" 묶음. groups.user_id는 그룹을 만든 소유자.
+-- 친구 초대/멤버십은 아래 migration (2026-11-12) 참고: invite_code(방 ID) + group_members 로 여러 유저가 함께 쓴다.
 create table if not exists groups (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
@@ -191,3 +191,43 @@ alter table diaries add column if not exists photo_paths text[] not null default
 
 -- migration (2026-11-07): 코인 · 상점 · 보유 아이템 · 설정값 ---------------------------
 -- 내용이 길어서 별도 파일로 둔다: migrations/2026-11-07_shop_coins.sql 전체를 SQL Editor에서 실행.
+
+-- migration (2026-11-12): 그룹 친구 초대 (방 ID 코드 + 멤버십) ----------------------
+-- Supabase 대시보드 → SQL Editor 에서 아래 블록을 실행한다. 여러 번 실행해도 안전하다.
+-- 그룹마다 공유용 invite_code("방 ID")를 두고, group_members 로 친구를 멤버로 받는다.
+-- 권한은 서비스-롤 백엔드가 담당하므로 RLS는 직접 접근 방어용(최소)만 둔다.
+
+-- 1) 그룹에 공유 코드(방 ID) 추가
+-- 기존 그룹에도 코드를 채운다. 8자 코드라 충돌 가능성이 있어 중복이면 다시 뽑는다(UNIQUE 인덱스 생성 실패 방지).
+alter table groups add column if not exists invite_code text;
+do $$
+declare g record; c text;
+begin
+  for g in select id from groups where invite_code is null loop
+    loop
+      c := upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
+      exit when not exists (select 1 from groups where invite_code = c);
+    end loop;
+    update groups set invite_code = c where id = g.id;
+  end loop;
+end $$;
+alter table groups alter column invite_code set not null;
+create unique index if not exists groups_invite_code_key on groups (invite_code);
+
+-- 2) 그룹 멤버십 (소유자 포함, 한 그룹에 여러 유저)
+create table if not exists group_members (
+  group_id uuid not null references groups (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  joined_at timestamptz not null default now(),
+  primary key (group_id, user_id)
+);
+
+alter table group_members enable row level security;
+drop policy if exists "group_members_select_self" on group_members;
+create policy "group_members_select_self" on group_members
+  for select using (auth.uid() = user_id);
+
+-- 3) 기존 그룹 소유자를 멤버로 백필
+insert into group_members (group_id, user_id)
+  select id, user_id from groups
+  on conflict (group_id, user_id) do nothing;

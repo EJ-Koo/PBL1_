@@ -26,6 +26,7 @@ type Props = {
   groups: GroupData[];
   onSelectGroup: (group: GroupData) => void;
   onAddGroup: () => void;
+  onJoinByCode: () => void;
 };
 
 function GroupPreview({ stars, scale }: { stars: PreviewStar[]; scale: number }) {
@@ -65,7 +66,7 @@ function GroupPreview({ stars, scale }: { stars: PreviewStar[]; scale: number })
   );
 }
 
-export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup }: Props) {
+export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup, onJoinByCode }: Props) {
   const insets = useSafeAreaInsets();
   const headerTop = Math.max(55 * scale, insets.top - 19 * scale);
   const bottomSpace = Math.max(34 * scale, insets.bottom) + 30 * scale;
@@ -124,6 +125,12 @@ export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup }: P
           style={{ alignSelf: 'center', marginTop: 33 * scale, width: 44 * scale, height: 44 * scale }}>
           <GroupAddIcon scale={scale} />
         </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityLabel="코드로 참여"
+          onPress={onJoinByCode}
+          style={{ alignSelf: 'center', marginTop: 14 * scale, paddingHorizontal: 18 * scale, paddingVertical: 8 * scale }}>
+          <Text style={[styles.joinByCode, { fontSize: 14 * scale }]}>코드로 참여</Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -136,4 +143,5 @@ const styles = StyleSheet.create({
   card: { backgroundColor: DesignPaint.groupCard },
   preview: { overflow: 'hidden', backgroundColor: DesignPaint.background },
   groupName: { color: DesignColors.black, fontFamily: DesignFonts.bold, fontWeight: '700', includeFontPadding: false },
+  joinByCode: { color: DesignPaint.ink, fontFamily: DesignFonts.bold, fontWeight: '700', textDecorationLine: 'underline', opacity: 0.7 },
 });

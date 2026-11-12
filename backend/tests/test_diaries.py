@@ -44,10 +44,10 @@ class _FakeTable:
             return _FakeResult(
                 [{"id": "diary-1", "created_at": "2026-01-01T00:00:00+00:00", **self._payload}]
             )
-        if self._name == "groups":
-            owned = self._db["owned_group_ids"]
-            matched = owned & self._in_ids if self._in_ids is not None else owned
-            return _FakeResult([{"id": gid} for gid in matched])
+        if self._name == "group_members":
+            member = self._db["member_group_ids"]
+            matched = member & self._in_ids if self._in_ids is not None else member
+            return _FakeResult([{"group_id": gid} for gid in matched])
         if self._name == "diary_groups":
             self._db["diary_group_inserts"].extend(self._payload)
             return _FakeResult([])
@@ -59,11 +59,11 @@ class _FakeTable:
 
 
 class _FakeSupabase:
-    def __init__(self, owned_group_ids=(), existing_stars=()):
+    def __init__(self, member_group_ids=(), existing_stars=()):
         self.star_inserts = []
         self.diary_group_inserts = []
         self._db = {
-            "owned_group_ids": set(owned_group_ids),
+            "member_group_ids": set(member_group_ids),
             "star_inserts": self.star_inserts,
             "diary_group_inserts": self.diary_group_inserts,
             "existing_stars": list(existing_stars),
@@ -98,8 +98,8 @@ def test_longer_content_makes_a_bigger_star(monkeypatch):
     assert long_size > short_size
 
 
-def test_create_diary_tags_owned_groups(monkeypatch):
-    fake = _FakeSupabase(owned_group_ids={"group-1", "group-2"})
+def test_create_diary_tags_member_groups(monkeypatch):
+    fake = _FakeSupabase(member_group_ids={"group-1", "group-2"})
     monkeypatch.setattr(diaries, "supabase", fake)
 
     diaries.create_diary(
@@ -111,8 +111,8 @@ def test_create_diary_tags_owned_groups(monkeypatch):
     assert all(row["diary_id"] == "diary-1" for row in fake.diary_group_inserts)
 
 
-def test_create_diary_rejects_group_not_owned(monkeypatch):
-    fake = _FakeSupabase(owned_group_ids={"group-1"})
+def test_create_diary_rejects_group_not_member(monkeypatch):
+    fake = _FakeSupabase(member_group_ids={"group-1"})
     monkeypatch.setattr(diaries, "supabase", fake)
 
     with pytest.raises(HTTPException) as exc_info:
