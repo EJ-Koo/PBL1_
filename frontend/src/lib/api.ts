@@ -140,12 +140,19 @@ export async function apiCreateDiary(
   return data as ApiDiary;
 }
 
+export type ApiGroupMember = {
+  user_id: string;
+  nickname: string | null;
+};
+
 export type ApiGroup = {
   id: string;
   user_id: string;
   name: string;
   created_at: string;
+  invite_code: string;
   diary_ids: string[];
+  members: ApiGroupMember[];
 };
 
 export async function apiListGroups(accessToken: string) {
@@ -168,6 +175,19 @@ export async function apiCreateGroup(accessToken: string, name: string) {
   const data = await res.json();
   if (!res.ok) {
     throw new Error(data.detail ?? '그룹 생성에 실패했습니다.');
+  }
+  return data as ApiGroup;
+}
+
+export async function apiJoinGroup(accessToken: string, inviteCode: string) {
+  const res = await fetch(`${API_BASE_URL}/groups/join`, {
+    method: 'POST',
+    headers: authHeaders(accessToken),
+    body: JSON.stringify({ invite_code: inviteCode }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail ?? '그룹 참여에 실패했습니다.');
   }
   return data as ApiGroup;
 }

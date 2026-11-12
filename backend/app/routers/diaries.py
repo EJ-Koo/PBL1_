@@ -100,18 +100,19 @@ def _create_star_for_diary(diary_id: str, content: str, user_id: str, topic: str
     ).execute()
 
 
-def _assert_owns_groups(group_ids: list[str], user_id: str) -> None:
+def _assert_member_of_groups(group_ids: list[str], user_id: str) -> None:
+    # 소유자뿐 아니라 그룹 멤버면 자기 일기를 그 그룹에 공유(태깅)할 수 있다.
     if not group_ids:
         return
-    owned = (
-        supabase.table("groups")
-        .select("id")
+    rows = (
+        supabase.table("group_members")
+        .select("group_id")
         .eq("user_id", user_id)
-        .in_("id", group_ids)
+        .in_("group_id", group_ids)
         .execute()
     )
-    owned_ids = {g["id"] for g in owned.data}
-    if owned_ids != set(group_ids):
+    member_ids = {g["group_id"] for g in rows.data}
+    if member_ids != set(group_ids):
         raise HTTPException(status_code=404, detail="Group not found")
 
 
@@ -249,7 +250,7 @@ def get_related_diaries(diary_id: UUID, user_id: str = Depends(get_current_user_
 
 @router.post("", response_model=Diary)
 def create_diary(diary: DiaryCreate, user_id: str = Depends(get_current_user_id)):
-    _assert_owns_groups(diary.group_ids, user_id)
+    _assert_member_of_groups(diary.group_ids, user_id)
     paths = diary.photo_paths or ([diary.photo_url] if diary.photo_url else [])
     row = {
         "user_id": user_id,
