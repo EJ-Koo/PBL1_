@@ -22,9 +22,11 @@ type Props = {
   onOpenEntry: (id: string) => void;
   // 메뉴의 달력 아이콘으로 열면 달력을 펼친 채로 시작한다.
   initialCalendarOpen?: boolean;
+  /** [ADDED 2026-11-12] 팝업 안에 넣을 때: 화면 배경·제목 줄 없이 내용만 (제목·✕는 팝업이 그림) */
+  embedded?: boolean;
 };
 
-export function SearchScreen({ onBack, onOpenEntry, initialCalendarOpen = false }: Props) {
+export function SearchScreen({ onBack, onOpenEntry, initialCalendarOpen = false, embedded = false }: Props) {
   const { entries } = useDiary();
   const [keyword, setKeyword] = useState('');
   const [dateKey, setDateKey] = useState<string | null>(null);
@@ -58,16 +60,18 @@ export function SearchScreen({ onBack, onOpenEntry, initialCalendarOpen = false 
   };
 
   return (
-    <View style={styles.screen}>
+    <View style={embedded ? styles.embeddedScreen : styles.screen}>
       {/* 모니터처럼 넓은 화면에서는 가로로 너무 늘어나지 않게 최대 폭을 두고 가운데 정렬 */}
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Pressable onPress={onBack} hitSlop={10}>
-            <Text style={styles.backText}>‹  나의 우주</Text>
-          </Pressable>
-          <Text style={styles.title}>일기 검색</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+      <View style={embedded ? styles.embeddedContainer : styles.container}>
+        {!embedded && (
+          <View style={styles.header}>
+            <Pressable onPress={onBack} hitSlop={10}>
+              <Text style={styles.backText}>‹  나의 우주</Text>
+            </Pressable>
+            <Text style={styles.title}>일기 검색</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+        )}
 
         {/* 위: 키워드 검색 */}
         <View style={styles.box}>
@@ -180,6 +184,8 @@ export function SearchScreen({ onBack, onOpenEntry, initialCalendarOpen = false 
 }
 
 const styles = StyleSheet.create({
+  embeddedScreen: { flex: 1 },
+  embeddedContainer: { flex: 1, width: '100%' },
   screen: {
     flex: 1,
     backgroundColor: '#05050A',

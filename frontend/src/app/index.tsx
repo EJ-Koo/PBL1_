@@ -8,7 +8,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { router } from 'expo-router';
 import {
-  ImageBackground,
   Modal,
   Pressable,
   StyleSheet,
@@ -20,6 +19,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DiaryComposer } from '@/components/diary-composer';
+import { SearchScreen } from '@/components/search-screen';
+import { PopupWindow } from '@/components/ui/popup-window';
 import { BackgroundTint, CometLayer } from '@/components/item-effects';
 import { ShopSheet } from '@/components/shop-screen';
 import { GroupSpaceScreen } from '@/components/ui/group-space-screen';
@@ -58,6 +59,9 @@ export default function HomeScreen() {
   const [questVisible, setQuestVisible] = useState(false);
   // [MODIFIED 2026-11-10] 상점은 별도 화면이 아니라 아래에서 올라오는 팝업
   const [shopVisible, setShopVisible] = useState(false);
+  // [ADDED 2026-11-12] 검색 팝업: null=닫힘, keyword=키워드 검색, calendar=달력으로 열기.
+  // 열 때마다 key 를 바꿔 새로 시작하고, 행성 상세에 갔다 와도 닫지 않아 검색어·결과가 남는다.
+  const [searchPopup, setSearchPopup] = useState<{ mode: 'keyword' | 'calendar'; key: number } | null>(null);
   const [createGroupVisible, setCreateGroupVisible] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [creatingGroup, setCreatingGroup] = useState(false);
@@ -115,10 +119,8 @@ export default function HomeScreen() {
     <View style={styles.container}>
       {/* ===== 가운데: 나의 우주 ===== */}
       {screen === 'home' && (
-        <ImageBackground
-          source={require('../../assets/images/night-sky.png')}
-          resizeMode="cover"
-          style={styles.fill}>
+        // [MODIFIED 2026-11-12] 배경 사진(night-sky.png) 제거 → 단색 배경 + 3D 우주의 배경 별만 사용
+        <View style={[styles.fill, styles.spaceBackground]}>
           <BackgroundTint effects={activeEffects} />
           <UniverseCanvas entries={entries} onStarPress={(id) => router.push(`/planet/${id}`)} />
           <CometLayer effects={activeEffects} />
@@ -141,15 +143,15 @@ export default function HomeScreen() {
               }}
               onQuest={() => setQuestVisible(true)}
               menuProps={{
-                onSearch: () => router.push('/search'),
-                onCalendar: () => router.push('/search?calendar=1'),
+                onSearch: () => setSearchPopup({ mode: 'keyword', key: Date.now() }),
+                onCalendar: () => setSearchPopup({ mode: 'calendar', key: Date.now() }),
                 onLogout: handleLogout,
                 sensitivity,
                 onSensitivity: (value) => setSensitivity(setRotateSensitivity(value)),
               }}
             />
           </Frame>
-        </ImageBackground>
+        </View>
       )}
 
       {/* ===== 왼쪽: 일기 작성 — 다른 탭에 갔다 와도 쓰던 내용이 남도록 화면을 숨기기만 한다 ===== */}
@@ -184,40 +186,10 @@ export default function HomeScreen() {
       {/* ===== 상점 팝업 (HUD 코인을 누르면 열림, ✕ 또는 바깥을 누르면 닫힘) ===== */}
       <ShopSheet visible={shopVisible} width={frameWidth} onClose={() => setShopVisible(false)} />
 
-      {/* ===== 새 그룹 만들기 ===== */}
-      <Modal transparent visible={createGroupVisible} animationType="fade" onRequestClose={() => setCreateGroupVisible(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setCreateGroupVisible(false)}>
-          <TouchableOpacity activeOpacity={1} style={[styles.inviteModalCard, { width: Math.min(frameWidth * 0.82, 420) }]}>
-            <Text style={styles.inviteModalTitle}>🪐 새로운 그룹 우주 만들기</Text>
-            <Text style={styles.inviteModalDesc}>
-              일기를 작성할 때 그룹을 선택하면 내 우주와 그룹 우주에 함께 별이 떠요!
-            </Text>
-            <TextInput
-              style={styles.inviteInput}
-              placeholder={`그룹 이름 (비워두면 '그룹${groups.length + 1}')`}
-              placeholderTextColor="#888"
-              value={newGroupName}
-              onChangeText={setNewGroupName}
-            />
-            <View style={styles.inviteModalButtonRow}>
-              <TouchableOpacity style={styles.inviteCancelBtn} onPress={() => setCreateGroupVisible(false)}>
-                <Text style={styles.whiteText}>취소</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.inviteConfirmBtn} onPress={handleCreateGroup} disabled={creatingGroup}>
-                <Text style={styles.inviteConfirmText}>{creatingGroup ? '만드는 중…' : '생성하기'}</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
       {/* ===== 그룹 카드를 눌렀을 때: 그 그룹의 우주를 3D로 크게 보기 ===== */}
       <Modal transparent={false} visible={activeGroup !== null} animationType="slide" onRequestClose={() => setActiveGroupId(null)}>
         {activeGroup && (
-          <ImageBackground
-            source={require('../../assets/images/night-sky.png')}
-            resizeMode="cover"
-            style={styles.fill}>
+          <View style={[styles.fill, styles.spaceBackground]}>
             <UniverseCanvas
               sceneKey={`group-${activeGroup.id}`}
               entries={groupEntries(activeGroup.diary_ids)}
@@ -244,7 +216,7 @@ export default function HomeScreen() {
                 <View style={{ width: 60 }} />
               </View>
             </Frame>
-          </ImageBackground>
+          </View>
         )}
       </Modal>
 
@@ -266,12 +238,59 @@ export default function HomeScreen() {
           onGroup={() => setScreen('group')}
         />
       </Frame>
+
+      {/* ===== 새 그룹 만들기 팝업 (✕ · 바깥 · 취소로 닫힘) ===== */}
+      <PopupWindow
+        visible={createGroupVisible}
+        onClose={() => setCreateGroupVisible(false)}
+        title="🪐 새로운 그룹 우주"
+        width={Math.min(frameWidth, 444)}
+        testID="group-create-popup">
+        <Text style={styles.inviteModalDesc}>
+          일기를 작성할 때 그룹을 선택하면 내 우주와 그룹 우주에 함께 별이 떠요!
+        </Text>
+        <TextInput
+          style={styles.inviteInput}
+          placeholder={`그룹 이름 (비워두면 '그룹${groups.length + 1}')`}
+          placeholderTextColor="#888"
+          value={newGroupName}
+          onChangeText={setNewGroupName}
+        />
+        <View style={styles.inviteModalButtonRow}>
+          <TouchableOpacity style={styles.inviteCancelBtn} onPress={() => setCreateGroupVisible(false)}>
+            <Text style={styles.whiteText}>취소</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.inviteConfirmBtn} onPress={handleCreateGroup} disabled={creatingGroup}>
+            <Text style={styles.inviteConfirmText}>{creatingGroup ? '만드는 중…' : '생성하기'}</Text>
+          </TouchableOpacity>
+        </View>
+      </PopupWindow>
+
+      {/* ===== 일기 검색 팝업 (메뉴의 검색·달력에서 열림) ===== */}
+      <PopupWindow
+        visible={searchPopup !== null}
+        onClose={() => setSearchPopup(null)}
+        title={searchPopup?.mode === 'calendar' ? '날짜로 찾기' : '일기 검색'}
+        width={frameWidth}
+        height="80%"
+        testID="search-popup">
+        {searchPopup && (
+          <SearchScreen
+            key={searchPopup.key}
+            embedded
+            onBack={() => setSearchPopup(null)}
+            onOpenEntry={(id) => router.push(`/planet/${id}`)}
+            initialCalendarOpen={searchPopup.mode === 'calendar'}
+          />
+        )}
+      </PopupWindow>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: DesignPaint.background },
+  spaceBackground: { backgroundColor: '#000' },
   fill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   hidden: { display: 'none' },
   frameOuter: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center' },
