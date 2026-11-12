@@ -17,8 +17,13 @@ class _FakeTable:
         self._payload = None
         self._eq = {}
         self._in_ids = None
+        self._delete = False
 
     def select(self, *_a, **_k):
+        return self
+
+    def delete(self):
+        self._delete = True
         return self
 
     def insert(self, payload):
@@ -43,6 +48,11 @@ class _FakeTable:
         return self
 
     def execute(self):
+        if self._delete:
+            rows = self._db[self._name]
+            removed = [r for r in rows if all(r.get(k) == v for k, v in self._eq.items())]
+            self._db[self._name] = [r for r in rows if r not in removed]
+            return _FakeResult(removed)
         if self._name == "groups":
             if self._payload is not None:  # insert
                 row = {
@@ -123,3 +133,40 @@ def test_join_group_unknown_code_404(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         groups.join_group(GroupJoin(invite_code="NOPE2345"), user_id="friend")
     assert exc.value.status_code == 404
+
+
+def test_leave_group_removes_my_membership_keeps_group(monkeypatch):
+    g = {"id": "group-1", "user_id": "owner", "name": "x", "invite_code": "ABCD2345", "created_at": "t"}
+    fake = _FakeSupabase(
+        groups_rows=[g],
+        member_rows=[{"group_id": "group-1", "user_id": "owner"}, {"group_id": "group-1", "user_id": "friend"}],
+    )
+    monkeypatch.setattr(groups, "supabase", fake)
+
+    groups.leave_group("group-1", user_id="friend")
+
+    members = [m["user_id"] for m in fake._db["group_members"]]
+    assert members == ["owner"]  # friend 만 빠짐
+    assert fake._db["groups"] == [g]  # 아직 멤버(owner) 있어 그룹 유지
+
+
+def test_leave_last_member_deletes_group(monkeypatch):
+    g = {"id": "group-1", "user_id": "owner", "name": "x", "invite_code": "ABCD2345", "created_at": "t"}
+    fake = _FakeSupabase(groups_rows=[g], member_rows=[{"group_id": "group-1", "user_id": "owner"}])
+    monkeypatch.setattr(groups, "supabase", fake)
+
+    groups.leave_group("group-1", user_id="owner")
+
+    assert fake._db["group_members"] == []
+    assert fake._db["groups"] == []  # 아무도 안 남아 그룹 자동 삭제
+
+
+def test_leave_group_by_non_member_is_noop(monkeypatch):
+    g = {"id": "group-1", "user_id": "owner", "name": "x", "invite_code": "ABCD2345", "created_at": "t"}
+    fake = _FakeSupabase(groups_rows=[g], member_rows=[{"group_id": "group-1", "user_id": "owner"}])
+    monkeypatch.setattr(groups, "supabase", fake)
+
+    groups.leave_group("group-1", user_id="stranger")  # 멤버 아님
+
+    assert [m["user_id"] for m in fake._db["group_members"]] == ["owner"]  # 변화 없음
+    assert fake._db["groups"] == [g]  # 비멤버가 그룹을 지우지 못함

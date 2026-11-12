@@ -5,6 +5,7 @@ import {
   apiCreateGroup,
   apiGoogleAuth,
   apiJoinGroup,
+  apiLeaveGroup,
   apiListDiaries,
   apiListGroups,
   apiListStars,
@@ -79,6 +80,7 @@ type DiaryContextValue = {
   groups: ApiGroup[];
   createGroup: (name: string) => Promise<SaveResult>;
   joinGroup: (inviteCode: string) => Promise<SaveResult>;
+  leaveGroup: (groupId: string) => Promise<SaveResult>;
 };
 
 function isSameDay(timestamp: number) {
@@ -365,6 +367,21 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           return {
             ok: false,
             error: err instanceof Error ? err.message : '그룹 참여에 실패했습니다.',
+          };
+        }
+      },
+      leaveGroup: async (groupId: string): Promise<SaveResult> => {
+        if (!accessToken) {
+          return { ok: false, error: '로그인이 필요합니다.' };
+        }
+        try {
+          await apiLeaveGroup(accessToken, groupId);
+          setGroups((prev) => prev.filter((g) => g.id !== groupId));
+          return { ok: true };
+        } catch (err) {
+          return {
+            ok: false,
+            error: err instanceof Error ? err.message : '그룹 나가기에 실패했습니다.',
           };
         }
       },

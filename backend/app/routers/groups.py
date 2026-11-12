@@ -1,7 +1,7 @@
 import secrets
 import string
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 
 from app.db import supabase
 from app.dependencies import get_current_user_id
@@ -146,3 +146,33 @@ def join_group(body: GroupJoin, user_id: str = Depends(get_current_user_id)):
 def list_members(group_id: str, user_id: str = Depends(get_current_user_id)):
     _assert_member(group_id, user_id)
     return _members_by_group([group_id]).get(group_id, [])
+
+
+@router.delete("/{group_id}/members/me", status_code=204)
+def leave_group(group_id: str, user_id: str = Depends(get_current_user_id)):
+    """그룹 나가기: 내 멤버십만 제거. 아무도 안 남으면 그룹 자체를 삭제한다
+    (diary_groups는 groups 삭제 시 on delete cascade 로 정리됨)."""
+    mine = (
+        supabase.table("group_members")
+        .select("user_id")
+        .eq("group_id", group_id)
+        .eq("user_id", user_id)
+        .execute()
+        .data
+    )
+    if not mine:
+        # 멤버가 아니면 아무것도 정리하지 않는다(비멤버가 빈 그룹을 삭제하는 것 방지). 멱등.
+        return Response(status_code=204)
+    supabase.table("group_members").delete().eq("group_id", group_id).eq(
+        "user_id", user_id
+    ).execute()
+    remaining = (
+        supabase.table("group_members").select("user_id").eq("group_id", group_id).execute().data
+    )
+    if not remaining:
+        supabase.table("groups").delete().eq("id", group_id).execute()
+    # shortcut: 멤버십 삭제~빈 그룹 삭제가 원자적이지 않다. 마지막 멤버 탈퇴와 '동시에' 다른 사용자가
+    #   가입하면 그 가입이 CASCADE로 지워질 수 있고, 중간 실패 시 빈 그룹이 남을 수 있다(개인용 앱이라
+    #   사실상 발생 불가). 멀티유저 동시성이 커지면 이 두 단계를 Postgres RPC(단일 트랜잭션)로 합칠 것.
+    #   나간 멤버의 diary_groups 잔여 태그도 그때 함께 정리.
+    return Response(status_code=204)

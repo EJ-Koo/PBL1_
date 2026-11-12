@@ -50,7 +50,7 @@ function Frame({ width, children, box = false }: { width: number; children: Reac
 }
 
 export default function HomeScreen() {
-  const { isLoggedIn, entries, groups, createGroup, joinGroup, logout } = useDiary();
+  const { isLoggedIn, entries, groups, createGroup, joinGroup, leaveGroup, logout } = useDiary();
   const { coins, activeEffects, refresh: refreshShop } = useShop();
   const { frameWidth, scale } = useDesignFrame();
   const insets = useSafeAreaInsets();
@@ -67,6 +67,8 @@ export default function HomeScreen() {
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [inviteVisible, setInviteVisible] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const [joinVisible, setJoinVisible] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
@@ -132,6 +134,20 @@ export default function HomeScreen() {
     }
     setJoinCode('');
     setJoinVisible(false);
+  };
+
+  const handleLeaveGroup = async () => {
+    if (leaving || !activeGroup) return;
+    setLeaving(true);
+    const result = await leaveGroup(activeGroup.id);
+    setLeaving(false);
+    if (!result.ok) {
+      showMessage('나가기 실패', result.error);
+      return;
+    }
+    setConfirmLeave(false);
+    setInviteVisible(false);
+    setActiveGroupId(null); // 상세 화면도 닫는다
   };
 
   // 초대 코드(방 ID) 복사: 웹에선 클립보드, 네이티브에선 안내만. (clipboard 모듈 의존성 추가 안 함)
@@ -242,7 +258,7 @@ export default function HomeScreen() {
                     {activeGroup.name}의 우주 (★ {groupEntries(activeGroup.diary_ids).length})
                   </Text>
                 </View>
-                <TouchableOpacity style={styles.inviteButton} onPress={() => setInviteVisible(true)}>
+                <TouchableOpacity style={styles.inviteButton} onPress={() => { setConfirmLeave(false); setInviteVisible(true); }}>
                   <Text style={styles.inviteButtonText}>＋친구</Text>
                 </TouchableOpacity>
               </View>
@@ -267,6 +283,23 @@ export default function HomeScreen() {
             {(activeGroup?.members ?? []).map((m) => (
               <Text key={m.user_id} style={styles.memberRow}>· {m.nickname ?? '익명'}</Text>
             ))}
+            {confirmLeave ? (
+              <View style={styles.leaveBox}>
+                <Text style={styles.leaveWarn}>나가면 이 그룹이 목록에서 사라져요. 아무도 안 남으면 그룹이 삭제돼요.</Text>
+                <View style={styles.inviteModalButtonRow}>
+                  <TouchableOpacity style={styles.inviteCancelBtn} onPress={() => setConfirmLeave(false)}>
+                    <Text style={styles.whiteText}>취소</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.leaveConfirmBtn} onPress={handleLeaveGroup} disabled={leaving}>
+                    <Text style={styles.whiteText}>{leaving ? '나가는 중…' : '나가기'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.leaveLink} onPress={() => setConfirmLeave(true)}>
+                <Text style={styles.leaveLinkText}>그룹 나가기</Text>
+              </TouchableOpacity>
+            )}
             <View style={styles.inviteModalButtonRow}>
               <TouchableOpacity style={styles.inviteConfirmBtn} onPress={() => setInviteVisible(false)}>
                 <Text style={styles.inviteConfirmText}>닫기</Text>
@@ -425,5 +458,10 @@ const styles = StyleSheet.create({
   codeCopy: { color: '#7f8c8d', fontSize: 12, marginTop: 4 },
   membersTitle: { color: '#a4b0be', fontSize: 13, fontWeight: 'bold', marginBottom: 6 },
   memberRow: { color: '#dfe6e9', fontSize: 14, marginBottom: 2 },
+  leaveLink: { alignSelf: 'flex-start', marginTop: 14, paddingVertical: 4 },
+  leaveLinkText: { color: '#e74c3c', fontSize: 14, fontWeight: '600' },
+  leaveBox: { marginTop: 14, backgroundColor: 'rgba(231,76,60,0.12)', borderRadius: 10, padding: 12 },
+  leaveWarn: { color: '#ffb8b0', fontSize: 13, lineHeight: 18, marginBottom: 10 },
+  leaveConfirmBtn: { backgroundColor: '#e74c3c', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
 
 });
