@@ -30,6 +30,7 @@ import { UniverseBottomNav } from '@/components/ui/universe-bottom-nav';
 import { UniverseCanvas } from '@/components/universe-scene';
 import { DesignPaint } from '@/constants/ui-design';
 import { useDesignFrame } from '@/hooks/use-design-frame';
+import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { showMessage } from '@/lib/feedback';
 import { localDateKey } from '@/lib/journal';
 import { getRotateSensitivity, loadSettings, setRotateSensitivity } from '@/lib/settings';
@@ -53,6 +54,9 @@ export default function HomeScreen() {
   const { isLoggedIn, entries, groups, createGroup, joinGroup, leaveGroup, logout } = useDiary();
   const { coins, activeEffects, refresh: refreshShop } = useShop();
   const { frameWidth, scale } = useDesignFrame();
+  // fffju 반응형 레이아웃: 전체 뷰포트로 그리는 화면(홈 HUD·하단바·그룹)은 이 scale을 쓴다.
+  // 아직 520 프레임을 쓰는 화면(일기 작성·상점)은 useDesignFrame(frameWidth/scale)을 유지.
+  const { scale: rScale } = useResponsiveLayout();
   const insets = useSafeAreaInsets();
 
   const [screen, setScreen] = useState<Screen>('home');
@@ -175,26 +179,25 @@ export default function HomeScreen() {
             </View>
           )}
 
-          <Frame width={frameWidth} box>
-            <HomeHud
-              scale={scale}
-              starCount={entries.length}
-              coinCount={coins ?? 0}
-              checkCount={checkCount}
-              onStats={() => {
-                refreshShop();
-                setShopVisible(true);
-              }}
-              onQuest={() => setQuestVisible(true)}
-              menuProps={{
-                onSearch: () => setSearchPopup({ mode: 'keyword', key: Date.now() }),
-                onCalendar: () => setSearchPopup({ mode: 'calendar', key: Date.now() }),
-                onLogout: handleLogout,
-                sensitivity,
-                onSensitivity: (value) => setSensitivity(setRotateSensitivity(value)),
-              }}
-            />
-          </Frame>
+          {/* HUD는 fffju 반응형(전체 뷰포트). 520 프레임으로 감싸지 않는다. */}
+          <HomeHud
+            scale={rScale}
+            starCount={entries.length}
+            coinCount={coins ?? 0}
+            checkCount={checkCount}
+            onStats={() => {
+              refreshShop();
+              setShopVisible(true);
+            }}
+            onQuest={() => setQuestVisible(true)}
+            menuProps={{
+              onSearch: () => setSearchPopup({ mode: 'keyword', key: Date.now() }),
+              onCalendar: () => setSearchPopup({ mode: 'calendar', key: Date.now() }),
+              onLogout: handleLogout,
+              sensitivity,
+              onSensitivity: (value) => setSensitivity(setRotateSensitivity(value)),
+            }}
+          />
         </View>
       )}
 
@@ -209,7 +212,7 @@ export default function HomeScreen() {
       {screen === 'group' && (
         <View style={styles.fill}>
           <GroupSpaceScreen
-            scale={scale}
+            scale={rScale}
             groups={groups.map((g) => ({
               id: g.id,
               name: g.name,
@@ -345,15 +348,14 @@ export default function HomeScreen() {
         </Pressable>
       </Modal>
 
-      {/* ===== 공통: 하단 네비게이션 (왼쪽=일기 / 가운데=나의 우주 / 오른쪽=그룹) ===== */}
-      <Frame width={frameWidth} box>
-        <UniverseBottomNav
-          scale={scale}
-          onDiary={() => setScreen('diary')}
-          onHome={() => setScreen('home')}
-          onGroup={() => setScreen('group')}
-        />
-      </Frame>
+      {/* ===== 공통: 하단 네비게이션 (fffju 반응형 — 전체 뷰포트) ===== */}
+      <UniverseBottomNav
+        scale={rScale}
+        activeScreen={screen}
+        onDiary={() => setScreen('diary')}
+        onHome={() => setScreen('home')}
+        onGroup={() => setScreen('group')}
+      />
 
       {/* ===== 새 그룹 만들기 팝업 (✕ · 바깥 · 취소로 닫힘) ===== */}
       <PopupWindow
