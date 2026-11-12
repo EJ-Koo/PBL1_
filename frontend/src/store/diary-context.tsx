@@ -28,6 +28,7 @@ export type DiaryPhoto = { id: string; uri: string; path?: string };
 
 export type DiaryEntry = {
   id: string;
+  authorId: string;
   text: string;
   photoUri: string | null;
   photos: DiaryPhoto[];
@@ -129,6 +130,7 @@ function toEntry(diary: ApiDiary, colorIndex: number, star?: ApiStar): DiaryEntr
   const photos = toPhotos(diary);
   return {
     id: diary.id,
+    authorId: diary.user_id,
     text: diary.content,
     photoUri: photos[0]?.uri ?? null,
     photos,

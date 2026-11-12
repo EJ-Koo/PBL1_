@@ -6,11 +6,12 @@
 //  - 서버 기능이 아직 없는 항목(배경음악·테마·소리·알림·회원 탈퇴·이용약관)은 값만 보여주고 눌러도 반응하지 않는다.
 //    펼치기/접기(아코디언)만 동작한다. 나중에 기능이 생기면 하나씩 연결.
 import { useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { MenuCalendarIcon, MenuChevron, MenuDecoration, MenuNotificationToggle, MenuSearchIcon } from './menu-decoration';
 import { MenuSlider } from './menu-slider';
+
+import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 
 import { DesignFonts, DesignPaint } from '@/constants/ui-design';
 import { ROTATE_SENSITIVITY_MAX, ROTATE_SENSITIVITY_MIN } from '@/lib/settings';
@@ -62,10 +63,8 @@ function Inactive({ children }: { children: ReactNode }) {
 export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, sensitivity, onSensitivity }: Props) {
   const [expanded, setExpanded] = useState<Partial<Record<AccordionId, boolean>>>({});
   const [sensitivityPreview, setSensitivityPreview] = useState<number | null>(null);
-  const insets = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
-  const top = Math.max(54 * scale, insets.top - 10 * scale) + 79 * scale;
-  const bottomSpace = Math.max(34 * scale, insets.bottom) + 30 * scale;
+  const { height, chromeLeft, headerTop, bottomSpace } = useResponsiveLayout();
+  const top = headerTop + 79 * scale;
   const visibleHeight = Math.min(558 * scale, Math.max(0, height - top - bottomSpace - 14 * scale));
   const type = (fontSize = 16, lineHeight = 24) => ({ fontSize: fontSize * scale, lineHeight: lineHeight * scale });
   const toggle = (id: AccordionId) => setExpanded((value) => ({ ...value, [id]: !value[id] }));
@@ -86,7 +85,7 @@ export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, 
   return (
     <View style={styles.overlay} pointerEvents="box-none">
       <Pressable accessibilityLabel="메뉴 닫기" onPress={onClose} style={StyleSheet.absoluteFill} />
-      <View style={[styles.panel, { left: insets.left + 15 * scale, top, width: 262 * scale, height: visibleHeight }]}>
+      <View style={[styles.panel, { left: chromeLeft + 15 * scale, top, width: 262 * scale, height: visibleHeight }]}>
         <View style={StyleSheet.absoluteFill} pointerEvents="none"><MenuDecoration scale={scale} height={visibleHeight} /></View>
         {/* 아코디언을 펼치면 내용이 길어지므로 메뉴 안에서 세로 스크롤된다. */}
         <ScrollView

@@ -5,19 +5,21 @@
 //  - 서버 기능이 아직 없는 테마·소리·알림은 화면만 보여주고 반응하지 않는다(나중에 하나씩 연결).
 //  - [MODIFIED 2026-11-07] 코인·상점은 서버 연결(useShop). HUD 코인을 누르면 상점, 장착한 배경·혜성이 나의 우주에 보인다.
 //  - 폰은 fffju 배율 그대로, 웹·PC는 폭 최대 520px 가운데 정렬(useDesignFrame).
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
 import {
   Modal,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CreateGroupDialog } from '@/components/ui/create-group-dialog';
+import { SpaceButton } from '@/components/ui/space-ui';
+import { GroupMemberStars } from '@/components/ui/group-member-stars';
+import { getMemberStars } from '@/lib/group-attendance';
 import { DiaryComposer } from '@/components/diary-composer';
 import { SearchScreen } from '@/components/search-screen';
 import { PopupWindow } from '@/components/ui/popup-window';
@@ -39,25 +41,13 @@ import { useShop } from '@/store/shop-context';
 
 type Screen = 'home' | 'diary' | 'group';
 
-/** fffju 디자인 영역: 폰은 화면 전체 폭, 넓은 화면은 최대 520px로 가운데. */
-function Frame({ width, children, box = false }: { width: number; children: ReactNode; box?: boolean }) {
-  return (
-    <View style={styles.frameOuter} pointerEvents={box ? 'box-none' : 'auto'}>
-      <View style={[styles.frameInner, { width }]} pointerEvents={box ? 'box-none' : 'auto'}>
-        {children}
-      </View>
-    </View>
-  );
-}
-
 export default function HomeScreen() {
   const { isLoggedIn, entries, groups, createGroup, joinGroup, leaveGroup, logout } = useDiary();
   const { coins, activeEffects, refresh: refreshShop } = useShop();
-  const { frameWidth, scale } = useDesignFrame();
+  const { frameWidth } = useDesignFrame();
   // fffju 반응형 레이아웃: 전체 뷰포트로 그리는 화면(홈 HUD·하단바·그룹)은 이 scale을 쓴다.
   // 아직 520 프레임을 쓰는 화면(일기 작성·상점)은 useDesignFrame(frameWidth/scale)을 유지.
-  const { scale: rScale } = useResponsiveLayout();
-  const insets = useSafeAreaInsets();
+  const { scale: rScale, contentLeft, contentWidth, headerTop } = useResponsiveLayout();
 
   const [screen, setScreen] = useState<Screen>('home');
   const [questVisible, setQuestVisible] = useState(false);
@@ -114,6 +104,10 @@ export default function HomeScreen() {
 
   const handleCreateGroup = async () => {
     if (creatingGroup) return;
+    if (newGroupName.trim().length > 24) {
+      showMessage('그룹 이름', '그룹 이름은 24자 이내로 입력해주세요.');
+      return;
+    }
     setCreatingGroup(true);
     const result = await createGroup(newGroupName.trim() || `그룹${groups.length + 1}`);
     setCreatingGroup(false);
@@ -170,8 +164,9 @@ export default function HomeScreen() {
         // [MODIFIED 2026-11-12] 배경 사진(night-sky.png) 제거 → 단색 배경 + 3D 우주의 배경 별만 사용
         <View style={[styles.fill, styles.spaceBackground]}>
           <BackgroundTint effects={activeEffects} />
-          <UniverseCanvas entries={entries} onStarPress={(id) => router.push(`/planet/${id}`)} />
+          {/* Comets sit behind the transparent 3D canvas so planets occlude them. */}
           <CometLayer effects={activeEffects} />
+          <UniverseCanvas entries={entries} onStarPress={(id) => router.push(`/planet/${id}`)} />
 
           {entries.length === 0 && (
             <View style={styles.emptyState} pointerEvents="none">
@@ -203,9 +198,7 @@ export default function HomeScreen() {
 
       {/* ===== 왼쪽: 일기 작성 — 다른 탭에 갔다 와도 쓰던 내용이 남도록 화면을 숨기기만 한다 ===== */}
       <View style={[styles.fill, screen !== 'diary' && styles.hidden]}>
-        <Frame width={frameWidth}>
-          <DiaryComposer scale={scale} onBack={() => setScreen('home')} onSaved={() => setScreen('home')} />
-        </Frame>
+        <DiaryComposer scale={rScale} onBack={() => setScreen('home')} onSaved={() => setScreen('home')} />
       </View>
 
       {/* ===== 오른쪽: 그룹 우주 (반응형 그리드 — 전체 뷰포트, useResponsiveLayout 사용) ===== */}
@@ -216,6 +209,7 @@ export default function HomeScreen() {
             groups={groups.map((g) => ({
               id: g.id,
               name: g.name,
+              members: getMemberStars(g, entries, today),
               stars: groupEntries(g.diary_ids).map((e) => ({
                 color: e.color,
                 size: 0.36,
@@ -251,21 +245,16 @@ export default function HomeScreen() {
                 <Text style={styles.emptyText}>아직 이 그룹에 공유된 별이 없어요.</Text>
               </View>
             )}
-            <Frame width={frameWidth} box>
-              <View style={[styles.topBar, { top: insets.top + 20 }]} pointerEvents="box-none">
-                <TouchableOpacity style={styles.questButton} onPress={() => setActiveGroupId(null)}>
-                  <Text style={styles.questText}>{'< 목록으로'}</Text>
-                </TouchableOpacity>
-                <View style={styles.statsPill}>
-                  <Text style={styles.statsText}>
-                    {activeGroup.name}의 우주 (★ {groupEntries(activeGroup.diary_ids).length})
-                  </Text>
-                </View>
-                <TouchableOpacity style={styles.inviteButton} onPress={() => { setConfirmLeave(false); setInviteVisible(true); }}>
-                  <Text style={styles.inviteButtonText}>＋친구</Text>
-                </TouchableOpacity>
+            <View style={{ position: 'absolute', top: headerTop, left: contentLeft + 20 * rScale,
+              width: contentWidth - 40 * rScale, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10 * rScale }}>
+              <SpaceButton scale={rScale} label="‹ 목록" onPress={() => setActiveGroupId(null)} />
+              <View style={{ flex: 1, minWidth: 70 }}>
+                <Text numberOfLines={1} style={{ color: '#fff', fontSize: 16 * rScale }}>{activeGroup.name}</Text>
+                <Text style={{ color: '#aeb7c4', fontSize: 11 * rScale }}>별 {groupEntries(activeGroup.diary_ids).length}개</Text>
               </View>
-            </Frame>
+              <SpaceButton scale={rScale} label="친구 초대" onPress={() => { setConfirmLeave(false); setInviteVisible(true); }} />
+              <GroupMemberStars scale={rScale} dark members={getMemberStars(activeGroup, entries, today)} />
+            </View>
           </View>
         )}
       </Modal>
@@ -341,11 +330,9 @@ export default function HomeScreen() {
 
       {/* ===== 퀘스트 (진행률은 오늘 일기 작성 여부만 실제 값) ===== */}
       <Modal transparent visible={questVisible} animationType="fade" onRequestClose={() => setQuestVisible(false)}>
-        <Pressable style={styles.frameOuter} onPress={() => setQuestVisible(false)}>
-          <View style={[styles.frameInner, { width: frameWidth }]}>
-            <QuestPanel scale={scale} todayComplete={todayComplete} onClose={() => setQuestVisible(false)} />
-          </View>
-        </Pressable>
+        <QuestPanel scale={rScale} todayComplete={todayComplete}
+          onWriteDiary={() => { setQuestVisible(false); setScreen('diary'); }}
+          onClose={() => setQuestVisible(false)} />
       </Modal>
 
       {/* ===== 공통: 하단 네비게이션 (fffju 반응형 — 전체 뷰포트) ===== */}
@@ -358,37 +345,16 @@ export default function HomeScreen() {
       />
 
       {/* ===== 새 그룹 만들기 팝업 (✕ · 바깥 · 취소로 닫힘) ===== */}
-      <PopupWindow
-        visible={createGroupVisible}
-        onClose={() => setCreateGroupVisible(false)}
-        title="🪐 새로운 그룹 우주"
-        width={Math.min(frameWidth, 444)}
-        testID="group-create-popup">
-        <Text style={styles.inviteModalDesc}>
-          일기를 작성할 때 그룹을 선택하면 내 우주와 그룹 우주에 함께 별이 떠요!
-        </Text>
-        <TextInput
-          style={styles.inviteInput}
-          placeholder={`그룹 이름 (비워두면 '그룹${groups.length + 1}')`}
-          placeholderTextColor="#888"
-          value={newGroupName}
-          onChangeText={setNewGroupName}
-        />
-        <View style={styles.inviteModalButtonRow}>
-          <TouchableOpacity style={styles.inviteCancelBtn} onPress={() => setCreateGroupVisible(false)}>
-            <Text style={styles.whiteText}>취소</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.inviteConfirmBtn} onPress={handleCreateGroup} disabled={creatingGroup}>
-            <Text style={styles.inviteConfirmText}>{creatingGroup ? '만드는 중…' : '생성하기'}</Text>
-          </TouchableOpacity>
-        </View>
-      </PopupWindow>
+      <CreateGroupDialog visible={createGroupVisible} scale={rScale} name={newGroupName}
+        defaultName={`그룹${groups.length + 1}`} saving={creatingGroup} onChangeName={setNewGroupName}
+        onClose={() => { if (!creatingGroup) setCreateGroupVisible(false); }} onCreate={handleCreateGroup} />
 
       {/* ===== 일기 검색 팝업 (메뉴의 검색·달력에서 열림) ===== */}
       <PopupWindow
         visible={searchPopup !== null}
         onClose={() => setSearchPopup(null)}
-        title={searchPopup?.mode === 'calendar' ? '날짜로 찾기' : '일기 검색'}
+        title="일기 검색"
+        appearance="search"
         width={frameWidth}
         height="80%"
         testID="search-popup">

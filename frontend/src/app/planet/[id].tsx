@@ -1,8 +1,11 @@
 // [MODIFIED 2026-11-05] 사진 여러 장(최대 5장)을 가로로 넘겨 보기, 넓은 화면에서는 폭 최대 520px 가운데 정렬.
 // [MODIFIED 2026-11-12] '행성 꾸미기' 버튼: 산 특수 효과를 이 행성에 적용·변경·해제 (components/planet-decorator.tsx)
-import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+
+import { PlanetPreview } from '@/components/universe-scene';
+import { PLANET_BASE_RADIUS, planetScaleForText } from '@/lib/planet-visual';
 
 import { PlanetDecorator } from '@/components/planet-decorator';
 import { goBackSafe } from '@/lib/navigation';
@@ -20,6 +23,11 @@ export default function PlanetDetailScreen() {
   const { getEntry, isEditableToday } = useDiary();
   const entry = getEntry(id);
   const [decorating, setDecorating] = useState(false);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  useFocusEffect(useCallback(() => {
+    setPreviewVisible(true);
+    return () => setPreviewVisible(false);
+  }, []));
 
   if (!entry) {
     return (
@@ -45,7 +53,10 @@ export default function PlanetDetailScreen() {
       </Pressable>
 
       <View style={styles.planetHeader}>
-        <View style={[styles.planet, { backgroundColor: entry.color }]} />
+        <View style={styles.planet} pointerEvents="none" testID="planet-detail-preview">
+          {previewVisible && !decorating && <PlanetPreview id={entry.id} visual={entry.planet} effect={entry.effect}
+            radius={PLANET_BASE_RADIUS * planetScaleForText(entry.text)} quality="high" />}
+        </View>
         <Text style={styles.dateLabel}>{dateLabel}</Text>
         <View style={styles.visibilityBadge}>
           <Text style={styles.visibilityBadgeText}>{VISIBILITY_LABELS[entry.visibility]}</Text>
@@ -135,9 +146,11 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   planet: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: '100%',
+    height: 260,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#050611',
   },
   dateLabel: {
     color: '#8888AA',

@@ -81,3 +81,12 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+
+## test UI 통합
+
+- fffju a3b2a5e의 공용 프레임, 퀘스트, 메뉴 위치, 일기 반응형·키보드 대응, 그룹 생성창을 서버 기능과 결합했습니다. 그룹 이름은 24자로 제한합니다.
+- 상점은 서버 상품·탭·구매·장착·행성 효과를 유지하고 공용 프레임을 사용합니다.
+- 멤버 별은 확인된 당일 그룹 공유 일기의 최신 감정색으로 빛나며 파티클이 반짝입니다. 인원 상한은 고정하지 않고 줄바꿈합니다.
+- 현재 일기 API는 본인 일기만 반환합니다. 다른 멤버의 출석을 추측하지 않으며 미확인 별은 흰색으로 표시합니다. 전체 작성 인원 집계는 서버 데이터 지원 전까지 표시하지 않습니다.
+- fffju로의 프론트 전용 이식과 기능 분리는 후속 작업입니다.

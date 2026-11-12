@@ -3,6 +3,9 @@ import { useId } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 
+import { GroupMemberStars } from './group-member-stars';
+import type { MemberStar } from '@/lib/group-attendance';
+
 import { GroupAddIcon, GroupCardFrame, GroupHeaderFrame, GroupLabelFrame } from './group-decoration';
 
 import { DesignColors, DesignFonts, DesignPaint, GroupStarGlowStops } from '@/constants/ui-design';
@@ -20,6 +23,7 @@ type GroupData = {
   id: string;
   name: string;
   stars: PreviewStar[];
+  members: MemberStar[];
 };
 
 type Props = {
@@ -99,29 +103,33 @@ export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup, onJ
           {groups.map((group, i) => {
             const s = cardScale;
             const first = i === 0;
+            const cardHeight = Math.max(CARD_HEIGHT, 207 + Math.ceil(group.members.length / 6) * 22 + 24);
             return (
               <TouchableOpacity
                 key={group.id}
                 activeOpacity={0.85}
                 accessibilityLabel={group.name}
                 onPress={() => onSelectGroup(group)}
-                style={{ width: cardWidth, height: CARD_HEIGHT * s }}>
+                style={{ width: cardWidth, height: cardHeight * s }}>
                 <View style={[styles.positioned, styles.card, {
-                  left: 8 * s, top: 5 * s, width: 343 * s, height: (CARD_HEIGHT - 6) * s, borderRadius: 12 * s,
+                  left: 8 * s, top: 5 * s, width: 343 * s, height: (cardHeight - 6) * s, borderRadius: 12 * s,
                 }]} />
-                <GroupCardFrame scale={s} height={CARD_HEIGHT} />
+                <GroupCardFrame scale={s} height={cardHeight} />
                 <View style={[styles.positioned, styles.preview, {
                   left: (first ? 16 : 15) * s, top: 11 * s, width: 329 * s, height: 186 * s, borderRadius: 11 * s,
                 }]}>
                   <GroupPreview stars={group.stars} scale={s} />
                 </View>
                 <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                  <GroupLabelFrame scale={s} first={first} height={CARD_HEIGHT} />
+                  <GroupLabelFrame scale={s} first={first} height={cardHeight} />
                 </View>
                 <Text numberOfLines={1} style={[styles.positioned, styles.groupName, {
                   left: (first ? 20 : 19) * s, top: 208 * s, width: 171 * s, height: 30 * s,
                   fontSize: 20 * s, lineHeight: 28 * s,
                 }]}>{group.name}</Text>
+                <View pointerEvents="none" style={{ position: 'absolute', left: 222 * s, top: 205 * s }}>
+                  <GroupMemberStars members={group.members} scale={s} />
+                </View>
               </TouchableOpacity>
             );
           })}

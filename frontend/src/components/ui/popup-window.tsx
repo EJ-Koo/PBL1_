@@ -4,6 +4,7 @@
 //    팝업과 그 안의 상태(검색어·결과)가 그대로 남는다. (Modal 은 웹에서 다음 화면 위까지 덮어버림)
 //  - 그래서 이 컴포넌트는 화면의 맨 마지막 자식으로 두어야 다른 요소 위에 보인다.
 import { useEffect, type ReactNode } from 'react';
+import { SearchPopupFrame } from './search-popup-frame';
 import { BackHandler, Pressable, StyleSheet, Text, TouchableOpacity, View, type DimensionValue } from 'react-native';
 
 type Props = {
@@ -16,9 +17,10 @@ type Props = {
   height?: DimensionValue;
   children: ReactNode;
   testID?: string;
+  appearance?: 'default' | 'search';
 };
 
-export function PopupWindow({ visible, onClose, title, width, height, children, testID }: Props) {
+export function PopupWindow({ visible, onClose, title, width, height, children, testID, appearance = 'default' }: Props) {
   // 안드로이드 뒤로가기 → 팝업만 닫기
   useEffect(() => {
     if (!visible) return;
@@ -34,7 +36,8 @@ export function PopupWindow({ visible, onClose, title, width, height, children, 
   return (
     <View style={styles.backdrop} testID={testID ? `${testID}-backdrop` : undefined}>
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel={`${title} 닫기`} />
-      <View style={[styles.card, { width: width - 24 }, height !== undefined && { height }]} testID={testID}>
+      <View style={[styles.card, appearance === 'search' && styles.searchCard, { width: width - 24 }, height !== undefined && { height }]} testID={testID}>
+        {appearance === 'search' && <SearchPopupFrame />}
         <View style={styles.header}>
           <View style={styles.side} />
           <Text style={styles.title} numberOfLines={1}>
@@ -74,6 +77,7 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     paddingHorizontal: 16,
   },
+  searchCard: { backgroundColor: 'transparent', borderWidth: 0, borderRadius: 0, paddingTop: 20, paddingBottom: 24, paddingHorizontal: 20 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   side: { width: 40 },
   sideRight: { alignItems: 'flex-end' },

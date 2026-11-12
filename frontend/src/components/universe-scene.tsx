@@ -133,7 +133,9 @@ function Starfield({ count }: { count: number }) {
       pos[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
       pos[i * 3 + 2] = radius * Math.cos(phi);
       // 세제곱 분포: 대부분 작고 어둡고, 드물게 크고 밝다
-      siz[i] = 0.45 + 1.2 * d ** 3;
+      // Slightly enlarge the warm/yellow background glints without changing
+      // their positions, density or the colder distant stars.
+      siz[i] = (0.45 + 1.2 * d ** 3) * (f > 0.65 ? 1.18 : 1);
       bri[i] = 0.3 + 0.7 * e ** 2;
       tin[i] = f;
     }

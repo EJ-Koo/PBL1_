@@ -4,6 +4,8 @@ import { Platform, Pressable, StyleSheet, Text } from 'react-native';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 
+import { AuthFieldFrame } from '@/components/ui/auth-decoration';
+
 import { showNotice } from '@/lib/notice';
 import { useDiary } from '@/store/diary-context';
 
@@ -23,18 +25,21 @@ const PLATFORM_CLIENT_ID = Platform.select({
   android: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
 });
 
-export function GoogleAuthButton() {
+type Props = { variant?: 'default' | 'space' };
+
+export function GoogleAuthButton({ variant = 'default' }: Props) {
   if (!PLATFORM_CLIENT_ID) {
     return (
-      <Pressable style={[styles.button, styles.disabled]} disabled accessibilityState={{ disabled: true }}>
-        <Text style={styles.text}>Google로 계속하기 (설정 필요)</Text>
+      <Pressable style={[styles.button, variant === 'space' && styles.spaceButton, styles.disabled]} disabled accessibilityState={{ disabled: true }}>
+        {variant === 'space' && <AuthFieldFrame />}
+        <Text style={[styles.text, variant === 'space' && styles.spaceText]}>Google로 계속하기 (설정 필요)</Text>
       </Pressable>
     );
   }
-  return <GoogleAuthButtonInner />;
+  return <GoogleAuthButtonInner variant={variant} />;
 }
 
-function GoogleAuthButtonInner() {
+function GoogleAuthButtonInner({ variant }: Props) {
   const { loginWithGoogle } = useDiary();
   const [busy, setBusy] = useState(false);
   const [request, , promptAsync] = Google.useIdTokenAuthRequest({
@@ -63,11 +68,13 @@ function GoogleAuthButtonInner() {
 
   return (
     <Pressable
-      style={[styles.button, (!request || busy) && styles.disabled]}
+      style={[styles.button, variant === 'space' && styles.spaceButton, (!request || busy) && styles.disabled]}
       onPress={onPress}
       disabled={!request || busy}
     >
-      <Text style={styles.text}>{busy ? '처리 중...' : 'Google로 계속하기'}</Text>
+      {variant === 'space' && <AuthFieldFrame />}
+      {variant === 'space' && <Text style={styles.googleMark}>G</Text>}
+      <Text style={[styles.text, variant === 'space' && styles.spaceText]}>{busy ? '처리 중...' : 'Google로 계속하기'}</Text>
     </Pressable>
   );
 }
@@ -82,6 +89,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 12,
   },
+  spaceButton: { maxWidth: undefined, height: 44, paddingVertical: 0, marginTop: 0, backgroundColor: 'transparent', borderRadius: 0, justifyContent: 'center', flexDirection: 'row', gap: 10 },
+  spaceText: { color: '#e4e5ed', fontSize: 12, zIndex: 1 },
+  googleMark: { color: '#e4e5ed', fontSize: 20, fontWeight: '700', zIndex: 1 },
   disabled: {
     opacity: 0.6,
   },
