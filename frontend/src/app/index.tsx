@@ -205,9 +205,9 @@ export default function HomeScreen() {
         </Frame>
       </View>
 
-      {/* ===== 오른쪽: 그룹 우주 ===== */}
+      {/* ===== 오른쪽: 그룹 우주 (반응형 그리드 — 전체 뷰포트, useResponsiveLayout 사용) ===== */}
       {screen === 'group' && (
-        <Frame width={frameWidth}>
+        <View style={styles.fill}>
           <GroupSpaceScreen
             scale={scale}
             groups={groups.map((g) => ({
@@ -225,7 +225,7 @@ export default function HomeScreen() {
             onAddGroup={() => setCreateGroupVisible(true)}
             onJoinByCode={() => setJoinVisible(true)}
           />
-        </Frame>
+        </View>
       )}
 
       {/* ===== 상점 팝업 (HUD 코인을 누르면 열림, ✕ 또는 바깥을 누르면 닫힘) ===== */}

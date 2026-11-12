@@ -1,12 +1,12 @@
 import { Image } from 'expo-image';
 import { useId } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 
 import { GroupAddIcon, GroupCardFrame, GroupHeaderFrame, GroupLabelFrame } from './group-decoration';
 
 import { DesignColors, DesignFonts, DesignPaint, GroupStarGlowStops } from '@/constants/ui-design';
+import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 
 type PreviewStar = {
   color: string;
@@ -15,6 +15,7 @@ type PreviewStar = {
   previewY?: string;
 };
 
+// 서버 데이터(ApiGroup)를 index.tsx에서 이 뷰모델로 매핑해서 넘긴다.
 type GroupData = {
   id: string;
   name: string;
@@ -29,6 +30,9 @@ type Props = {
   onJoinByCode: () => void;
 };
 
+// 카드 고정 높이(fffju는 멤버 출석 수에 따라 가변이었으나, 서버에 교차 출석 데이터가 없어 고정).
+const CARD_HEIGHT = 249;
+
 function GroupPreview({ stars, scale }: { stars: PreviewStar[]; scale: number }) {
   const gradientId = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   return (
@@ -38,42 +42,43 @@ function GroupPreview({ stars, scale }: { stars: PreviewStar[]; scale: number })
         contentFit="cover"
         style={StyleSheet.absoluteFill}
       />
-      {/* [MODIFIED 2026-11-05] 웹에서는 위치 지정된(absolute) 배경 이미지가 일반 배치된 Svg를 덮어서 별이 안 보였다.
-          Svg도 absolute로 감싸서, 나중에 그린 별이 이미지 위에 오도록 한다. */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Svg width={329 * scale} height={186 * scale} viewBox="0 0 329 186" pointerEvents="none">
-        <Defs>
+        <Svg width={329 * scale} height={186 * scale} viewBox="0 0 329 186" pointerEvents="none">
+          <Defs>
+            {stars.map((star, i) => (
+              <RadialGradient key={i} id={`${gradientId}-${i}`} cx="50%" cy="50%" r="50%">
+                {GroupStarGlowStops.map((stop) => (
+                  <Stop key={stop.offset} offset={stop.offset} stopColor={star.color} stopOpacity={stop.opacity} />
+                ))}
+              </RadialGradient>
+            ))}
+          </Defs>
           {stars.map((star, i) => (
-            <RadialGradient key={i} id={`${gradientId}-${i}`} cx="50%" cy="50%" r="50%">
-              {GroupStarGlowStops.map((stop) => (
-                <Stop key={stop.offset} offset={stop.offset} stopColor={star.color} stopOpacity={stop.opacity} />
-              ))}
-            </RadialGradient>
+            <Circle
+              key={i}
+              cx={star.previewX || `${25 + ((i * 30) % 55)}%`}
+              cy={star.previewY || `${30 + ((i * 25) % 50)}%`}
+              r={(star.size / 0.36) * 23}
+              fill={`url(#${gradientId}-${i})`}
+            />
           ))}
-        </Defs>
-        {stars.map((star, i) => (
-          <Circle
-            key={i}
-            cx={star.previewX || `${25 + ((i * 30) % 55)}%`}
-            cy={star.previewY || `${30 + ((i * 25) % 50)}%`}
-            r={(star.size / 0.36) * 23}
-            fill={`url(#${gradientId}-${i})`}
-          />
-        ))}
-      </Svg>
+        </Svg>
       </View>
     </>
   );
 }
 
 export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup, onJoinByCode }: Props) {
-  const insets = useSafeAreaInsets();
-  const headerTop = Math.max(55 * scale, insets.top - 19 * scale);
-  const bottomSpace = Math.max(34 * scale, insets.bottom) + 30 * scale;
+  const { headerTop, bottomSpace, contentLeft, gridLeft, gridWidth } = useResponsiveLayout();
+  const gap = 16 * scale;
+  const innerWidth = gridWidth - 32 * scale;
+  const columns = Math.max(1, Math.min(3, Math.floor((innerWidth + gap) / (320 + gap))));
+  const cardWidth = Math.min(362 * scale, (innerWidth - gap * (columns - 1)) / columns);
+  const cardScale = cardWidth / 362;
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.positioned, { left: insets.left + 16 * scale, top: headerTop, width: 363 * scale, height: 63 * scale }]}>
+      <View style={[styles.positioned, { left: contentLeft + 16 * scale, top: headerTop, width: 363 * scale, height: 63 * scale }]}>
         <GroupHeaderFrame scale={scale} />
         <Text style={[styles.positioned, styles.text, {
           left: 18 * scale, top: 14 * scale, width: 176 * scale, height: 38 * scale,
@@ -82,38 +87,40 @@ export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup, onJ
         <Text style={[styles.positioned, styles.text, {
           left: 203.5 * scale, top: 39 * scale, width: 158 * scale, height: 15 * scale,
           fontSize: 9.5 * scale, lineHeight: 13 * scale,
-        }]}>[GROUP_NETWORK_CONNECTED]</Text>
+        }]}>별일을 함께 나누는 우리의 우주</Text>
       </View>
 
       <ScrollView
-        style={[styles.positioned, { left: insets.left, top: headerTop + 86 * scale, width: 393 * scale, bottom: bottomSpace }]}
+        style={[styles.positioned, { left: gridLeft, top: headerTop + 86 * scale, width: gridWidth, bottom: bottomSpace }]}
         showsVerticalScrollIndicator={false}
         contentInsetAdjustmentBehavior="never"
-        contentContainerStyle={{ paddingBottom: 66 * scale }}>
-        <View style={{ gap: 5 * scale }}>
+        contentContainerStyle={{ paddingHorizontal: 16 * scale, paddingBottom: 24 * scale }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'center', gap }}>
           {groups.map((group, i) => {
+            const s = cardScale;
             const first = i === 0;
             return (
               <TouchableOpacity
                 key={group.id}
                 activeOpacity={0.85}
+                accessibilityLabel={group.name}
                 onPress={() => onSelectGroup(group)}
-                style={{ marginLeft: (first ? 17 : 16) * scale, width: 362 * scale, height: 249 * scale }}>
+                style={{ width: cardWidth, height: CARD_HEIGHT * s }}>
                 <View style={[styles.positioned, styles.card, {
-                  left: 8 * scale, top: 5 * scale, width: 343 * scale, height: 243 * scale, borderRadius: 12 * scale,
+                  left: 8 * s, top: 5 * s, width: 343 * s, height: (CARD_HEIGHT - 6) * s, borderRadius: 12 * s,
                 }]} />
-                <GroupCardFrame scale={scale} />
+                <GroupCardFrame scale={s} height={CARD_HEIGHT} />
                 <View style={[styles.positioned, styles.preview, {
-                  left: (first ? 16 : 15) * scale, top: 11 * scale, width: 329 * scale, height: 186 * scale, borderRadius: 11 * scale,
+                  left: (first ? 16 : 15) * s, top: 11 * s, width: 329 * s, height: 186 * s, borderRadius: 11 * s,
                 }]}>
-                  <GroupPreview stars={group.stars} scale={scale} />
+                  <GroupPreview stars={group.stars} scale={s} />
                 </View>
                 <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                  <GroupLabelFrame scale={scale} first={first} />
+                  <GroupLabelFrame scale={s} first={first} height={CARD_HEIGHT} />
                 </View>
                 <Text numberOfLines={1} style={[styles.positioned, styles.groupName, {
-                  left: (first ? 20 : 19) * scale, top: 208 * scale, width: 171 * scale, height: 30 * scale,
-                  fontSize: 20 * scale, lineHeight: 28 * scale,
+                  left: (first ? 20 : 19) * s, top: 208 * s, width: 171 * s, height: 30 * s,
+                  fontSize: 20 * s, lineHeight: 28 * s,
                 }]}>{group.name}</Text>
               </TouchableOpacity>
             );
