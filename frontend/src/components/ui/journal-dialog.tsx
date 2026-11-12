@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DesignFonts, DesignPaint } from '@/constants/ui-design';
@@ -23,7 +23,9 @@ export function JournalDialog({ mode, diaries, onClose }: Props) {
 
   return (
     <Modal visible={mode !== null} transparent animationType="fade" onRequestClose={close}>
-      <View style={[styles.overlay, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={[styles.overlay, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20,
+          paddingLeft: insets.left + 20, paddingRight: insets.right + 20 }]}>
         <View style={styles.card}>
           <View style={styles.header}>
             <Text style={styles.title}>{selected ? '나의 일기' : mode ? titles[mode] : ''}</Text>
@@ -58,7 +60,7 @@ export function JournalDialog({ mode, diaries, onClose }: Props) {
             </>
           )}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -66,8 +68,8 @@ export function JournalDialog({ mode, diaries, onClose }: Props) {
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: '#000a', justifyContent: 'center', paddingHorizontal: 20 },
   card: { backgroundColor: '#1e1e24', borderWidth: 1, borderColor: '#888', borderRadius: 20, padding: 22, maxHeight: '90%', width: '100%', maxWidth: 500, alignSelf: 'center', flexShrink: 1 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  title: { color: DesignPaint.ink, fontFamily: DesignFonts.bold, fontSize: 20 },
+  header: { flexDirection: 'row', gap: 8, justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  title: { color: DesignPaint.ink, fontFamily: DesignFonts.bold, fontSize: 20, flex: 1 },
   text: { color: DesignPaint.ink, fontFamily: DesignFonts.regular, fontSize: 16 },
   muted: { color: '#bbb', fontFamily: DesignFonts.regular, fontSize: 13 },
   close: { padding: 8 },

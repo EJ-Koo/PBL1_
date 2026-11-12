@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addDiary, initialJournal, localDateKey, parseJournal, purchaseItem, rotationDelta, searchDiaries } from '../src/lib/journal.ts';
+import { addDiary, createGroup, getGroupAttendance, initialJournal, LOCAL_MEMBER, localDateKey, parseJournal, purchaseItem, rotationDelta, searchDiaries, selectDiaryAudience } from '../src/lib/journal.ts';
 
 const fresh = () => structuredClone(initialJournal);
 
@@ -122,4 +122,67 @@ test('rotation sensitivity scales both positive and negative drag movement and s
     state.settings.rotationSensitivity = sensitivity;
     assert.throws(() => parseJournal(JSON.stringify(state)), /설정 형식/);
   }
+});
+
+test('a newly created group appears in diary audience choices and receives the shared star', () => {
+  let state = createGroup(fresh(), '  우리의 별일  ');
+  const group = state.groups.at(-1);
+  assert.equal(group.name, '우리의 별일');
+  assert.deepEqual(group.members, [LOCAL_MEMBER]);
+  state.draft.content = '새 우주에 공유할 일기';
+  state = selectDiaryAudience(state, group.id);
+  assert.deepEqual(state.draft.groupIds, [group.id]);
+  const saved = addDiary(state);
+  assert.equal(saved.groups.at(-1).stars.length, 1);
+  assert.equal(saved.stars.length, state.stars.length + 1);
+  assert.deepEqual(saved.groups.slice(0, -1), state.groups.slice(0, -1));
+  const restored = parseJournal(JSON.stringify(saved));
+  assert.equal(restored.groups.at(-1).name, '우리의 별일');
+  assert.equal(restored.groups.at(-1).stars[0].diaryId, restored.diaries[0].id);
+});
+
+test('private pill clears all group selections and creates only a personal star', () => {
+  let state = fresh(); state.draft.content = '비밀 일기';
+  state = selectDiaryAudience(state, 'group-1');
+  state = selectDiaryAudience(state, 'group-2');
+  assert.deepEqual(state.draft.groupIds, ['group-1', 'group-2']);
+  state = selectDiaryAudience(state, null);
+  const saved = addDiary(state);
+  assert.deepEqual(saved.diaries[0].groupIds, []);
+  assert.deepEqual(saved.groups, state.groups);
+  assert.equal(saved.stars.length, state.stars.length + 1);
+});
+
+test('audience pills toggle independently; tapping the last selected group restores private mode', () => {
+  let state = selectDiaryAudience(fresh(), 'group-1');
+  state = selectDiaryAudience(state, 'group-2');
+  state = selectDiaryAudience(state, 'group-1');
+  assert.deepEqual(state.draft.groupIds, ['group-2']);
+  state = selectDiaryAudience(state, 'group-2');
+  assert.deepEqual(state.draft.groupIds, []);
+  assert.equal(selectDiaryAudience(state, 'missing-group'), state);
+});
+
+test('five members show three completed stars when three distinct members shared diaries today', () => {
+  const group = structuredClone(initialJournal.groups[0]);
+  group.members = Array.from({ length: 5 }, (_, i) => ({ id: `member-${i}`, name: `멤버${i}`, color: '#a39bff' }));
+  const createdAt = new Date(2026, 10, 5, 12).toISOString();
+  const record = (authorId, groupIds = [group.id], date = createdAt) => ({ id: `${authorId}-${date}`, authorId, groupIds, createdAt: date, content: '일기', photos: [] });
+  const diaries = [record('member-0'), record('member-1'), record('member-2'), record('member-0'),
+    record('member-3', []), record('member-4', ['another-group']), record('not-a-member')];
+  const result = getGroupAttendance(group, diaries, '2026-11-05');
+  assert.equal(result.length, 5);
+  assert.deepEqual(result.map((member) => member.completed), [true, true, true, false, false]);
+  assert.equal(getGroupAttendance(group, diaries, '2026-11-06').filter((member) => member.completed).length, 0);
+});
+
+test('old stored groups and diaries gain member and author IDs without losing content', () => {
+  let state = fresh(); state.draft.content = '기존 작성 내용';
+  state = addDiary(state);
+  for (const group of state.groups) delete group.members;
+  delete state.diaries[0].authorId;
+  const restored = parseJournal(JSON.stringify(state));
+  assert.deepEqual(restored.groups[0].members, [LOCAL_MEMBER]);
+  assert.equal(restored.diaries[0].authorId, LOCAL_MEMBER.id);
+  assert.equal(restored.diaries[0].content, '기존 작성 내용');
 });

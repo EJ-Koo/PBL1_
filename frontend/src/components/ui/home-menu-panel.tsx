@@ -1,11 +1,11 @@
 import { useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { MenuCalendarIcon, MenuChevron, MenuDecoration, MenuNotificationToggle, MenuSearchIcon } from './menu-decoration';
 import { MenuSlider } from './menu-slider';
 
 import { DesignFonts, DesignPaint } from '@/constants/ui-design';
+import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import type { Settings } from '@/lib/journal';
 
 type AccordionId = 'music' | 'theme' | 'logout' | 'delete-account';
@@ -40,10 +40,8 @@ function MenuAccordion({ scale, title, expanded, onToggle, children }: {
 export function HomeMenuPanel({ scale, onClose, settings, purchases, notificationBusy, onSetting, onVolumePreview, onToggleNotifications, onAction }: Props) {
   const [expanded, setExpanded] = useState<Partial<Record<AccordionId, boolean>>>({});
   const [preview, setPreview] = useState<Partial<Record<NumericSetting, number>>>({});
-  const insets = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
-  const top = Math.max(54 * scale, insets.top - 10 * scale) + 79 * scale;
-  const bottomSpace = Math.max(34 * scale, insets.bottom) + 30 * scale;
+  const { height, chromeLeft, headerTop, bottomSpace } = useResponsiveLayout();
+  const top = headerTop + 79 * scale;
   const visibleHeight = Math.min(558 * scale, Math.max(0, height - top - bottomSpace - 14 * scale));
   const type = (fontSize = 16, lineHeight = 24) => ({ fontSize: fontSize * scale, lineHeight: lineHeight * scale });
   const toggle = (id: AccordionId) => setExpanded((value) => ({ ...value, [id]: !value[id] }));
@@ -66,7 +64,7 @@ export function HomeMenuPanel({ scale, onClose, settings, purchases, notificatio
   return (
     <View style={styles.overlay} pointerEvents="box-none">
       <Pressable accessibilityLabel="메뉴 닫기" onPress={onClose} style={StyleSheet.absoluteFill} />
-      <View style={[styles.panel, { left: insets.left + 15 * scale, top, width: 262 * scale, height: visibleHeight }]}>
+      <View style={[styles.panel, { left: chromeLeft + 15 * scale, top, width: 262 * scale, height: visibleHeight }]}>
         <View style={StyleSheet.absoluteFill} pointerEvents="none"><MenuDecoration scale={scale} height={visibleHeight} /></View>
         <ScrollView
           accessibilityLabel="설정 메뉴"

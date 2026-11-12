@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, ImageBackground, AppState, ActivityIndicator, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, ImageBackground, AppState, ActivityIndicator } from 'react-native';
 import { Canvas, useFrame } from '@react-three/fiber/native';
 import { Color } from 'three';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,13 +8,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HomeHud } from '@/components/ui/home-hud';
 import { DiaryWriteScreen } from '@/components/ui/diary-write-screen';
 import { GroupSpaceScreen } from '@/components/ui/group-space-screen';
+import { CreateGroupDialog } from '@/components/ui/create-group-dialog';
+import { ShopScreen } from '@/components/ui/shop-screen';
+import { SpaceButton } from '@/components/ui/space-ui';
+import { GroupMemberStars } from '@/components/ui/group-member-stars';
 import { UniverseBottomNav } from '@/components/ui/universe-bottom-nav';
 import { QuestPanel } from '@/components/ui/quest-panel';
-import { DesignPaint, DesignSize } from '@/constants/ui-design';
+import { DesignFonts, DesignPaint } from '@/constants/ui-design';
+import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { JournalDialog } from '@/components/ui/journal-dialog';
 import { useJournal } from '@/hooks/use-journal';
 import { useUniverseAudio } from '@/hooks/use-universe-audio';
-import { addDiary, MAX_PHOTOS, localDateKey, purchaseItem, rotationDelta } from '@/lib/journal';
+import { addDiary, MAX_PHOTOS, localDateKey, purchaseItem, rotationDelta, createGroup, selectDiaryAudience, getGroupAttendance, LOCAL_MEMBER } from '@/lib/journal';
 import { pickPhotos, recoverPendingPhotos } from '@/lib/photos';
 import { showMessage } from '@/lib/feedback';
 import { hasReminderPermission, setDiaryReminder } from '@/lib/reminders';
@@ -136,12 +141,13 @@ function UniverseScene({ stars, glow = false, comet = false }) {
 
 // 📱 메인 앱 화면
 export default function App() {
-  const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const uiScale = (width - insets.left - insets.right) / DesignSize.width;
+  const { scale: uiScale, contentLeft, contentWidth, headerTop, bottomSpace } = useResponsiveLayout();
   // 화면 상태: 'diary'(왼쪽 일기작성), 'home'(가운데 홈), 'group'(오른쪽 그룹우주), 'shop'(상점), 'community'(커뮤니티)
   const [currentScreen, setCurrentScreen] = useState('home');
   const [questVisible, setQuestVisible] = useState(false);
+  const [shopBusy, setShopBusy] = useState(false);
+  const [shopMessage, setShopMessage] = useState('');
 
   const { data, update, commit, ready, error: storageError, reload } = useJournal();
   const { stars: myStars, groups, draft, diaries, settings } = data;
@@ -240,12 +246,12 @@ export default function App() {
       showMessage('프리즘', '연속 출석 기능이 아직 연결되지 않아 이 상품은 구매할 수 없어요.');
       return;
     }
-    saveLock.current = true;
+    saveLock.current = true; setShopBusy(true); setShopMessage('');
     try {
       await commit((state) => purchaseItem(state, id));
-      showMessage('상점', id === 'comet' ? '혜성을 나의 우주에 적용했어요.' : '배경을 나의 우주에 적용했어요.');
+      setShopMessage(id === 'comet' ? '혜성이 나의 우주에 찾아왔어요.' : '새로운 배경을 나의 우주에 적용했어요.');
     } catch (cause) { reportError(cause); }
-    finally { saveLock.current = false; }
+    finally { saveLock.current = false; setShopBusy(false); }
   };
 
   // 새 그룹 추가 모달 & 3D 그룹 상세 보기 상태
@@ -308,10 +314,12 @@ export default function App() {
     }
   };
 
-  const handleSelectPrivate = () => setDraft((value) => ({ ...value, groupIds: [] }));
-  const handleToggleGroupSelect = (groupId) => setDraft((value) => ({
-    ...value, groupIds: value.groupIds.includes(groupId) ? value.groupIds.filter((id) => id !== groupId) : [...value.groupIds, groupId],
-  }));
+  const selectAudience = (groupId) => {
+    if (saveLock.current) return;
+    void update((state) => selectDiaryAudience(state, groupId)).catch(reportError);
+  };
+  const handleSelectPrivate = () => selectAudience(null);
+  const handleToggleGroupSelect = (groupId) => selectAudience(groupId);
 
   const handleAddDiaryStar = async () => {
     if (saveLock.current || photoLock.current) return;
@@ -328,9 +336,7 @@ export default function App() {
     if (saveLock.current) return;
     saveLock.current = true; setSaving(true);
     try {
-      await commit((state) => ({ ...state, groups: [...state.groups, {
-        id: `group-${Date.now()}`, name: newGroupName.trim() || `그룹${state.groups.length + 1}`, stars: [],
-      }] }));
+      await commit((state) => createGroup(state, newGroupName));
       setNewGroupName('');
       setCreateGroupModalVisible(false);
     } catch (cause) { reportError(cause); }
@@ -380,7 +386,7 @@ export default function App() {
             scale={uiScale}
             starCount={myStars.length}
             coinCount={data.coins}
-            checkCount={new Set(diaries.map((diary) => localDateKey(diary.createdAt))).size}
+            checkCount={new Set(diaries.filter((diary) => diary.authorId === LOCAL_MEMBER.id).map((diary) => localDateKey(diary.createdAt))).size}
             onStats={() => setCurrentScreen('shop')}
             onQuest={() => setQuestVisible(true)}
             menuProps={{ settings, purchases: data.purchases, notificationBusy, onSetting: changeSetting, onVolumePreview: audio.previewVolume,
@@ -398,7 +404,7 @@ export default function App() {
           diaryText={diaryText}
           onChangeText={setDiaryText}
           dateLabel={new Date(`${today}T12:00:00`).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
-          authorLabel="HA_LULU"
+          authorLabel={LOCAL_MEMBER.name}
           photoCountLabel={`${draft.photos.length}/${MAX_PHOTOS}`}
           photos={draft.photos} photoBusy={photoBusy} saving={saving}
           onAddPhotos={addPhotos}
@@ -420,46 +426,15 @@ export default function App() {
           <GroupSpaceScreen
             scale={uiScale}
             groups={groups}
+            diaries={diaries}
+            today={today}
             onSelectGroup={setActiveGroup3D}
             onAddGroup={() => setCreateGroupModalVisible(true)}
           />
 
-          {/* 팝업 1: 새 그룹 추가 모달 */}
-          <Modal transparent={true} visible={createGroupModalVisible} animationType="fade" onRequestClose={() => setCreateGroupModalVisible(false)}>
-            <TouchableOpacity
-              style={styles.modalOverlay}
-              activeOpacity={1}
-              onPress={() => setCreateGroupModalVisible(false)}
-            >
-              <TouchableOpacity activeOpacity={1} style={styles.inviteModalCard}>
-                <Text style={styles.inviteModalTitle}>🪐 새로운 그룹 우주 만들기</Text>
-                <Text style={styles.inviteModalDesc}>
-                  일기를 작성할 때 그룹을 선택하면 내 우주와 그룹 우주에 함께 별이 떠요!
-                </Text>
-                <TextInput
-                  style={styles.inviteInput}
-                  placeholder={`그룹 이름 (비워두면 '그룹${groups.length + 1}')`}
-                  placeholderTextColor="#888"
-                  value={newGroupName}
-                  onChangeText={setNewGroupName}
-                />
-                <View style={styles.inviteModalButtonRow}>
-                  <TouchableOpacity
-                    style={styles.inviteCancelBtn}
-                    onPress={() => setCreateGroupModalVisible(false)}
-                  >
-                    <Text style={styles.whiteText}>취소</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.inviteConfirmBtn}
-                    onPress={handleCreateGroup}
-                  >
-                    <Text style={styles.inviteConfirmText}>생성하기</Text>
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-            </TouchableOpacity>
-          </Modal>
+          <CreateGroupDialog visible={createGroupModalVisible} scale={uiScale} name={newGroupName}
+            defaultName={`그룹${groups.length + 1}`} saving={saving} onChangeName={setNewGroupName}
+            onClose={() => setCreateGroupModalVisible(false)} onCreate={handleCreateGroup} />
 
           {/* 팝업 2: 그룹 카드를 눌렀을 때 해당 그룹 우주를 3D로 크게 보기 */}
           <Modal transparent={false} visible={activeGroup3D !== null} animationType="slide" onRequestClose={() => setActiveGroup3D(null)}>
@@ -486,20 +461,16 @@ export default function App() {
                   </View>
                 </View>
 
-                <View style={styles.topBar}>
-                  <TouchableOpacity
-                    style={styles.questButton}
-                    onPress={() => setActiveGroup3D(null)}
-                  >
-                    <Text style={styles.questText}>{'< 목록으로'}</Text>
-                  </TouchableOpacity>
-                  <View style={styles.statsPill}>
-                    <Text style={styles.statsText}>
-                      {activeGroup3D.name}의 우주 (★{' '}
-                      {groups.find((g) => g.id === activeGroup3D.id)?.stars.length || 0})
+                <View style={{ position: 'absolute', top: headerTop, left: contentLeft + 20 * uiScale,
+                  width: contentWidth - 40 * uiScale, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10 * uiScale }}>
+                  <SpaceButton scale={uiScale} label="‹ 목록" onPress={() => setActiveGroup3D(null)} />
+                  <View style={{ flex: 1, minWidth: 70 * uiScale }}>
+                    <Text numberOfLines={1} style={{ color: '#fff', fontFamily: DesignFonts.bold, fontSize: 16 * uiScale }}>{activeGroup3D.name}</Text>
+                    <Text style={{ color: '#aeb7c4', fontFamily: DesignFonts.regular, fontSize: 11 * uiScale, marginTop: 5 * uiScale }}>
+                      별 {groups.find((group) => group.id === activeGroup3D.id)?.stars.length || 0}개
                     </Text>
                   </View>
-                  <View style={{ width: 60 }} />
+                  <GroupMemberStars scale={uiScale} dark members={getGroupAttendance(groups.find((group) => group.id === activeGroup3D.id) || activeGroup3D, diaries, today)} />
                 </View>
               </View>
             )}
@@ -511,14 +482,16 @@ export default function App() {
           팝업: 퀘스트 창
       ========================================== */}
       <Modal transparent={true} visible={questVisible} animationType="fade" onRequestClose={() => setQuestVisible(false)}>
-        <QuestPanel scale={uiScale} todayComplete={diaries.some((diary) => localDateKey(diary.createdAt) === today)} onClose={() => setQuestVisible(false)} />
+        <QuestPanel scale={uiScale} todayComplete={diaries.some((diary) => diary.authorId === LOCAL_MEMBER.id && localDateKey(diary.createdAt) === today)}
+          onWriteDiary={() => { setQuestVisible(false); setCurrentScreen('diary'); }} onClose={() => setQuestVisible(false)} />
       </Modal>
 
       {/* ==========================================
           부가 화면: 커뮤니티 & 글쓰기 & 상점 (기존 기능 유지)
       ========================================== */}
       {currentScreen === 'community' && (
-        <View style={styles.communityContainer}>
+        <View style={[styles.communityContainer, { paddingTop: headerTop, paddingHorizontal: 15 * uiScale,
+          width: contentWidth, alignSelf: 'center', paddingBottom: bottomSpace }]}>
           <View style={styles.communityHeader}>
             <Text style={styles.communityHeaderTitle}>✨ 다른 우주 구경하기</Text>
             <TouchableOpacity style={styles.bragButton} onPress={() => setCurrentScreen('write_post')}>
@@ -547,7 +520,7 @@ export default function App() {
       )}
 
       {currentScreen === 'write_post' && (
-        <View style={styles.writeContainer}>
+        <View style={[styles.writeContainer, { paddingTop: headerTop, width: contentWidth, alignSelf: 'center', paddingBottom: bottomSpace }]}>
           <View style={styles.writeHeader}>
             <TouchableOpacity onPress={() => setCurrentScreen('community')}>
               <Text style={styles.writeCancelText}>취소</Text>
@@ -575,43 +548,8 @@ export default function App() {
       )}
 
       {currentScreen === 'shop' && (
-        <View style={styles.shopContainer}>
-          <View style={styles.shopHeader}>
-            <Text style={styles.shopTitle}>🛍️ 상점</Text>
-            <View style={styles.shopCoinPill}>
-              <Text style={styles.shopCoinText}>🪙 {data.coins}</Text>
-            </View>
-          </View>
-
-          <ScrollView style={styles.shopScroll} showsVerticalScrollIndicator={false}>
-            <View style={styles.shopGrid}>
-              <TouchableOpacity accessibilityRole="button" onPress={() => buyItem('prism')} style={styles.shopItemCard}>
-                <Text style={styles.shopItemIcon}>❄️</Text>
-                <Text style={styles.shopItemName}>프리즘</Text>
-                <Text style={styles.shopItemDesc}>연속 출석 멈춤을 1회 방어할 수 있다.</Text>
-                <Text style={styles.shopPriceText}>🪙 30</Text>
-              </TouchableOpacity>
-              <TouchableOpacity accessibilityRole="button" onPress={() => buyItem('blue')} style={styles.shopItemCard}>
-                <Text style={styles.shopItemIcon}>🌌</Text>
-                <Text style={styles.shopItemName}>배경 (blue)</Text>
-                <Text style={styles.shopItemDesc}>나의 우주 배경을 바꿀 수 있다.</Text>
-                <Text style={styles.shopPriceText}>🪙 50</Text>
-              </TouchableOpacity>
-              <TouchableOpacity accessibilityRole="button" onPress={() => buyItem('comet')} style={styles.shopItemCard}>
-                <Text style={styles.shopItemIcon}>☄️</Text>
-                <Text style={styles.shopItemName}>혜성</Text>
-                <Text style={styles.shopItemDesc}>5초마다 나의 우주에 혜성이 떨어진다.</Text>
-                <Text style={styles.shopPriceText}>🪙 30</Text>
-              </TouchableOpacity>
-              <TouchableOpacity accessibilityRole="button" onPress={() => buyItem('black')} style={styles.shopItemCard}>
-                <Text style={styles.shopItemIcon}>🌃</Text>
-                <Text style={styles.shopItemName}>배경 (black)</Text>
-                <Text style={styles.shopItemDesc}>나의 우주 배경을 바꿀 수 있다.</Text>
-                <Text style={styles.shopPriceText}>🪙 50</Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-        </View>
+        <ShopScreen scale={uiScale} coins={data.coins} purchases={data.purchases} theme={settings.theme}
+          busy={shopBusy} message={shopMessage} onBuy={buyItem} />
       )}
 
       {/* ==========================================
@@ -625,6 +563,7 @@ export default function App() {
       </TouchableOpacity>}
       <UniverseBottomNav
         scale={uiScale}
+        activeScreen={currentScreen}
         onDiary={() => setCurrentScreen('diary')}
         onHome={() => setCurrentScreen('home')}
         onGroup={() => setCurrentScreen('group')}
@@ -684,34 +623,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#dcdde1',
   },
 
-  // 모달 & 기타 화면 스타일
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
-  inviteModalCard: {
-    width: '82%',
-    backgroundColor: '#1E1E24',
-    borderRadius: 20,
-    padding: 22,
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  inviteModalTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginBottom: 8 },
-  inviteModalDesc: { color: '#a4b0be', fontSize: 13, marginBottom: 16, lineHeight: 18 },
-  inviteInput: {
-    backgroundColor: '#111115', color: '#fff', borderRadius: 12,
-    paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, marginBottom: 16,
-  },
-  inviteModalButtonRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
-  inviteCancelBtn: { backgroundColor: '#444', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
-  inviteConfirmBtn: { backgroundColor: '#3498db', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
-  inviteConfirmText: { color: '#fff', fontWeight: 'bold' },
-
-  // 커뮤니티 & 상점 스타일 유지
+  // 커뮤니티 화면 스타일
   communityContainer: { flex: 1, paddingTop: 60, paddingHorizontal: 15, backgroundColor: '#000' },
-  communityHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, marginTop: 10 },
-  communityHeaderTitle: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
+  communityHeader: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, marginTop: 10 },
+  communityHeaderTitle: { color: '#fff', fontSize: 22, fontWeight: 'bold', flexShrink: 1 },
   bragButton: { backgroundColor: '#cfd8dc', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 5 },
   bragButtonText: { color: '#000', fontWeight: 'bold', fontSize: 14 },
-  communityScroll: { marginBottom: 80 },
+  communityScroll: { flex: 1 },
   instaCard: { backgroundColor: '#000', borderRadius: 15, padding: 15, marginBottom: 20, borderWidth: 1, borderColor: '#333' },
   instaHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
   profileCircleOuter: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: '#fff', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
@@ -725,23 +643,12 @@ const styles = StyleSheet.create({
   writeContainer: { flex: 1, backgroundColor: '#000', paddingTop: 20 },
   writeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 15, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: '#333' },
   writeCancelText: { color: '#fff', fontSize: 16 },
-  writeHeaderTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', paddingTop: 60 },
+  writeHeaderTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   writeShareText: { color: '#3498db', fontSize: 16, fontWeight: 'bold' },
   writeScroll: { flex: 1 },
   writeImagePlaceholder: { width: '100%', height: 350, backgroundColor: '#1e1e24', justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
   writeImageText: { color: '#888', fontSize: 16, fontWeight: 'bold' },
   writeInput: { color: '#fff', fontSize: 16, paddingHorizontal: 15, height: 150, textAlignVertical: 'top' },
 
-  shopContainer: { flex: 1, backgroundColor: '#000', paddingTop: 60, paddingHorizontal: 20 },
-  shopHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
-  shopTitle: { color: '#fff', fontSize: 26, fontWeight: 'bold' },
-  shopCoinPill: { backgroundColor: '#7f8c8d', paddingHorizontal: 18, paddingVertical: 8, borderRadius: 10 },
-  shopCoinText: { color: '#000', fontWeight: 'bold', fontSize: 16 },
-  shopScroll: { flex: 1, marginBottom: 80 },
-  shopGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  shopItemCard: { backgroundColor: '#b2bec3', width: '48%', borderRadius: 10, padding: 15, alignItems: 'center', marginBottom: 15 },
-  shopItemIcon: { fontSize: 50, marginBottom: 15 },
-  shopItemName: { fontSize: 16, fontWeight: 'bold', marginBottom: 8, color: '#000' },
-  shopItemDesc: { fontSize: 10, color: '#2d3436', textAlign: 'center', marginBottom: 20, minHeight: 30 },
-  shopPriceText: { fontWeight: 'bold', fontSize: 16, color: '#000' },
+
 });

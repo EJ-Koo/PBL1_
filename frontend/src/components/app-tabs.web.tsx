@@ -20,14 +20,13 @@ export default function AppTabs() {
     <Tabs style={{ flex: 1 }}>
       <TabSlot style={{ height: '100%' }} />
       <TabList style={{ display: 'none' }}>
-        <CustomTabList>
-          <TabTrigger name="home" href="/" asChild>
-            <TabButton>Home</TabButton>
-          </TabTrigger>
-          <TabTrigger name="explore" href="/explore" asChild>
-            <TabButton>Explore</TabButton>
-          </TabTrigger>
-        </CustomTabList>
+        {/* Expo Router discovers routes from direct TabTrigger children. */}
+        <TabTrigger name="home" href="/" asChild>
+          <TabButton>Home</TabButton>
+        </TabTrigger>
+        <TabTrigger name="explore" href="/explore" asChild>
+          <TabButton>Explore</TabButton>
+        </TabTrigger>
       </TabList>
     </Tabs>
   );

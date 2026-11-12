@@ -1,4 +1,4 @@
-import Svg, { Circle, G, Path } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 import { DesignColors, DesignPaint } from '@/constants/ui-design';
 
@@ -19,11 +19,11 @@ export function GroupHeaderFrame({ scale }: { scale: number }) {
   );
 }
 
-export function GroupCardFrame({ scale }: { scale: number }) {
+export function GroupCardFrame({ scale, height = 249 }: { scale: number; height?: number }) {
   return (
-    <Svg width={362 * scale} height={249 * scale} viewBox="0 0 362 249" pointerEvents="none">
+    <Svg width={362 * scale} height={height * scale} viewBox={`0 0 362 ${height}`} pointerEvents="none">
       <Path
-        d="M8 .75H.75V7 M352 .75H360.25V7 M.75 240V247.5H8 M352 247.5H360.25V240"
+        d={`M8 .75H.75V7 M352 .75H360.25V7 M.75 ${height - 9}V${height - 1.5}H8 M352 ${height - 1.5}H360.25V${height - 9}`}
         fill="none"
         stroke={DesignColors.gray}
         strokeWidth={1.3}
@@ -40,25 +40,16 @@ export function GroupCardFrame({ scale }: { scale: number }) {
   );
 }
 
-export function GroupLabelFrame({ scale, first }: { scale: number; first: boolean }) {
+export function GroupLabelFrame({ scale, first, height = 249 }: { scale: number; first: boolean; height?: number }) {
   const left = first ? 16 : 15;
   return (
-    <Svg width={362 * scale} height={249 * scale} viewBox="0 0 362 249" pointerEvents="none">
+    <Svg width={362 * scale} height={height * scale} viewBox={`0 0 362 ${height}`} pointerEvents="none">
       <Path
-        d={`M${left} 203.2H195L228 239H341 M${first ? 20 : 19} 239.15L215 240`}
+        d={`M${left} 203.2H195L228 ${height - 10}H341 M${first ? 20 : 19} ${height - 9.85}L215 ${height - 9}`}
         fill="none"
         stroke={DesignPaint.ink}
         strokeWidth={0.8}
       />
-      <G fill={DesignPaint.ink}>
-        {[0, 1, 2, 3].map((i) => (
-          <Path
-            key={i}
-            transform={`translate(${(first ? 248 : 247) + i * 24} 209)`}
-            d="M11 1L14.2 8.1L21.8 8.8L16 14L17.8 21.5L11 17.4L4.2 21.5L6 14L.2 8.8L7.8 8.1Z"
-          />
-        ))}
-      </G>
     </Svg>
   );
 }
