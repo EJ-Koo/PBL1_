@@ -4,6 +4,8 @@ DB 함수 자체(코인 차감, 중복 구매 막기 등)는 migrations/2026-11-
 실제 Postgres 에서 따로 검증했다. 여기서는 라우터가 결과·오류를 올바르게 전달하는지만 본다.
 """
 
+from uuid import UUID
+
 import pytest
 from fastapi import HTTPException
 from postgrest.exceptions import APIError
@@ -15,6 +17,7 @@ from app.schemas.shop import (
     AdminItemCreate,
     AdminItemUpdate,
     EquipRequest,
+    PlanetEffectRequest,
     PurchaseRequest,
 )
 
@@ -312,3 +315,106 @@ def test_admin_reset_wallet_ignores_user_switch(fake):
     fake.tables["app_config"].append({"key": "allow_test_reset", "value": False})
     assert admin_shop.admin_reset_wallet("u2", admin_id="a").coins == 999
     assert [r["user_id"] for r in fake.tables["user_items"]] == ["u1", "u1"]
+
+
+# --- 행성 특수 효과 (2026-11-12) ---------------------------------------------------------
+
+DIARY = "11111111-1111-1111-1111-111111111111"
+FX_ITEMS = [
+    {"id": "fx_ocean", "name": "바다 효과", "icon": "🌊", "description": "", "price": 100, "kind": "consumable",
+     "slot": "planet_effect", "effect": {"type": "planet_effect", "special": "ocean"}, "is_active": True, "sort_order": 70},
+    {"id": "fx_nebula", "name": "성운 효과", "icon": "🌌", "description": "", "price": 100, "kind": "consumable",
+     "slot": "planet_effect", "effect": {"type": "planet_effect", "special": "nebula"}, "is_active": True, "sort_order": 100},
+    {"id": "fx_weird", "name": "모르는 효과", "icon": "?", "description": "", "price": 1, "kind": "consumable",
+     "slot": "planet_effect", "effect": {"type": "planet_effect", "special": "sparkle"}, "is_active": True, "sort_order": 120},
+]
+
+
+@pytest.fixture
+def fx(fake):
+    fake.tables["items"] += [dict(i) for i in FX_ITEMS]
+    fake.rpc_handlers["apply_planet_effect"] = lambda p_user, p_diary, p_item: {"diary_id": p_diary, "item_id": p_item}
+    return fake
+
+
+def test_apply_effect_calls_db_function_and_returns_effect_type(fx):
+    result = shop.set_planet_effect(UUID(DIARY), PlanetEffectRequest(item_id="fx_ocean"), user_id="u1")
+
+    assert fx.rpc_calls[-1] == ("apply_planet_effect", {"p_user": "u1", "p_diary": DIARY, "p_item": "fx_ocean"})
+    assert (result.diary_id, result.item_id, result.effect) == (DIARY, "fx_ocean", "ocean")
+
+
+def test_remove_effect_sends_null(fx):
+    result = shop.set_planet_effect(UUID(DIARY), PlanetEffectRequest(item_id=None), user_id="u1")
+
+    assert fx.rpc_calls[-1][1]["p_item"] is None
+    assert result.item_id is None and result.effect is None
+
+
+@pytest.mark.parametrize(
+    "message,status",
+    # 사지 않은 효과 → 403 (not_owned 와 이름이 겹쳐도 행성 효과 문장이 나와야 한다), 남의 일기 → 404
+    # 산 개수를 모두 다른 행성에 쓰는 중 → 409
+    [("effect_not_owned", 403), ("diary_not_found", 404), ("effect_all_used", 409)],
+)
+def test_apply_effect_errors(fx, message, status):
+    fx.rpc_handlers["apply_planet_effect"] = _raise(message)
+
+    with pytest.raises(HTTPException) as exc:
+        shop.set_planet_effect(UUID(DIARY), PlanetEffectRequest(item_id="fx_ocean"), user_id="u1")
+
+    assert exc.value.status_code == status
+    if message == "effect_not_owned":
+        assert "행성 효과" in exc.value.detail
+    if message == "effect_all_used":
+        assert "하나 더 구매" in exc.value.detail
+
+
+def test_applied_effects_maps_my_planets_only(fx):
+    fx.tables["planet_effects"] = [
+        {"diary_id": "d1", "user_id": "u1", "item_id": "fx_ocean"},
+        {"diary_id": "d2", "user_id": "u1", "item_id": "fx_weird"},  # 앱이 모르는 효과 → 일반 행성
+        {"diary_id": "d3", "user_id": "u2", "item_id": "fx_nebula"},  # 다른 사람 행성
+    ]
+
+    assert shop.applied_effects("u1") == {"d1": {"item_id": "fx_ocean", "effect": "ocean"}}
+    assert shop.applied_effects("u2") == {"d3": {"item_id": "fx_nebula", "effect": "nebula"}}
+
+
+def test_applied_effects_before_migration_is_empty(fake, monkeypatch):
+    def missing(*_a, **_k):
+        raise APIError({"message": "relation planet_effects does not exist", "code": "42P01"})
+
+    monkeypatch.setattr(_Query, "execute", missing)
+    assert shop.applied_effects("u1") == {}
+
+
+def test_reset_shop_also_clears_my_applied_effects(fx):
+    fx.tables["planet_effects"] = [
+        {"diary_id": "d1", "user_id": "u1", "item_id": "fx_ocean"},
+        {"diary_id": "d3", "user_id": "u2", "item_id": "fx_nebula"},
+    ]
+
+    shop.reset_my_shop(user_id="u1")
+
+    assert [r["user_id"] for r in fx.tables["planet_effects"]] == ["u2"]
+
+
+def test_effect_items_listed_as_consumables_with_count(fx):
+    fx.tables["user_items"].append({"user_id": "u1", "item_id": "fx_ocean", "quantity": 2, "equipped": False})
+    items = {i.id: i for i in shop.list_shop_items(user_id="u1")}
+
+    assert items["fx_ocean"].slot == "planet_effect" and items["fx_ocean"].quantity == 2  # 산 개수 = 쓸 수 있는 행성 수
+    assert items["fx_ocean"].kind == "consumable"
+    assert items["fx_nebula"].quantity == 0 and items["fx_nebula"].price == 100
+
+
+def test_admin_keeps_slot_for_consumable_planet_effects(fx):
+    # 소모품이라도 칸(planet_effect)을 지우면 행성 효과가 일반 소모품이 되므로 저장해야 한다
+    created = admin_shop.admin_create_item(
+        AdminItemCreate(id="fx_star", name="별빛 효과", price=100, kind="consumable", slot="planet_effect",
+                        effect={"type": "planet_effect", "special": "crystal"}), admin_id="a"
+    )
+    assert created["slot"] == "planet_effect"
+    plain = admin_shop.admin_create_item(AdminItemCreate(id="snack", name="간식", price=1, kind="consumable", slot="  "), admin_id="a")
+    assert plain["slot"] is None

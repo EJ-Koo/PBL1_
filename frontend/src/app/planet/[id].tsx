@@ -1,8 +1,12 @@
 // [MODIFIED 2026-11-05] 사진 여러 장(최대 5장)을 가로로 넘겨 보기, 넓은 화면에서는 폭 최대 520px 가운데 정렬.
+// [MODIFIED 2026-11-12] '행성 꾸미기' 버튼: 산 특수 효과를 이 행성에 적용·변경·해제 (components/planet-decorator.tsx)
 import { router, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { PlanetDecorator } from '@/components/planet-decorator';
 import { goBackSafe } from '@/lib/navigation';
+import { EFFECT_LABELS, SPECIAL_NAMES, effectToDraw } from '@/lib/special-planet';
 import { useDiary, type Visibility } from '@/store/diary-context';
 
 const VISIBILITY_LABELS: Record<Visibility, string> = {
@@ -15,6 +19,7 @@ export default function PlanetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getEntry, isEditableToday } = useDiary();
   const entry = getEntry(id);
+  const [decorating, setDecorating] = useState(false);
 
   if (!entry) {
     return (
@@ -30,6 +35,7 @@ export default function PlanetDetailScreen() {
   const date = new Date(entry.createdAt);
   const dateLabel = `${date.getFullYear()}.${date.getMonth() + 1}.${date.getDate()}`;
   const editable = isEditableToday(entry.id);
+  const effect = effectToDraw(entry.effect);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.outer}>
@@ -60,32 +66,31 @@ export default function PlanetDetailScreen() {
 
       <Text style={styles.text}>{entry.text}</Text>
 
-      {entry.design ? (
-        // AI 행성 설계가 있을 때: 행성 종류와 (특수 행성이면) AI가 그렇게 고른 이유. 이유 문장은 서버가 실제 분석 결과로 만든다.
-        <View style={styles.analysisBox}>
-          <Text style={styles.analysisTitle}>
-            {entry.design.planetType === 'special' && entry.design.selection.typeName
-              ? `✦ ${entry.design.selection.typeName}`
-              : '일반 행성'}
-          </Text>
-          <Text style={styles.analysisText}>
-            {entry.design.emotionCore.state === 'none'
+      {/* [MODIFIED 2026-11-12] 행성 색·무늬는 AI 감정 분석, 특수 효과는 사용자가 직접 적용한 것 */}
+      <View style={styles.analysisBox} testID="planet-analysis">
+        <Text style={styles.analysisTitle}>{effect ? `✦ ${SPECIAL_NAMES[effect]}` : '일반 행성'}</Text>
+        <Text style={styles.analysisText}>
+          {entry.planet.version === 'fallback'
+            ? '아직 감정 분석 결과가 없어 기본색으로 표현했어요.'
+            : entry.planet.state === 'none'
               ? '뚜렷한 감정이 없어 차분한 기본색으로 표현했어요.'
-              : `행성 색과 무늬: '${entry.design.emotionCore.primaryEmotionName}' 감정`}
-          </Text>
-          {entry.design.planetType === 'special' && entry.design.selection.reason ? (
-            <Text style={styles.analysisReason}>{entry.design.selection.reason}</Text>
-          ) : null}
-          {entry.design.selection.topicName ? (
-            <Text style={styles.analysisText}>선택한 주제: {entry.design.selection.topicName}</Text>
-          ) : null}
-        </View>
-      ) : (
-        <View style={styles.analysisBox}>
-          <Text style={styles.analysisTitle}>AI 분석 (목업)</Text>
-          <Text style={styles.analysisText}>감정·의미 분석 결과가 이 영역에 표시될 예정입니다.</Text>
-        </View>
-      )}
+              : `행성 색과 무늬: '${entry.planet.primary.name}' 감정`}
+        </Text>
+        <Text style={styles.analysisText}>
+          {effect
+            ? `${EFFECT_LABELS[effect].icon} ${EFFECT_LABELS[effect].name}를 적용한 행성이에요.`
+            : '상점에서 산 특수 효과로 이 행성을 꾸밀 수 있어요.'}
+        </Text>
+      </View>
+
+      <Pressable
+        style={styles.decorateButton}
+        onPress={() => setDecorating(true)}
+        testID="planet-decorate"
+        accessibilityLabel="행성 꾸미기">
+        <Text style={styles.decorateButtonText}>🪐 행성 꾸미기</Text>
+      </Pressable>
+      <PlanetDecorator visible={decorating} diaryId={entry.id} onClose={() => setDecorating(false)} />
 
       <Pressable
         style={[styles.editButton, !editable && styles.editButtonDisabled]}
@@ -185,10 +190,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
-  analysisReason: {
-    color: '#C9C9E0',
-    fontSize: 13,
-    lineHeight: 19,
+  decorateButton: {
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#7C6CF6',
+    backgroundColor: '#14142A',
+  },
+  decorateButtonText: {
+    color: '#C9C2FF',
+    fontSize: 15,
+    fontWeight: '600',
   },
   editButton: {
     width: '100%',

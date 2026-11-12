@@ -41,6 +41,21 @@ class EquipRequest(BaseModel):
     equipped: bool
 
 
+# [ADDED 2026-11-12] 행성 특수 효과: 산 효과를 내 일기 행성에 적용·변경·해제
+SpecialType = Literal["ocean", "cloud", "crystal", "nebula", "lava"]
+
+
+class PlanetEffectRequest(BaseModel):
+    # 적용할 효과 아이템 id (예: fx_ocean). null 이면 효과 해제
+    item_id: str | None = Field(default=None, max_length=40)
+
+
+class PlanetEffectResult(BaseModel):
+    diary_id: str
+    item_id: str | None = None
+    effect: SpecialType | None = None  # 화면이 그릴 효과 종류. 해제했으면 null
+
+
 # --- 관리자 ---------------------------------------------------------------------
 
 
