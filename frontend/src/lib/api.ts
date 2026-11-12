@@ -192,6 +192,17 @@ export async function apiJoinGroup(accessToken: string, inviteCode: string) {
   return data as ApiGroup;
 }
 
+export async function apiLeaveGroup(accessToken: string, groupId: string) {
+  const res = await fetch(`${API_BASE_URL}/groups/${groupId}/members/me`, {
+    method: 'DELETE',
+    headers: authHeaders(accessToken),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail ?? '그룹 나가기에 실패했습니다.');
+  }
+}
+
 export async function apiUploadPhoto(accessToken: string, localUri: string) {
   const filename = localUri.split('/').pop()?.split('?')[0] || `photo-${Date.now()}.jpg`;
   const ext = /\.(\w+)$/.exec(filename)?.[1]?.toLowerCase();
