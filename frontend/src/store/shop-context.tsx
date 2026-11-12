@@ -7,9 +7,11 @@ import {
   apiPurchaseItem,
   apiResetMyShop,
   apiSetEquipped,
+  apiSetPlanetEffect,
   type ItemEffect,
   type ShopItem,
 } from '@/lib/shop-api';
+import { asSpecialType } from '@/lib/special-planet';
 import { useDiary } from '@/store/diary-context';
 
 export type ShopResult = { ok: true } | { ok: false; error: string };
@@ -30,6 +32,11 @@ type ShopContextValue = {
   resetShop: () => Promise<ShopResult>;
   /** 장착 중인 아이템의 효과 목록 (홈 화면이 읽어서 배경·혜성 등을 그린다) */
   activeEffects: ItemEffect[];
+  /**
+   * [ADDED 2026-11-12] 산 행성 효과(itemId)를 내 일기 행성에 적용·변경. null 이면 해제.
+   * 서버에 저장된 뒤 나의 우주 행성이 바로 바뀐다(새로고침·재로그인 후에도 유지).
+   */
+  applyPlanetEffect: (diaryId: string, itemId: string | null) => Promise<ShopResult>;
 };
 
 const EMPTY: ShopItem[] = [];
@@ -39,7 +46,7 @@ const ShopContext = createContext<ShopContextValue | null>(null);
 const message = (err: unknown, fallback: string) => (err instanceof Error ? err.message : fallback);
 
 export function ShopProvider({ children }: { children: ReactNode }) {
-  const { accessToken } = useDiary();
+  const { accessToken, entries, setEntryEffect } = useDiary();
   // 받은 값에 "어느 로그인의 값인지"를 같이 저장해, 로그아웃·계정 변경 시 이전 계정 값이 보이지 않게 한다.
   const [state, setState] = useState<{ token: string | null; coins: number | null; items: ShopItem[]; resetAllowed: boolean }>({
     token: null,
@@ -129,16 +136,35 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     [accessToken, refresh]
   );
 
+  const applyPlanetEffect = useCallback(
+    async (diaryId: string, itemId: string | null): Promise<ShopResult> => {
+      if (!accessToken) return { ok: false, error: '로그인이 필요합니다.' };
+      try {
+        const result = await apiSetPlanetEffect(accessToken, diaryId, itemId);
+        setEntryEffect(diaryId, asSpecialType(result.effect));
+        return { ok: true };
+      } catch (err) {
+        refresh();
+        return { ok: false, error: message(err, '행성 효과를 적용하지 못했습니다.') };
+      }
+    },
+    [accessToken, refresh, setEntryEffect]
+  );
+
   const resetShop = useCallback(async (): Promise<ShopResult> => {
     if (!accessToken) return { ok: false, error: '로그인이 필요합니다.' };
     try {
       await apiResetMyShop(accessToken);
+      // 산 효과가 없어지면 서버가 행성에 적용한 효과도 지운다 → 화면의 행성도 일반 행성으로
+      for (const entry of entries) {
+        if (entry.effect) setEntryEffect(entry.id, null);
+      }
       await fetchAll();
       return { ok: true };
     } catch (err) {
       return { ok: false, error: message(err, '초기화에 실패했습니다.') };
     }
-  }, [accessToken, fetchAll]);
+  }, [accessToken, fetchAll, entries, setEntryEffect]);
 
   const value = useMemo<ShopContextValue>(
     () => ({
@@ -152,8 +178,9 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       resetAllowed: current && state.resetAllowed,
       resetShop,
       activeEffects: items.filter((i) => i.equipped && i.quantity > 0).map((i) => i.effect ?? {}),
+      applyPlanetEffect,
     }),
-    [coins, items, loading, current, accessToken, error, refresh, purchase, setEquipped, state.resetAllowed, resetShop]
+    [coins, items, loading, current, accessToken, error, refresh, purchase, setEquipped, state.resetAllowed, resetShop, applyPlanetEffect]
   );
 
   return <ShopContext.Provider value={value}>{children}</ShopContext.Provider>;

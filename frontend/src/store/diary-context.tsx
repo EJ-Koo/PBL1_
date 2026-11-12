@@ -17,7 +17,7 @@ import {
   type ApiStar,
 } from '@/lib/api';
 import { fallbackVisual, type PlanetVisual } from '@/lib/planet-visual';
-import type { DiaryTopic, PlanetDesign } from '@/lib/special-planet';
+import { asSpecialType, type DiaryTopic, type SpecialType } from '@/lib/special-planet';
 
 export type Visibility = 'public' | 'friends' | 'private';
 
@@ -39,8 +39,8 @@ export type DiaryEntry = {
   position: [number, number, number];
   /** 행성 외형(감정). AI 분석 결과가 없으면 무채색 기본 행성. 크기는 text 분량으로 따로 계산한다. */
   planet: PlanetVisual;
-  /** 행성 설계(감정 행성 + 특수 행성 여부·효과·선택 이유). AI 분석 결과가 없으면 null(일반 행성으로 그림). */
-  design: PlanetDesign | null;
+  /** [2026-11-12] 사용자가 상점에서 산 효과를 직접 적용한 특수 효과. 없으면 null(일반 행성). 본체(색·무늬·크기·위치)와 무관. */
+  effect: SpecialType | null;
 };
 
 export type LoginResult = { ok: true } | { ok: false; error: string };
@@ -73,6 +73,8 @@ type DiaryContextValue = {
     visibility: Visibility
   ) => Promise<SaveResult>;
   getEntry: (id: string) => DiaryEntry | undefined;
+  /** [2026-11-12] 서버에 효과 적용·해제가 저장된 뒤 화면의 행성 효과를 바로 바꾼다(상점 store가 부른다). */
+  setEntryEffect: (id: string, effect: SpecialType | null) => void;
   isEditableToday: (id: string) => boolean;
   groups: ApiGroup[];
   createGroup: (name: string) => Promise<SaveResult>;
@@ -134,7 +136,7 @@ function toEntry(diary: ApiDiary, colorIndex: number, star?: ApiStar): DiaryEntr
     brightness: star?.brightness ?? 1,
     position: star ? [star.x, star.y, star.z] : fallbackPosition(colorIndex),
     planet: starVisual(star),
-    design: star?.design ?? null,
+    effect: asSpecialType(star?.effect),
   };
 }
 
@@ -314,7 +316,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
             setEntries((prev) =>
               prev.map((e) =>
                 e.id === id
-                  ? { ...e, color: planet.base_color, brightness: star.brightness, planet, design: star.design ?? null }
+                  ? { ...e, color: planet.base_color, brightness: star.brightness, planet, effect: asSpecialType(star.effect) }
                   : e
               )
             );
@@ -328,6 +330,8 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
         }
       },
       getEntry: (id: string) => entries.find((e) => e.id === id),
+      setEntryEffect: (id: string, effect: SpecialType | null) =>
+        setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, effect } : e))),
       isEditableToday: (id: string) => {
         const entry = entries.find((e) => e.id === id);
         return entry ? isSameDay(entry.createdAt) : false;

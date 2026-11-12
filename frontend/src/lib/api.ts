@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 
 import type { PlanetVisual } from '@/lib/planet-visual';
-import type { DiaryTopic, PlanetDesign } from '@/lib/special-planet';
+import type { DiaryTopic, SpecialType } from '@/lib/special-planet';
 
 // [MODIFIED 2026-11-05] 기본값은 Cloudtype에 올린 서버 (api.star2day.com → Cloudflare → Cloudtype).
 // 로컬 백엔드로 테스트할 때만 실행 시 EXPO_PUBLIC_API_URL로 바꾼다.
@@ -91,8 +91,9 @@ export type ApiStar = {
   brightness: number;
   /** AI 감정 분석으로 정한 행성 외형. AI 서비스가 없으면 null/없음. */
   planet?: PlanetVisual | null;
-  /** 행성 설계(특수 행성 여부·효과·선택 이유). AI 서비스가 없으면 null/없음. */
-  design?: PlanetDesign | null;
+  /** [2026-11-12] 사용자가 이 행성에 적용한 특수 효과(상점에서 산 효과). 없으면 null/없음 = 일반 행성. */
+  effect?: SpecialType | null;
+  effect_item_id?: string | null;
 };
 
 export async function apiListStars(accessToken: string) {

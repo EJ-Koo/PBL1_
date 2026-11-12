@@ -2,7 +2,7 @@
 //  - 색은 고정하지 않는다: 행성의 감정 대표색 계열(planetPalette)과 보조 감정 색에서 고른다(용암 행성이라고 붉게 만들지 않음).
 //  - 본체를 가리지 않게: 대부분 색만 더하는 투명 막(가장자리 위주)이고, 깊이를 쓰지 않는다(수정 조각만 불투명).
 //  - 단계(LOD, EffectTier): 0 멀리 = 바탕 층만 멈춘 채 / 1 가까이 = 애니메이션 + 입자 일부 / 2 선택 = 전부.
-// 서버(AI)가 정한 유형: ai/src/special/selector.py, 화면 설정: src/lib/special-planet.ts
+// [2026-11-12] 유형은 사용자가 상점에서 산 효과를 직접 적용한 값(DiaryEntry.effect). 화면 설정: src/lib/special-planet.ts
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber/native';
 import {
@@ -440,10 +440,12 @@ type EffectProps = {
   /** 행성 선택 강조 값(0~1, Planet이 매 프레임 갱신) */
   highlight: { current: number };
   shared: SharedUniforms;
+  /** 단계 고정(미리보기). 없으면 선택 여부·EFFECT_TIERS(거리)로 정한다. */
+  fixedTier?: EffectTier;
 };
 
 /** 특수 행성 효과 하나. Planet의 위치·기울기 그룹 안에 둔다(자전 그룹 밖 → 효과는 자기 속도로 움직인다). */
-export function SpecialEffect({ id, type, radius, palette, intensity, speed, quality, highlight, shared }: EffectProps) {
+export function SpecialEffect({ id, type, radius, palette, intensity, speed, quality, highlight, shared, fixedTier }: EffectProps) {
   // 효과마다 재질은 최대 두 개(막·판·궤도) + 입자 하나
   const mat0 = useRef<ShaderMaterial>(null);
   const mat1 = useRef<ShaderMaterial>(null);
@@ -502,7 +504,7 @@ export function SpecialEffect({ id, type, radius, palette, intensity, speed, qua
 
   useFrame((_, delta) => {
     const sel = highlight.current > 0.5;
-    const tier: EffectTier = sel ? 2 : (EFFECT_TIERS.get(id) ?? 0);
+    const tier: EffectTier = fixedTier ?? (sel ? 2 : (EFFECT_TIERS.get(id) ?? 0));
     // 멀리 있으면 멈춘다(바탕 층만 보임). 선택하면 조금 더 생기 있게.
     if (tier > 0) time.current += delta * speed * SPECIAL_EFFECT_SETTINGS.speed * (tier === 2 ? 1.25 : 1);
     for (const m of [mat0.current, mat1.current, matP.current]) {

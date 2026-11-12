@@ -9,7 +9,7 @@ import { DiaryWriteScreen } from '@/components/ui/diary-write-screen';
 import { showMessage } from '@/lib/feedback';
 import { MAX_PHOTOS } from '@/lib/journal';
 import { pickPhotos, recoverPendingPhotos } from '@/lib/photos';
-import { DIARY_TOPICS, type DiaryTopic } from '@/lib/special-planet';
+import { DIARY_TOPICS, SHOW_TOPIC_PICKER, type DiaryTopic } from '@/lib/special-planet';
 import { useDiary, type DiaryPhoto, type Visibility } from '@/store/diary-context';
 
 type Props = {
@@ -119,7 +119,8 @@ export function DiaryComposer({ scale, editId, onBack, onSaved }: Props) {
       onBack={onBack}
       onSubmit={submit}
       // 수정할 때는 주제를 바꾸지 않는다(서버에 주제 수정 경로 없음).
-      topics={editing ? undefined : DIARY_TOPICS}
+      // [2026-11-12] 주제는 특수 효과 자동 선택에만 쓰였다 → 효과를 사용자가 고르게 되어 숨김(SHOW_TOPIC_PICKER)
+      topics={editing || !SHOW_TOPIC_PICKER ? undefined : DIARY_TOPICS}
       selectedTopic={topic}
       onToggleTopic={(id) => setTopic((prev) => (prev === id ? null : (id as DiaryTopic)))}
     />

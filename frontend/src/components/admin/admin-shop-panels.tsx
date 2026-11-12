@@ -147,7 +147,8 @@ function fromForm(f: ItemForm): { ok: true; value: Partial<AdminItem> } | { ok: 
       icon: f.icon.trim(),
       description: f.description,
       price,
-      slot: f.kind === 'equip' ? f.slot.trim() : null,
+      // [2026-11-12] 소모품도 칸을 보낸다(행성 효과 = planet_effect). 비우면 없음. 예전처럼 null 로 덮으면 행성 효과가 일반 소모품이 된다
+      slot: f.slot.trim() || null,
       effect,
       sort_order: sort,
       is_active: f.is_active,
@@ -182,7 +183,7 @@ function ItemEditor({ initial, isNew, onSave, onCancel }: {
       <View style={styles.rowWrap}>
         <View style={styles.flex1}><Field label="가격" value={f.price} onChange={set('price')} numeric testID="item-price" /></View>
         <View style={styles.flex1}><Field label="정렬 순서" value={f.sort_order} onChange={set('sort_order')} numeric /></View>
-        {f.kind === 'equip' && <View style={styles.flex1}><Field label="칸(slot)" value={f.slot} onChange={set('slot')} /></View>}
+        <View style={styles.flex1}><Field label={f.kind === 'equip' ? '칸(slot)' : '칸(선택, 행성 효과는 planet_effect)'} value={f.slot} onChange={set('slot')} /></View>
       </View>
       <Field label='효과 JSON (예: {"type":"background","tint":"#0B2A6B","opacity":0.45})' value={f.effect} onChange={set('effect')} multiline />
       <View style={styles.switchRow}>
@@ -247,7 +248,7 @@ export function AdminItemsPanel({ token }: { token: string }) {
                 {item.name} · 🪙 {item.price} {item.is_active ? '' : '(판매 중지)'}
               </Text>
               <Text style={styles.rowMeta}>
-                {item.id} · {item.kind === 'equip' ? `장착(${item.slot})` : '소모품'} · {JSON.stringify(item.effect)}
+                {item.id} · {item.kind === 'equip' ? `장착(${item.slot})` : item.slot ? `소모품(${item.slot})` : '소모품'} · {JSON.stringify(item.effect)}
               </Text>
             </View>
             <Button label="수정" kind="ghost" onPress={() => setEditing(item.id)} testID={`item-edit-${item.id}`} />

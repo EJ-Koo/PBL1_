@@ -8,7 +8,7 @@
 //  - 휠 줌: 앱 전체에서 리스너 1번만 등록, deltaMode 보정, 우주 화면 위에서만, 거리 비례(배율) 줌
 //  - 회전 민감도: 메뉴 설정값(lib/settings.ts)을 드래그 회전에 곱함
 //  - 화면 복귀: 상세·검색에 갔다 오면 보던 각도·거리 그대로(처음 맞춘 화면 위치는 화면별로 기억)
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber/native';
 import { Platform, View, useWindowDimensions } from 'react-native';
 import {
@@ -45,11 +45,11 @@ import {
   type PlanetQuality,
   type PlanetVisual,
 } from '@/lib/planet-visual';
-import { SPECIAL_EFFECT_SETTINGS, specialTypeOf, type EffectTier, type SpecialType } from '@/lib/special-planet';
+import { SPECIAL_EFFECT_SETTINGS, effectToDraw, type EffectTier, type SpecialType } from '@/lib/special-planet';
 import { getRotateSensitivity, loadSettings } from '@/lib/settings';
 import type { DiaryEntry } from '@/store/diary-context';
 
-import { EFFECT_TIERS, LIGHT_DIR_GLSL, SpecialEffect } from './planet-effects';
+import { EFFECT_TIERS, LIGHT_DIR_GLSL, SpecialEffect, type SharedUniforms } from './planet-effects';
 
 // pointsMaterial은 텍스처가 없으면 각 점을 네모로 그린다. 중심은 불투명, 가장자리는
 // 투명한 작은 원형 텍스처를 입혀서 동그란 별점으로 보이게 한다.
@@ -421,8 +421,10 @@ function Planet({
   quality,
   selected = false,
   special = null,
-  effectIntensity = 0.8,
+  effectIntensity = SPECIAL_EFFECT_SETTINGS.intensity,
   effectSpeed = 1,
+  effectTier,
+  shared = SCENE_UNIFORMS,
   onPress,
   onPressStart,
   registerMesh,
@@ -436,10 +438,14 @@ function Planet({
   quality: PlanetQuality;
   /** 마우스를 올렸거나 누르고 있는 행성 */
   selected?: boolean;
-  /** 특수 행성 유형(서버 설계). null이면 일반 행성. 본체(색·무늬·크기)는 같고 바깥 효과만 더한다. */
+  /** 사용자가 적용한 특수 효과(상점에서 산 효과). null이면 일반 행성. 본체(색·무늬·크기)는 같고 바깥 효과만 더한다. */
   special?: SpecialType | null;
   effectIntensity?: number;
   effectSpeed?: number;
+  /** 효과 단계를 고정한다(미리보기: 2 = 전부). 없으면 우주 화면의 거리별 단계(LOD)를 따른다. */
+  effectTier?: EffectTier;
+  /** 화면 공통 값(선택 중 어둡게, 먼 행성 어둡게). 미리보기는 자기 값을 따로 쓴다. */
+  shared?: SharedUniforms;
   onPress?: () => void;
   onPressStart?: () => void;
   /** 웹 마우스 올림 판정(UniverseScene의 광선 검사)에 쓸 본체 메시를 알려 준다 */
@@ -491,11 +497,11 @@ function Planet({
       // 행성마다 전체 밝기를 조금 다르게(서버 밝기 0.5~1.5 → 0.9~1.1배). 색상은 바꾸지 않는다.
       uExposure: { value: 0.9 + 0.2 * Math.min(Math.max(brightness - 0.5, 0), 1) },
       uHighlight: { value: 0 },
-      uFocus: SCENE_UNIFORMS.uFocus,
-      uDepthFade: SCENE_UNIFORMS.uDepthFade,
+      uFocus: shared.uFocus,
+      uDepthFade: shared.uDepthFade,
       uSeed: { value: new Vector3(r0 * 40, r1 * 40, r2 * 40) },
     };
-  }, [visual, palette, bandTexture, brightness, atmo, atmoColor, r0, r1, r2, r6, r7, r8]);
+  }, [visual, palette, bandTexture, brightness, atmo, atmoColor, shared, r0, r1, r2, r6, r7, r8]);
 
   const ringUniforms = useMemo(
     () => ({
@@ -508,10 +514,10 @@ function Planet({
       uGap: { value: 0.45 + r3 * 0.25 },
       uSeed: { value: r3 },
       uHighlight: { value: 0 },
-      uFocus: SCENE_UNIFORMS.uFocus,
-      uDepthFade: SCENE_UNIFORMS.uDepthFade,
+      uFocus: shared.uFocus,
+      uDepthFade: shared.uDepthFade,
     }),
-    [visual.ring.color, palette, radius, r3]
+    [visual.ring.color, palette, radius, shared, r3]
   );
 
   const atmosphereUniforms = useMemo(
@@ -519,10 +525,10 @@ function Planet({
       uColor: { value: new Color(atmoColor) },
       uStrength: { value: 0.22 * atmo },
       uHighlight: { value: 0 },
-      uFocus: SCENE_UNIFORMS.uFocus,
-      uDepthFade: SCENE_UNIFORMS.uDepthFade,
+      uFocus: shared.uFocus,
+      uDepthFade: shared.uDepthFade,
     }),
-    [atmoColor, atmo]
+    [atmoColor, atmo, shared]
   );
 
   // 매우 느린 자전: 한 바퀴 약 90~210초. 행성마다 속도가 다르다(감정과 무관한 고정 난수).
@@ -614,16 +620,19 @@ function Planet({
         </mesh>
       )}
       {special && (
+        // 효과를 바꾸면 이전 효과의 메시·재질을 통째로 내리고(정리) 새로 만든다
         <SpecialEffect
+          key={special}
           id={id}
           type={special}
+          fixedTier={effectTier}
           radius={radius}
           palette={effectPalette}
           intensity={effectIntensity}
           speed={effectSpeed}
           quality={quality}
           highlight={highlight}
-          shared={SCENE_UNIFORMS}
+          shared={shared}
         />
       )}
     </group>
@@ -867,7 +876,7 @@ export function UniverseScene({
 
   // 특수 효과 단계(LOD): 0.3초마다 카메라와 특수 행성 사이 거리를 재서, 가까운 순서로 maxNear개까지만 '가까이'(1).
   // 나머지는 '멀리'(0, 바탕 층만 멈춘 채). 선택한 행성(2)은 효과 쪽에서 바로 판단한다. 좌표는 바꾸지 않는다.
-  const specialEntries = useMemo(() => entries.filter((e) => specialTypeOf(e.design)), [entries]);
+  const specialEntries = useMemo(() => entries.filter((e) => effectToDraw(e.effect)), [entries]);
   const lodClock = useRef(0);
   const centerRef = useRef<[number, number, number]>([0, 0, 0]);
   useEffect(() => {
@@ -931,9 +940,7 @@ export function UniverseScene({
               brightness={entry.brightness}
               quality={quality}
               selected={entry.id === selectedId}
-              special={specialTypeOf(entry.design)}
-              effectIntensity={entry.design?.effectParameters?.intensity}
-              effectSpeed={entry.design?.effectParameters?.speed}
+              special={effectToDraw(entry.effect)}
               onPress={() => onStarPress(entry.id)}
               registerMesh={(mesh) => {
                 if (mesh) {
@@ -974,5 +981,53 @@ export function UniverseCanvas({
         <UniverseScene entries={entries} onStarPress={onStarPress} sceneKey={sceneKey} />
       </Canvas>
     </View>
+  );
+}
+
+// ---------------------------------------------------------------- 미리보기 (상점·행성 꾸미기)
+// [ADDED 2026-11-12] 행성 하나 + 특수 효과를 작은 화면에 그린다. 우주 화면과 같은 Planet·SpecialEffect 코드를 쓴다.
+// 우주 화면의 공통 값(선택 중 어둡게 등)에 영향을 받지 않도록 자기 값을 따로 쓴다.
+const PREVIEW_UNIFORMS: SharedUniforms = { uFocus: { value: 0 }, uDepthFade: { value: new Vector2(100, 200) } };
+
+function PreviewSpin({ children }: { children: ReactNode }) {
+  const ref = useRef<Group>(null);
+  // 효과가 여러 방향에서 보이도록 천천히 돈다(행성 자전과 별개)
+  useFrame((_, delta) => {
+    if (ref.current) ref.current.rotation.y += delta * 0.25;
+  });
+  return <group ref={ref}>{children}</group>;
+}
+
+export function PlanetPreview({
+  id,
+  visual,
+  radius = PLANET_BASE_RADIUS,
+  effect,
+  quality = 'medium',
+}: {
+  /** 행성 고정 난수(무늬 배치)의 기준. 실제 일기 id를 주면 우주 화면과 같은 모습이 된다. */
+  id: string;
+  visual: PlanetVisual;
+  radius?: number;
+  effect: SpecialType | null;
+  quality?: PlanetQuality;
+}) {
+  // 행성 크기와 상관없이 화면을 비슷하게 채우도록 카메라 거리를 반지름에 맞춘다(성운 판·궤도까지 보이게)
+  const distance = radius * 5.2;
+  return (
+    <Canvas style={{ flex: 1 }} camera={{ fov: CAMERA_FOV, position: [0, radius * 0.9, distance] }}>
+      <PreviewSpin>
+        <Planet
+          id={id}
+          position={[0, 0, 0]}
+          radius={radius}
+          visual={visual}
+          quality={quality}
+          special={effectToDraw(effect)}
+          effectTier={2}
+          shared={PREVIEW_UNIFORMS}
+        />
+      </PreviewSpin>
+    </Canvas>
   );
 }

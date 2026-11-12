@@ -5,6 +5,9 @@
 //  - 어느 탭·줄에 들어갈지는 아이템의 slot 으로 정한다 → 관리자 화면에서 slot 만 맞추면 새 아이템이 바로 나타남
 //      slot=effect → 배경 탭 '이펙트' 줄 / slot=background → 배경 탭 '테마' 줄
 //      slot=music  → 음악 탭 / 소모품(consumable) → 소모품 탭 / 그 밖의 slot → 배경 탭 '기타' 줄
+//  - [ADDED 2026-11-12] slot=planet_effect → 소모품 탭 '행성 효과' 줄 (바다·구름·수정·성운·용암)
+//      위에 샘플 행성 미리보기(카드를 누르면 그 효과로 바뀜). 소모품: 1개 = 행성 1개.
+//      [구매]로 개수를 늘리고, 남은 개수가 있으면 [적용]으로 원하는 일기 행성에 적용(해제·변경하면 1개가 돌아온다)
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -18,12 +21,16 @@ import {
   View,
 } from 'react-native';
 
+import { PlanetDecorator } from '@/components/planet-decorator';
+import { PlanetPreview } from '@/components/universe-scene';
 import { showMessage } from '@/lib/feedback';
 import { confirmChoice } from '@/lib/notice';
 import type { ShopItem } from '@/lib/shop-api';
+import { PLANET_EFFECT_SLOT, SAMPLE_PLANET, effectOfItem, type SpecialType } from '@/lib/special-planet';
+import { useDiary } from '@/store/diary-context';
 import { useShop } from '@/store/shop-context';
 
-const KNOWN_SLOTS = ['effect', 'background', 'music'];
+const KNOWN_SLOTS = ['effect', 'background', 'music', PLANET_EFFECT_SLOT];
 
 type DefaultCard = { name: string; icon: string; description: string };
 type Section = {
@@ -32,6 +39,8 @@ type Section = {
   /** 같은 slot 의 장착을 모두 해제하는 무료 기본 카드 (예: 기본 우주) */
   defaultCard?: DefaultCard & { slot: string };
   emptyText?: string;
+  /** 줄 위에 샘플 행성 효과 미리보기를 보인다(행성 효과 줄) */
+  preview?: boolean;
 };
 type Tab = { id: string; label: string; sections: Section[] };
 
@@ -64,7 +73,16 @@ const TABS: Tab[] = [
   {
     id: 'consumable',
     label: '소모품',
-    sections: [{ title: '소모품', match: (i) => i.kind === 'consumable', emptyText: '아직 소모품이 없어요.' }],
+    sections: [
+      // 행성 효과도 소모품 종류지만 아래 자기 줄에만 보인다
+      { title: '소모품', match: (i) => i.kind === 'consumable' && i.slot !== PLANET_EFFECT_SLOT, emptyText: '아직 소모품이 없어요.' },
+      {
+        title: '행성 효과',
+        match: (i) => i.slot === PLANET_EFFECT_SLOT,
+        emptyText: '아직 행성 효과가 없어요.',
+        preview: true,
+      },
+    ],
   },
 ];
 
@@ -89,7 +107,10 @@ function Card({
   priceText,
   badge,
   highlighted,
+  previewing,
+  onSelect,
   action,
+  secondary,
   busy,
   disabledAll,
   onPress,
@@ -101,14 +122,25 @@ function Card({
   priceText: string;
   badge?: string;
   highlighted?: boolean;
+  /** 미리보기 중인 카드(보라 테두리) */
+  previewing?: boolean;
+  /** 카드(버튼 바깥)를 누르면 미리보기 */
+  onSelect?: () => void;
   action: Action;
+  /** 두 번째 버튼(행성 효과의 [적용]). 있으면 버튼 두 개를 나란히 둔다 */
+  secondary?: { label: string; onPress: () => void };
   busy: boolean;
   disabledAll: boolean;
   onPress: () => void;
   testID: string;
 }) {
   return (
-    <View style={[styles.card, highlighted && styles.cardEquipped]} testID={testID}>
+    <Pressable
+      disabled={!onSelect}
+      onPress={onSelect}
+      accessibilityLabel={onSelect ? `${name} 미리보기` : undefined}
+      style={[styles.card, highlighted && styles.cardEquipped, previewing && styles.cardPreviewing]}
+      testID={testID}>
       {badge ? <Text style={styles.badge}>{badge}</Text> : null}
       <Text style={styles.icon}>{icon}</Text>
       <Text style={styles.name} numberOfLines={1}>
@@ -119,27 +151,74 @@ function Card({
       </Text>
       {/* 가격 줄은 항상 같은 높이 → 구매 후에도 버튼 위치가 그대로 */}
       <Text style={styles.price}>{priceText}</Text>
-      <TouchableOpacity
-        testID={`${testID}-action`}
-        accessibilityLabel={`${name} ${action.label}`}
-        disabled={action.disabled || disabledAll}
-        onPress={onPress}
-        style={[styles.button, action.kind === 'unequip' && styles.buttonGhost, action.disabled && styles.buttonDisabled]}>
-        {busy ? (
-          <ActivityIndicator size="small" color="#000" />
-        ) : (
-          <Text style={[styles.buttonText, action.disabled && styles.buttonTextDisabled]}>{action.label}</Text>
-        )}
-      </TouchableOpacity>
+      <View style={styles.buttonRow}>
+        <TouchableOpacity
+          testID={`${testID}-action`}
+          accessibilityLabel={`${name} ${action.label}`}
+          disabled={action.disabled || disabledAll}
+          onPress={onPress}
+          style={[
+            styles.button,
+            // 버튼 줄(가로) 안에서는 늘이기(stretch)가 폭이 아니라 높이에 걸리므로, 하나든 둘이든 flex 로 폭을 채운다
+            styles.buttonHalf,
+            action.kind === 'unequip' && styles.buttonGhost,
+            action.disabled && styles.buttonDisabled,
+          ]}>
+          {busy ? (
+            <ActivityIndicator size="small" color="#000" />
+          ) : (
+            <Text style={[styles.buttonText, action.disabled && styles.buttonTextDisabled]}>{action.label}</Text>
+          )}
+        </TouchableOpacity>
+        {secondary ? (
+          <TouchableOpacity
+            testID={`${testID}-apply`}
+            accessibilityLabel={`${name} ${secondary.label}`}
+            disabled={disabledAll}
+            onPress={secondary.onPress}
+            style={[styles.button, styles.buttonHalf, styles.buttonApply]}>
+            <Text style={styles.buttonText}>{secondary.label}</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
+/** 행성 효과 줄 위의 미리보기: 샘플 감정 행성(연분홍 '설렘·애정')에 고른 효과를 실제 3D로 그린다. */
+function EffectPreview({ item, visible }: { item: ShopItem | undefined; visible: boolean }) {
+  const effect = item ? effectOfItem(item) : null;
+  return (
+    <View style={styles.preview} testID="shop-effect-preview">
+      {/* 행성 꾸미기 팝업이 떠 있으면 3D 화면을 하나만 쓰도록 잠시 내린다 */}
+      {visible ? <PlanetPreview id="shop-sample" visual={SAMPLE_PLANET} radius={0.36} effect={effect} /> : null}
+      <Text style={styles.previewTag} pointerEvents="none">
+        미리보기 · 샘플 행성
+      </Text>
+      {item ? (
+        <Text style={styles.previewName} pointerEvents="none">
+          {item.icon} {item.name}
+        </Text>
+      ) : null}
     </View>
   );
 }
 
 export function ShopSheet({ visible, width, onClose }: { visible: boolean; width: number; onClose: () => void }) {
   const { coins, items, loading, error, refresh, purchase, setEquipped, resetAllowed, resetShop } = useShop();
+  const { entries } = useDiary();
   const { height } = useWindowDimensions();
   const [tabId, setTabId] = useState(TABS[0].id);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // 행성 효과 줄: 미리보기 중인 아이템, 행성 꾸미기 팝업(적용하기)
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [decorating, setDecorating] = useState<SpecialType | null>(null);
+  // 효과별로 적용된 행성 수 (카드 배지)
+  const appliedCount = useMemo(() => {
+    const count = new Map<SpecialType, number>();
+    for (const e of entries) if (e.effect) count.set(e.effect, (count.get(e.effect) ?? 0) + 1);
+    return count;
+  }, [entries]);
   const balance = coins ?? 0;
   const tab = TABS.find((t) => t.id === tabId) ?? TABS[0];
 
@@ -163,7 +242,8 @@ export function ShopSheet({ visible, width, onClose }: { visible: boolean; width
     const action = actionFor(item, balance);
     if (action.disabled || action.kind === 'none' || busyId) return;
     if (action.kind === 'buy') {
-      confirmChoice('구매', `${item.icon} ${item.name}을(를) 🪙 ${item.price}에 살까요?`, '구매', () =>
+      const note = item.slot === PLANET_EFFECT_SLOT ? '\n1개로 행성 1개를 꾸밀 수 있어요.' : '';
+      confirmChoice('구매', `${item.icon} ${item.name}을(를) 🪙 ${item.price}에 살까요?${note}`, '구매', () =>
         run(item.id, () => purchase(item.id))
       );
       return;
@@ -234,6 +314,17 @@ export function ShopSheet({ visible, width, onClose }: { visible: boolean; width
                 <View key={section.title} testID={`shop-section-${section.title}`}>
                   {index > 0 ? <View style={styles.divider} /> : null}
                   <Text style={styles.sectionTitle}>{section.title}</Text>
+                  {section.preview && list.length > 0 ? (
+                    <>
+                      <EffectPreview
+                        item={list.find((i) => i.id === previewId) ?? list[0]}
+                        visible={visible && decorating === null}
+                      />
+                      <Text style={styles.previewHint}>
+                        카드를 누르면 미리 볼 수 있어요. 행성 색과 무늬는 그대로, 주변 효과만 더해져요.
+                      </Text>
+                    </>
+                  ) : null}
                   {list.length === 0 && !section.defaultCard ? (
                     <Text style={styles.empty}>{section.emptyText}</Text>
                   ) : (
@@ -258,6 +349,11 @@ export function ShopSheet({ visible, width, onClose }: { visible: boolean; width
                       ) : null}
                       {list.map((item) => {
                         const owned = item.quantity > 0;
+                        const effect = section.preview ? effectOfItem(item) : null;
+                        // 행성 효과: 남은 개수 = 산 개수 − 적용 중인 행성 수
+                        const applied = effect ? (appliedCount.get(effect) ?? 0) : 0;
+                        const left = Math.max(item.quantity - applied, 0);
+                        const previewing = section.preview && (previewId ?? list[0]?.id) === item.id;
                         return (
                           <Card
                             key={item.id}
@@ -266,8 +362,23 @@ export function ShopSheet({ visible, width, onClose }: { visible: boolean; width
                             name={item.name}
                             description={item.description}
                             priceText={item.kind === 'equip' && owned ? '보유 중' : `🪙 ${item.price}`}
-                            badge={item.equipped ? '장착 중' : item.kind === 'consumable' && owned ? `보유 ${item.quantity}개` : undefined}
+                            badge={
+                              effect
+                                ? owned
+                                  ? left > 0
+                                    ? `남은 ${left}/${item.quantity}개`
+                                    : '모두 사용 중'
+                                  : undefined
+                                : item.equipped
+                                  ? '장착 중'
+                                  : item.kind === 'consumable' && owned
+                                    ? `보유 ${item.quantity}개`
+                                    : undefined
+                            }
+                            secondary={effect && left > 0 ? { label: '적용', onPress: () => setDecorating(effect) } : undefined}
                             highlighted={item.equipped}
+                            previewing={previewing}
+                            onSelect={section.preview ? () => setPreviewId(item.id) : undefined}
                             action={actionFor(item, balance)}
                             busy={busyId === item.id}
                             disabledAll={busyId !== null}
@@ -301,6 +412,8 @@ export function ShopSheet({ visible, width, onClose }: { visible: boolean; width
           </ScrollView>
         </View>
       </View>
+      {/* 적용하기 → 행성 고르기 → 미리보기 → 적용 */}
+      <PlanetDecorator visible={decorating !== null} effect={decorating} onClose={() => setDecorating(null)} />
     </Modal>
   );
 }
@@ -357,6 +470,19 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   cardEquipped: { borderColor: '#FED240' },
+  cardPreviewing: { borderColor: '#B888FF' },
+  preview: {
+    height: 170,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#05050c',
+    borderWidth: 1,
+    borderColor: '#2f2f3d',
+    marginBottom: 8,
+  },
+  previewTag: { position: 'absolute', top: 8, left: 10, color: '#B888FF', fontSize: 11, fontWeight: 'bold' },
+  previewName: { position: 'absolute', bottom: 8, left: 10, color: '#fff', fontSize: 13, fontWeight: 'bold' },
+  previewHint: { color: '#9C9CC0', fontSize: 11, lineHeight: 16, marginBottom: 10 },
   badge: {
     position: 'absolute',
     top: 6,
@@ -383,6 +509,9 @@ const styles = StyleSheet.create({
     minHeight: 32,
     justifyContent: 'center',
   },
+  buttonRow: { flexDirection: 'row', gap: 6, alignSelf: 'stretch' },
+  buttonHalf: { flex: 1, alignSelf: 'auto' },
+  buttonApply: { backgroundColor: '#B888FF' },
   buttonGhost: { backgroundColor: '#dfe6e9' },
   buttonDisabled: { backgroundColor: '#95a5a6' },
   buttonText: { fontWeight: 'bold', fontSize: 13, color: '#000' },
