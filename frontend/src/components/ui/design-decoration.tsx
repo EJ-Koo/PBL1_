@@ -2,12 +2,20 @@ import { useId } from 'react';
 import Svg, { ClipPath, Defs, G, Path, Rect } from 'react-native-svg';
 
 import { DesignColors, DesignPaint } from '@/constants/ui-design';
+import { getBottomNavItems } from '@/lib/responsive-layout';
 
-export function HomeHudFrame({ scale }: { scale: number }) {
+export function HomeHudFrame({ scale, width = 393 * scale, wide = false }: { scale: number; width?: number; wide?: boolean }) {
+  const frameWidth = scale > 0 ? width / scale : 393;
+  const center = frameWidth / 2;
+  const notchLeft = center - (wide ? 154 : 73);
+  const notchRight = center + (wide ? 154 : 73);
+  const stripes = Math.max(0, Math.floor((notchLeft + 5) / 7));
   return (
-    <Svg width={393 * scale} height={75 * scale} viewBox="0 0 393 75" pointerEvents="none">
+    <Svg width={width} height={75 * scale} viewBox={`0 0 ${frameWidth} 75`} pointerEvents="none">
       <Path
-        d="M2 .5H114L124 8H270L281 .5H393 M124 .5H269 M2 58H114L124 50H270L280 58H393 M124 58H269"
+        d={`M2 .5H${notchLeft - 10}L${notchLeft} 8H${notchRight}L${notchRight + 11} .5H${frameWidth}
+          M2 58H${notchLeft - 10}L${notchLeft} 50H${notchRight}L${notchRight + 10} 58H${frameWidth}
+          ${wide ? '' : `M${notchLeft} .5H${notchRight} M${notchLeft} 58H${notchRight}`}`}
         fill="none"
         stroke={DesignPaint.hudFrame}
         strokeWidth={1}
@@ -20,8 +28,8 @@ export function HomeHudFrame({ scale }: { scale: number }) {
       />
       <Path d="M29 20H51 M29 28.5H51 M29 37H51" stroke={DesignPaint.ink} strokeWidth={1.3} />
       <G stroke={DesignPaint.hudHatching} strokeWidth={1}>
-        {Array.from({ length: 18 }, (_, i) => (
-          <Path key={i} d={`M${2 + i * 7} 73L${10 + i * 7} 65 M${267 + i * 7} 65L${275 + i * 7} 73`} />
+        {Array.from({ length: stripes }, (_, i) => (
+          <Path key={i} d={`M${2 + i * 7} 73L${10 + i * 7} 65 M${frameWidth - 2 - i * 7} 73L${frameWidth - 10 - i * 7} 65`} />
         ))}
       </G>
     </Svg>
@@ -61,36 +69,51 @@ export function HudIcon({ kind, scale }: { kind: 'star' | 'coin' | 'check'; scal
   );
 }
 
-export function BottomNavFrame({ scale }: { scale: number }) {
+export function BottomNavFrame({ scale, width = 393 * scale, wide = false, activeScreen = 'home' }: {
+  scale: number; width?: number; wide?: boolean; activeScreen?: string;
+}) {
   const id = useId().replace(/:/g, '');
   const clipId = `bottom-stripes-${id}`;
+  const frameWidth = scale > 0 ? width / scale : 393;
+  const center = frameWidth / 2;
+  const items = getBottomNavItems(frameWidth, wide);
+  const stripeWidth = wide ? Math.max(0, Math.min(110, items[0].x - 12)) : 71;
+  const stripeY = wide ? 4 : 15;
+  const stripeLeft = wide ? 0 : 11;
+  const stripeRight = frameWidth - stripeLeft - stripeWidth;
   return (
-    <Svg width={393 * scale} height={31 * scale} viewBox="0 0 393 31" pointerEvents="none">
+    <Svg width={width} height={(wide ? 58 : 31) * scale} viewBox={`0 0 ${frameWidth} ${wide ? 58 : 31}`} pointerEvents="none">
       <Defs>
         <ClipPath id={clipId}>
-          <Rect x={11} y={15} width={71} height={15} />
-          <Rect x={312} y={15} width={71} height={15} />
+          <Rect x={stripeLeft} y={stripeY} width={stripeWidth} height={15} />
+          <Rect x={stripeRight} y={stripeY} width={stripeWidth} height={15} />
         </ClipPath>
       </Defs>
-      <Path d="M0 8H93L103 .5H290L302 8H393" fill="none" stroke={DesignPaint.ink} strokeWidth={0.8} />
+      <Path d={wide ? `M0 .5H${frameWidth}` : `M0 8H${center - 103.5}L${center - 93.5} .5H${center + 93.5}L${center + 105.5} 8H${frameWidth}`}
+        fill="none" stroke={DesignPaint.ink} strokeWidth={0.8} />
       <G clipPath={`url(#${clipId})`}>
-        <Rect x={11} y={15} width={71} height={15} fill={DesignColors.black} />
-        <Rect x={312} y={15} width={71} height={15} fill={DesignColors.black} />
-        {Array.from({ length: 9 }, (_, i) => (
+        <Rect x={stripeLeft} y={stripeY} width={stripeWidth} height={15} fill={DesignColors.black} />
+        <Rect x={stripeRight} y={stripeY} width={stripeWidth} height={15} fill={DesignColors.black} />
+        {Array.from({ length: Math.ceil(stripeWidth / 15) + 2 }, (_, i) => (
           <Path
             key={i}
-            d={`M${i * 15 - 5} 32L${i * 15 + 14} 13 M${i * 15 + 296} 32L${i * 15 + 315} 13`}
+            d={`M${stripeLeft + i * 15 - 16} ${stripeY + 17}L${stripeLeft + i * 15 + 3} ${stripeY - 2}
+              M${stripeRight + i * 15 - 16} ${stripeY - 2}L${stripeRight + i * 15 + 3} ${stripeY + 17}`}
             stroke={DesignColors.gray}
             strokeWidth={7}
           />
         ))}
       </G>
-      <Path
-        d="M92.5 29.5V20L107.5 8.5H140.5V29.5Z M147.5 8.5H246.5V29.5H147.5Z M253.5 8.5H284.5L301.5 21V29.5H253.5Z"
-        fill={DesignPaint.bottomBar}
-        stroke={DesignPaint.ink}
-        strokeWidth={1}
-      />
+      {items.map(({ id, x, y, width, height }, index) => (
+        <Path key={id}
+          d={wide
+            ? `M${x + 12} ${y}H${x + width}V${y + height - 12}L${x + width - 12} ${y + height}H${x}V${y + 12}Z`
+            : index === 0 ? `M${x} ${y + height}V20L${x + 15} ${y}H${x + width}V${y + height}Z`
+              : index === 2 ? `M${x} ${y}H${x + 31}L${x + width} 21V${y + height}H${x}Z`
+                : `M${x} ${y}H${x + width}V${y + height}H${x}Z`}
+          fill={id === activeScreen ? DesignPaint.bottomBar : 'rgba(255,255,255,0.04)'}
+          stroke={DesignPaint.ink} strokeWidth={1} />
+      ))}
     </Svg>
   );
 }
