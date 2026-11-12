@@ -28,11 +28,10 @@ export const DIARY_TOPICS: { id: DiaryTopic; label: string }[] = [
 ];
 
 /**
- * [ADDED 2026-11-12] 일기 작성 화면의 '오늘의 주제' 줄을 보일지.
- * 주제는 AI가 특수 행성을 자동으로 고를 때만 쓰였는데, 이제 효과는 사용자가 직접 고르므로 화면에서 숨긴다.
- * 서버는 주제를 계속 받을 수 있어(선택 값) true 로 바꾸면 그대로 다시 나타난다.
+ * [ADDED 2026-11-12] 일기 작성 화면의 '오늘의 주제' 줄을 보일지 (선택 사항, 고르지 않아도 저장된다).
+ * 고른 주제는 서버를 거쳐 AI 서비스에 일기와 함께 저장된다. false 로 바꾸면 줄이 숨겨진다.
  */
-export const SHOW_TOPIC_PICKER = false;
+export const SHOW_TOPIC_PICKER = true;
 
 export const SPECIAL_NAMES: Record<SpecialType, string> = {
   ocean: '바다 행성',
