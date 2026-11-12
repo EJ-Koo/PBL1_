@@ -119,7 +119,7 @@ export function DiaryComposer({ scale, editId, onBack, onSaved }: Props) {
       onBack={onBack}
       onSubmit={submit}
       // 수정할 때는 주제를 바꾸지 않는다(서버에 주제 수정 경로 없음).
-      // [2026-11-12] 주제는 특수 효과 자동 선택에만 쓰였다 → 효과를 사용자가 고르게 되어 숨김(SHOW_TOPIC_PICKER)
+      // 새 일기에만 '오늘의 주제'(선택) 줄을 보인다. 끄고 켜기: lib/special-planet.ts 의 SHOW_TOPIC_PICKER
       topics={editing || !SHOW_TOPIC_PICKER ? undefined : DIARY_TOPICS}
       selectedTopic={topic}
       onToggleTopic={(id) => setTopic((prev) => (prev === id ? null : (id as DiaryTopic)))}
