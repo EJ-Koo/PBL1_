@@ -42,14 +42,14 @@ function MemberLight({ member, scale }: { member: MemberStar; scale: number }) {
   );
 }
 
-export function GroupMemberStars({ members, scale, dark = false }: { members: MemberStar[]; scale: number; dark?: boolean }) {
+export function GroupMemberStars({ members, scale, dark = false, readable = false }: { members: MemberStar[]; scale: number; dark?: boolean; readable?: boolean }) {
   const complete = members.filter(member => member.completed).length;
   const allKnown = members.length > 0 && members.every(member => member.known);
   return <View style={{ width: 120 * scale }}>
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 2 * scale }}>
       {members.map(member => <MemberLight key={member.id} member={member} scale={scale} />)}
     </View>
-    <Text style={{ color: dark ? '#bbc4d0' : '#252b35', fontFamily: DesignFonts.regular, fontSize: 9 * scale, lineHeight: 13 * scale }}>
+    <Text style={{ color: dark ? '#bbc4d0' : '#252b35', fontFamily: DesignFonts.regular, fontSize: readable ? Math.max(11, 9 * scale) : 9 * scale, lineHeight: readable ? Math.max(16, 13 * scale) : 13 * scale }}>
       {allKnown ? `오늘 ${complete}/${members.length}명` : `멤버 ${members.length}명 · 확인된 작성 ${complete}명`}
     </Text>
   </View>;
