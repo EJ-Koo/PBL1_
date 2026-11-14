@@ -4,7 +4,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 
 import { GroupMemberStars } from './group-member-stars';
-import { getGroupAttendance, type Diary, type Group } from '@/lib/journal';
+import type { MemberStar } from '@/lib/group-attendance';
 
 import { GroupAddIcon, GroupCardFrame, GroupHeaderFrame, GroupLabelFrame } from './group-decoration';
 
@@ -18,14 +18,24 @@ type PreviewStar = {
   previewY?: string;
 };
 
+// 서버 데이터(ApiGroup)를 index.tsx에서 이 뷰모델로 매핑해서 넘긴다.
+type GroupData = {
+  id: string;
+  name: string;
+  stars: PreviewStar[];
+  members: MemberStar[];
+};
+
 type Props = {
   scale: number;
-  groups: Group[];
-  diaries: Diary[];
-  today: string;
-  onSelectGroup: (group: Group) => void;
+  groups: GroupData[];
+  onSelectGroup: (group: GroupData) => void;
   onAddGroup: () => void;
+  onJoinByCode: () => void;
 };
+
+// 카드 고정 높이(fffju는 멤버 출석 수에 따라 가변이었으나, 서버에 교차 출석 데이터가 없어 고정).
+const CARD_HEIGHT = 249;
 
 function GroupPreview({ stars, scale }: { stars: PreviewStar[]; scale: number }) {
   const gradientId = useId().replace(/[^a-zA-Z0-9_-]/g, '');
@@ -36,31 +46,33 @@ function GroupPreview({ stars, scale }: { stars: PreviewStar[]; scale: number })
         contentFit="cover"
         style={StyleSheet.absoluteFill}
       />
-      <Svg width={329 * scale} height={186 * scale} viewBox="0 0 329 186" pointerEvents="none">
-        <Defs>
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <Svg width={329 * scale} height={186 * scale} viewBox="0 0 329 186" pointerEvents="none">
+          <Defs>
+            {stars.map((star, i) => (
+              <RadialGradient key={i} id={`${gradientId}-${i}`} cx="50%" cy="50%" r="50%">
+                {GroupStarGlowStops.map((stop) => (
+                  <Stop key={stop.offset} offset={stop.offset} stopColor={star.color} stopOpacity={stop.opacity} />
+                ))}
+              </RadialGradient>
+            ))}
+          </Defs>
           {stars.map((star, i) => (
-            <RadialGradient key={i} id={`${gradientId}-${i}`} cx="50%" cy="50%" r="50%">
-              {GroupStarGlowStops.map((stop) => (
-                <Stop key={stop.offset} offset={stop.offset} stopColor={star.color} stopOpacity={stop.opacity} />
-              ))}
-            </RadialGradient>
+            <Circle
+              key={i}
+              cx={star.previewX || `${25 + ((i * 30) % 55)}%`}
+              cy={star.previewY || `${30 + ((i * 25) % 50)}%`}
+              r={(star.size / 0.36) * 23}
+              fill={`url(#${gradientId}-${i})`}
+            />
           ))}
-        </Defs>
-        {stars.map((star, i) => (
-          <Circle
-            key={i}
-            cx={star.previewX || `${25 + ((i * 30) % 55)}%`}
-            cy={star.previewY || `${30 + ((i * 25) % 50)}%`}
-            r={(star.size / 0.36) * 23}
-            fill={`url(#${gradientId}-${i})`}
-          />
-        ))}
-      </Svg>
+        </Svg>
+      </View>
     </>
   );
 }
 
-export function GroupSpaceScreen({ scale, groups, diaries, today, onSelectGroup, onAddGroup }: Props) {
+export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup, onJoinByCode }: Props) {
   const { headerTop, bottomSpace, contentLeft, gridLeft, gridWidth } = useResponsiveLayout();
   const gap = 16 * scale;
   const innerWidth = gridWidth - 32 * scale;
@@ -89,35 +101,34 @@ export function GroupSpaceScreen({ scale, groups, diaries, today, onSelectGroup,
         contentContainerStyle={{ paddingHorizontal: 16 * scale, paddingBottom: 24 * scale }}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'center', gap }}>
           {groups.map((group, i) => {
-            const scale = cardScale;
+            const s = cardScale;
             const first = i === 0;
-            const members = getGroupAttendance(group, diaries, today);
-            const cardHeight = 201 + Math.max(48, Math.ceil(members.length / 6) * 18 + 24);
+            const cardHeight = Math.max(CARD_HEIGHT, 207 + Math.ceil(group.members.length / 6) * 22 + 24);
             return (
               <TouchableOpacity
                 key={group.id}
                 activeOpacity={0.85}
-                accessibilityLabel={`${group.name}, 오늘 ${members.filter((member) => member.completed).length}/${members.length}명 작성`}
+                accessibilityLabel={group.name}
                 onPress={() => onSelectGroup(group)}
-                style={{ width: cardWidth, height: cardHeight * scale }}>
+                style={{ width: cardWidth, height: cardHeight * s }}>
                 <View style={[styles.positioned, styles.card, {
-                  left: 8 * scale, top: 5 * scale, width: 343 * scale, height: (cardHeight - 6) * scale, borderRadius: 12 * scale,
+                  left: 8 * s, top: 5 * s, width: 343 * s, height: (cardHeight - 6) * s, borderRadius: 12 * s,
                 }]} />
-                <GroupCardFrame scale={scale} height={cardHeight} />
+                <GroupCardFrame scale={s} height={cardHeight} />
                 <View style={[styles.positioned, styles.preview, {
-                  left: (first ? 16 : 15) * scale, top: 11 * scale, width: 329 * scale, height: 186 * scale, borderRadius: 11 * scale,
+                  left: (first ? 16 : 15) * s, top: 11 * s, width: 329 * s, height: 186 * s, borderRadius: 11 * s,
                 }]}>
-                  <GroupPreview stars={group.stars} scale={scale} />
+                  <GroupPreview stars={group.stars} scale={s} />
                 </View>
                 <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                  <GroupLabelFrame scale={scale} first={first} height={cardHeight} />
+                  <GroupLabelFrame scale={s} first={first} height={cardHeight} />
                 </View>
                 <Text numberOfLines={1} style={[styles.positioned, styles.groupName, {
-                  left: (first ? 20 : 19) * scale, top: 208 * scale, width: 171 * scale, height: 30 * scale,
-                  fontSize: 20 * scale, lineHeight: 28 * scale,
+                  left: (first ? 20 : 19) * s, top: 208 * s, width: 171 * s, height: 30 * s,
+                  fontSize: 20 * s, lineHeight: 28 * s,
                 }]}>{group.name}</Text>
-                <View pointerEvents="none" style={[styles.positioned, { left: 234 * scale, top: 207 * scale }]}>
-                  <GroupMemberStars members={members} scale={scale} />
+                <View pointerEvents="none" style={{ position: 'absolute', left: 222 * s, top: 205 * s }}>
+                  <GroupMemberStars members={group.members} scale={s} />
                 </View>
               </TouchableOpacity>
             );
@@ -128,6 +139,12 @@ export function GroupSpaceScreen({ scale, groups, diaries, today, onSelectGroup,
           onPress={onAddGroup}
           style={{ alignSelf: 'center', marginTop: 33 * scale, width: 44 * scale, height: 44 * scale }}>
           <GroupAddIcon scale={scale} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityLabel="코드로 참여"
+          onPress={onJoinByCode}
+          style={{ alignSelf: 'center', marginTop: 14 * scale, paddingHorizontal: 18 * scale, paddingVertical: 8 * scale }}>
+          <Text style={[styles.joinByCode, { fontSize: 14 * scale }]}>코드로 참여</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -141,4 +158,5 @@ const styles = StyleSheet.create({
   card: { backgroundColor: DesignPaint.groupCard },
   preview: { overflow: 'hidden', backgroundColor: DesignPaint.background },
   groupName: { color: DesignColors.black, fontFamily: DesignFonts.bold, fontWeight: '700', includeFontPadding: false },
+  joinByCode: { color: DesignPaint.ink, fontFamily: DesignFonts.bold, fontWeight: '700', textDecorationLine: 'underline', opacity: 0.7 },
 });

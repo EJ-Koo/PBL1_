@@ -37,10 +37,11 @@ export function MenuCalendarIcon({ scale }: { scale: number }) {
   );
 }
 
+// [MODIFIED 2026-11-05] 오른쪽(>) 화살표 → 아래(∨) 화살표. 펼치면 위(∧)로 바뀐다.
 export function MenuChevron({ scale, expanded }: { scale: number; expanded: boolean }) {
   return (
     <Svg width={16 * scale} height={16 * scale} viewBox="0 0 16 16" pointerEvents="none">
-      <Path d={expanded ? 'M1 4L8 11L15 4' : 'M4 1L11 8L4 15'} fill="none" stroke={DesignPaint.menuText} strokeWidth={2} />
+      <Path d={expanded ? 'M1 12L8 5L15 12' : 'M1 4L8 11L15 4'} fill="none" stroke={DesignPaint.menuText} strokeWidth={2} />
     </Svg>
   );
 }

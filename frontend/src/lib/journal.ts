@@ -3,10 +3,8 @@ export type Star = {
   id?: string; diaryId?: string; position: number[]; color: string; size: number;
   previewX: string; previewY: string;
 };
-export type GroupMember = { id: string; name: string; color: string };
-export type Group = { id: string; name: string; stars: Star[]; members: GroupMember[] };
-export type Diary = { id: string; authorId: string; content: string; photos: Photo[]; groupIds: string[]; createdAt: string };
-export const LOCAL_MEMBER: GroupMember = { id: 'local-user', name: 'HA_LULU', color: '#a39bff' };
+export type Group = { id: string; name: string; stars: Star[] };
+export type Diary = { id: string; content: string; photos: Photo[]; groupIds: string[]; createdAt: string };
 export type Settings = {
   music: 'space' | 'night' | 'off'; theme: 'original' | 'blue' | 'black';
   backgroundVolume: number; effectVolume: number; rotationSensitivity: number; notifications: boolean;
@@ -30,7 +28,6 @@ export const initialJournal: Journal = {
     {
       id: 'group-1',
       name: '그룹1',
-      members: [{ ...LOCAL_MEMBER }],
       stars: [
         { position: [-0.3, 0.8, -2], color: '#ffffff', size: 0.38, previewX: '42%', previewY: '22%' },
         { position: [1.2, 0.3, -1.5], color: '#536dfe', size: 0.38, previewX: '78%', previewY: '38%' },
@@ -40,7 +37,6 @@ export const initialJournal: Journal = {
     {
       id: 'group-2',
       name: '그룹2',
-      members: [{ ...LOCAL_MEMBER }],
       stars: [
         { position: [-0.8, 0.9, -2], color: '#ff5252', size: 0.36, previewX: '31%', previewY: '15%' },
         { position: [1.1, 0.3, -1.5], color: '#536dfe', size: 0.36, previewX: '69%', previewY: '42%' },
@@ -63,26 +59,6 @@ export function rotationDelta(distance: number, sensitivity: number): number {
   return distance * 0.01 * sensitivity / 100;
 }
 
-export function selectDiaryAudience(state: Journal, groupId: string | null): Journal {
-  if (groupId !== null && !state.groups.some((group) => group.id === groupId)) return state;
-  const selected = state.draft.groupIds;
-  const groupIds = groupId === null ? [] : selected.includes(groupId) ? selected.filter((id) => id !== groupId) : [...selected, groupId];
-  return { ...state, draft: { ...state.draft, groupIds } };
-}
-
-export function createGroup(state: Journal, name: string, now = new Date()): Journal {
-  const finalName = name.trim() || `그룹${state.groups.length + 1}`;
-  if (finalName.length > 24) throw new Error('그룹 이름은 24자 이내로 입력해주세요.');
-  const id = `group-${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`;
-  return { ...state, groups: [...state.groups, { id, name: finalName, stars: [], members: [{ ...LOCAL_MEMBER }] }] };
-}
-
-export function getGroupAttendance(group: Group, diaries: Diary[], dateKey: string) {
-  const writers = new Set(diaries.filter((diary) => diary.groupIds.includes(group.id)
-    && localDateKey(diary.createdAt) === dateKey).map((diary) => diary.authorId));
-  return group.members.map((member) => ({ ...member, completed: writers.has(member.id) }));
-}
-
 export function addDiary(state: Journal, now = new Date(), random = Math.random): Journal {
   const content = state.draft.content.trim();
   if (!content) throw new Error('오늘의 이야기를 입력해주세요.');
@@ -90,7 +66,7 @@ export function addDiary(state: Journal, now = new Date(), random = Math.random)
   const id = `diary-${now.getTime()}-${random().toString(36).slice(2, 8)}`;
   const colors = ['#ff5252', '#536dfe', '#ffd740', '#ff9ff3', '#1dd1a1', '#ffffff'];
   const groupIds = state.draft.groupIds.filter((id) => state.groups.some((group) => group.id === id));
-  const diary: Diary = { id, authorId: LOCAL_MEMBER.id, content, photos: [...state.draft.photos], groupIds, createdAt: now.toISOString() };
+  const diary: Diary = { id, content, photos: [...state.draft.photos], groupIds, createdAt: now.toISOString() };
   const star: Star = {
     id, diaryId: id, color: colors[Math.floor(random() * colors.length)], size: 0.36,
     position: [(random() - 0.5) * 3, (random() - 0.5) * 3, -1 - random() * 2.5],
@@ -98,7 +74,7 @@ export function addDiary(state: Journal, now = new Date(), random = Math.random)
   };
   return {
     ...state, diaries: [diary, ...state.diaries], stars: [...state.stars, star],
-    coins: state.coins + (state.diaries.some((entry) => entry.authorId === LOCAL_MEMBER.id && localDateKey(entry.createdAt) === localDateKey(now)) ? 0 : 5),
+    coins: state.coins + (state.diaries.some((entry) => localDateKey(entry.createdAt) === localDateKey(now)) ? 0 : 5),
     groups: state.groups.map((group) => groupIds.includes(group.id) ? { ...group, stars: [...group.stars, star] } : group),
     draft: { content: '', photos: [], groupIds: [] },
   };
@@ -145,17 +121,5 @@ export function parseJournal(raw: string): Journal {
       || settings.rotationSensitivity < 25 || settings.rotationSensitivity > 200 || typeof settings.notifications !== 'boolean') {
     throw new Error('저장된 설정 형식을 확인할 수 없어요.');
   }
-  const groups = value.groups.map((group) => {
-    const members = group.members ?? [{ ...LOCAL_MEMBER }];
-    if (!Array.isArray(members) || !members.every((member) => record(member) && typeof member.id === 'string'
-      && typeof member.name === 'string' && typeof member.color === 'string')
-      || new Set(members.map((member) => member.id)).size !== members.length) throw new Error('저장된 그룹 멤버 형식을 확인할 수 없어요.');
-    return { ...group, members };
-  });
-  const diaries = value.diaries.map((diary) => {
-    const authorId = diary.authorId ?? LOCAL_MEMBER.id;
-    if (typeof authorId !== 'string') throw new Error('저장된 일기 작성자 형식을 확인할 수 없어요.');
-    return { ...diary, authorId };
-  });
-  return { ...value, groups, diaries, settings } as Journal;
+  return { ...value, settings } as Journal;
 }

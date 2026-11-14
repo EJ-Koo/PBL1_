@@ -4,9 +4,9 @@ import Svg, { Circle, Path } from 'react-native-svg';
 
 import { DesignFonts, DesignPaint } from '@/constants/ui-design';
 
-export function SpaceSurface({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+export function SpaceSurface({ children, style, testID }: { children: ReactNode; style?: StyleProp<ViewStyle>; testID?: string }) {
   return (
-    <View style={[styles.surface, style]}>
+    <View testID={testID} style={[styles.surface, style]}>
       {children}
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
         {[styles.topLeft, styles.topRight, styles.bottomLeft, styles.bottomRight].map((corner, index) => <View key={index} style={[styles.corner, corner]} />)}

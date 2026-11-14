@@ -36,13 +36,13 @@ export function QuestPanel({ scale, onClose, onWriteDiary, todayComplete }: Prop
               {todayComplete && <View style={{ flex: 1, backgroundColor: DesignPaint.questProgress }} />}
             </View>
             {todayComplete ? (
-              <View accessibilityRole="text" accessibilityLabel="오늘의 퀘스트 완료, 5코인 지급 완료"
+              <View accessibilityRole="text" accessibilityLabel="오늘의 퀘스트 완료"
                 style={{ borderColor: DesignPaint.questProgress, borderWidth: 1, borderRadius: 20 * scale,
                   backgroundColor: '#9DFD0210', minHeight: 38 * scale, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 * scale }}>
                 <SpaceIcon kind="check" size={17 * scale} color={DesignPaint.questProgress} />
-                <Text style={{ color: DesignPaint.questProgress, fontFamily: DesignFonts.bold, fontSize: 12 * scale }}>완료 · +5 코인 지급됨</Text>
+                <Text style={{ color: DesignPaint.questProgress, fontFamily: DesignFonts.bold, fontSize: 12 * scale }}>오늘의 별 띄우기 완료</Text>
               </View>
-            ) : <Text style={[styles.muted, { fontSize: 12 * scale, lineHeight: 20 * scale }]}>완료하면 5코인을 받아요.</Text>}
+            ) : <Text style={[styles.muted, { fontSize: 12 * scale, lineHeight: 20 * scale }]}>오늘의 이야기를 남겨보세요.</Text>}
             <SpaceButton scale={scale} label={todayComplete ? '확인' : '일기 쓰러 가기'} onPress={todayComplete ? onClose : onWriteDiary}
               primary={!todayComplete} style={{ marginTop: 16 * scale }} />
             <View style={{ height: 1, backgroundColor: '#ffffff30', marginVertical: 20 * scale }} />

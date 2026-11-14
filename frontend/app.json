@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "starex-926-app",
+    "name": "오늘의 별일",
     "slug": "starex-926-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -12,6 +12,7 @@
       "bundleIdentifier": "com.jwo916.starex-926-app"
     },
     "android": {
+      "package": "com.jwo916.starex926app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -22,7 +23,7 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/planet-favicon-v1.png"
     },
     "plugins": [
       "expo-router",
@@ -34,6 +35,7 @@
           "imageWidth": 76
         }
       ],
+      "expo-asset",
       ["expo-audio", { "microphonePermission": false, "recordAudioAndroid": false }],
       ["expo-image-picker", {
         "photosPermission": "일기에 첨부할 사진을 선택합니다.",

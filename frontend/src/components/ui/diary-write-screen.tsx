@@ -33,15 +33,19 @@ type Props = {
   onToggleGroup: (id: string) => void;
   onBack: () => void;
   onSubmit: () => void;
+  topics?: { id: string; label: string }[];
+  selectedTopic?: string | null;
+  onToggleTopic?: (id: string) => void;
 };
 
 export function DiaryWriteScreen({
   scale, diaryText, onChangeText, dateLabel, authorLabel, photoCountLabel,
   photos, photoBusy, saving, onAddPhotos, onRemovePhoto,
   groups, selectedGroupIds, onSelectPrivate, onToggleGroup, onBack, onSubmit,
+  topics, selectedTopic, onToggleTopic,
 }: Props) {
-  const [preview, setPreview] = useState<Photo | null>(null);
   const insets = useSafeAreaInsets();
+  const [preview, setPreview] = useState<Photo | null>(null);
   const { contentLeft, contentWidth, headerTop, bottomSpace } = useResponsiveLayout();
   const box = (left: number, top: number, width: number, height: number) => ({
     left: left * scale, top: top * scale, width: width * scale, height: height * scale,
@@ -90,6 +94,33 @@ export function DiaryWriteScreen({
             onChangeText={onChangeText}
           />
         </View>
+
+        {topics?.length ? (
+          <>
+            <Text style={[styles.text, { marginHorizontal: 27 * scale, marginTop: 16 * scale }, type(16, 22)]}>오늘의 주제</Text>
+            <Text style={[styles.text, styles.photoCount, { marginHorizontal: 27 * scale }, type(12, 18)]}>선택 안 해도 돼요</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ marginHorizontal: 27 * scale, marginTop: 8 * scale, height: 30 * scale }}
+              contentContainerStyle={{ alignItems: 'center', gap: 6 * scale }}>
+              {topics.map((t) => {
+                const selected = selectedTopic === t.id;
+                return (
+                  <TouchableOpacity
+                    key={t.id}
+                    onPress={() => onToggleTopic?.(t.id)}
+                    disabled={saving}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    style={[styles.pill, { height: 28 * scale, borderRadius: 14 * scale, borderWidth: (selected ? 1.5 : 1) * scale, paddingHorizontal: 12 * scale, opacity: selected ? 1 : 0.75 }]}>
+                    <Text style={[styles.text, type(13, 18)]}>{selected ? '✓ ' : ''}{t.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </>
+        ) : null}
 
         <View style={{ marginHorizontal: 27 * scale, marginTop: 26 * scale, marginBottom: 12 * scale,
           flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>

@@ -8,13 +8,13 @@ module.exports = defineConfig([
     ignores: ["dist/*"],
   },
   {
-    files: ['src/app/index.jsx'],
+    files: ['src/components/universe-scene.tsx'],
     rules: {
       // These props belong to the Three.js renderer, rather than DOM elements.
       'react/no-unknown-property': ['warn', {
         ignore: ['position', 'args', 'uniforms', 'vertexShader', 'fragmentShader',
           'transparent', 'depthWrite', 'toneMapped', 'emissive',
-          'emissiveIntensity', 'roughness', 'intensity'],
+          'emissiveIntensity', 'roughness', 'intensity', 'attach', 'opacity', 'raycast'],
       }],
     },
   },
