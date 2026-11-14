@@ -13,9 +13,14 @@ export function subscribeFontScale(listener: () => void) {
   fontListeners.add(listener);
   return () => { fontListeners.delete(listener); };
 }
+function normalizeFontScale(value: number) {
+  return Math.round(Math.max(FONT_SCALE_MIN, Math.min(FONT_SCALE_MAX, value)) * 10) / 10;
+}
 export function setFontScale(value: number) {
   if (!Number.isFinite(value)) return fontScale;
-  fontScale = Math.round(Math.max(FONT_SCALE_MIN, Math.min(FONT_SCALE_MAX, value)) * 10) / 10;
+  const next = normalizeFontScale(value);
+  if (next === fontScale) return fontScale;
+  fontScale = next;
   fontListeners.forEach(listener => listener());
   AsyncStorage.setItem(FONT_KEY, String(fontScale)).catch(() => {});
   return fontScale;
@@ -29,7 +34,7 @@ export const ROTATE_SENSITIVITY_MAX = 1.5;
 export const ROTATE_SENSITIVITY_DEFAULT = 1;
 
 let rotateSensitivity = ROTATE_SENSITIVITY_DEFAULT;
-let loaded = false;
+let loading: Promise<void> | undefined;
 
 function clamp(v: number) {
   return Math.min(Math.max(v, ROTATE_SENSITIVITY_MIN), ROTATE_SENSITIVITY_MAX);
@@ -39,30 +44,28 @@ export function getRotateSensitivity(): number {
   return rotateSensitivity;
 }
 
-export async function loadSettings(): Promise<void> {
-  if (loaded) return;
-  try {
-    const raw = await AsyncStorage.getItem(ROTATE_KEY);
-    const v = raw === null ? NaN : Number(raw);
-    if (Number.isFinite(v)) rotateSensitivity = clamp(v);
-  } catch {
-    // 읽기 실패 시 기본값 사용
-  }
-  try {
-    const raw = await AsyncStorage.getItem(FONT_KEY);
-    const value = raw === null ? NaN : Number(raw);
-    if (Number.isFinite(value)) {
-      fontScale = Math.round(Math.max(FONT_SCALE_MIN, Math.min(FONT_SCALE_MAX, value)) * 10) / 10;
-      fontListeners.forEach(listener => listener());
+export function loadSettings(): Promise<void> {
+  // 루트와 홈이 동시에 요청해도 저장소는 한 번만 읽는다. 읽기 실패 시 기본값 유지.
+  return loading ??= Promise.all([ROTATE_KEY, FONT_KEY].map(key =>
+    AsyncStorage.getItem(key).catch(() => null)
+  )).then(([rotate, font]) => {
+    if (rotate !== null && Number.isFinite(Number(rotate))) rotateSensitivity = clamp(Number(rotate));
+    if (font !== null && Number.isFinite(Number(font))) {
+      const next = normalizeFontScale(Number(font));
+      if (next !== fontScale) {
+        fontScale = next;
+        fontListeners.forEach(listener => listener());
+      }
     }
-  } catch { /* 기본 글자 크기 유지 */ }
-  loaded = true;
+  });
 }
 
 export function setRotateSensitivity(value: number): number {
   // [FIXED 2026-11-10] 숫자가 아니면 무시 (NaN 이 저장되면 우주 회전이 멈춘다)
   if (!Number.isFinite(value)) return rotateSensitivity;
-  rotateSensitivity = clamp(value);
+  const next = clamp(value);
+  if (next === rotateSensitivity) return rotateSensitivity;
+  rotateSensitivity = next;
   AsyncStorage.setItem(ROTATE_KEY, String(rotateSensitivity)).catch(() => {});
   return rotateSensitivity;
 }

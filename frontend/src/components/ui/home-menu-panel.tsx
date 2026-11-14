@@ -6,16 +6,17 @@ import { Text } from '@/components/app-text';
 //  - 로그아웃 → 실제 로그아웃 후 로그인 화면
 //  - 서버 기능이 아직 없는 항목(배경음악·테마·소리·알림·회원 탈퇴·이용약관)은 값만 보여주고 눌러도 반응하지 않는다.
 //    펼치기/접기(아코디언)만 동작한다. 나중에 기능이 생기면 하나씩 연결.
-import { useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { MenuCalendarIcon, MenuChevron, MenuDecoration, MenuNotificationToggle, MenuSearchIcon } from './menu-decoration';
 import { MenuSlider } from './menu-slider';
 
+import { useFontScale } from '@/hooks/use-font-scale';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 
 import { DesignFonts, DesignPaint } from '@/constants/ui-design';
-import { FONT_SCALE_MIN, FONT_SCALE_MAX, getFontScale, setFontScale, subscribeFontScale, ROTATE_SENSITIVITY_MAX, ROTATE_SENSITIVITY_MIN } from '@/lib/settings';
+import { FONT_SCALE_MIN, FONT_SCALE_MAX, setFontScale, ROTATE_SENSITIVITY_MAX, ROTATE_SENSITIVITY_MIN } from '@/lib/settings';
 
 type AccordionId = 'logout' | 'delete-account';
 
@@ -62,7 +63,7 @@ function Inactive({ children }: { children: ReactNode }) {
 }
 
 export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, sensitivity, onSensitivity }: Props) {
-  const fontScale = useSyncExternalStore(subscribeFontScale, getFontScale, () => 1);
+  const fontScale = useFontScale();
   const [expanded, setExpanded] = useState<Partial<Record<AccordionId, boolean>>>({});
   const [sensitivityPreview, setSensitivityPreview] = useState<number | null>(null);
   const { height, chromeLeft, chromeWidth, headerTop, bottomSpace } = useResponsiveLayout();
@@ -135,16 +136,16 @@ export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, 
 
           <View style={{ marginLeft: 10 * scale, marginTop: 8 * scale, gap: 8 * scale }}>
             <Text style={[styles.label, type(14, 22)]}>글자 크기</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44 }}>
               <Pressable accessibilityRole="button" accessibilityLabel="글자 크기 줄이기"
-                disabled={fontScale <= FONT_SCALE_MIN} accessibilityState={{ disabled: fontScale <= FONT_SCALE_MIN }}
+                hitSlop={6} disabled={fontScale <= FONT_SCALE_MIN} accessibilityState={{ disabled: fontScale <= FONT_SCALE_MIN }}
                 onPress={() => setFontScale(fontScale - 0.1)}
                 style={[styles.sizeButton, fontScale <= FONT_SCALE_MIN && styles.inactive]}>
-                <Text style={[styles.label, type(22, 28)]}>−</Text>
+                <Text style={[styles.label, type(18, 22)]}>−</Text>
               </Pressable>
               <Text accessibilityLiveRegion="polite" style={[styles.label, type(14, 22)]}>{Math.round(fontScale * 100)}%</Text>
               <Pressable accessibilityRole="button" accessibilityLabel="글자 크기 키우기"
-                disabled={fontScale >= FONT_SCALE_MAX} accessibilityState={{ disabled: fontScale >= FONT_SCALE_MAX }}
+                hitSlop={6} disabled={fontScale >= FONT_SCALE_MAX} accessibilityState={{ disabled: fontScale >= FONT_SCALE_MAX }}
                 onPress={() => setFontScale(fontScale + 0.1)}
                 style={[styles.sizeButton, fontScale >= FONT_SCALE_MAX && styles.inactive]}>
                 <Text style={[styles.label, type(22, 28)]}>+</Text>
@@ -199,6 +200,6 @@ const styles = StyleSheet.create({
   label: { color: DesignPaint.menuText, fontFamily: DesignFonts.regular, includeFontPadding: false },
   heading: { fontFamily: DesignFonts.bold, fontWeight: '700' },
   accountButton: { borderWidth: 1, borderColor: DesignPaint.menuText, alignItems: 'center' },
-  sizeButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: DesignPaint.menuText },
+  sizeButton: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: DesignPaint.menuText },
   inactive: { opacity: 0.4 },
 });

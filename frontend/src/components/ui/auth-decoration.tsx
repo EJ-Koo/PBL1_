@@ -11,14 +11,14 @@ export function AuthPanelFrame() {
   </View>;
 }
 
-export function AuthFieldFrame({ primary = false, focused = false }: { primary?: boolean; focused?: boolean }) {
+export function AuthFieldFrame({ primary = false }: { primary?: boolean }) {
   return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
     <Svg width="100%" height="100%" viewBox="0 0 316 48" preserveAspectRatio="none">
       <Defs><LinearGradient id={primary ? 'auth-primary' : 'auth-field'} x1="0" y1="0" x2="1" y2="1">
         <Stop offset="0" stopColor={primary ? '#fafbff' : '#242632'} /><Stop offset="1" stopColor={primary ? '#c4c7d1' : '#11131c'} />
       </LinearGradient></Defs>
       <Path d="M10 1H307L315 9V38L306 47H1V11Z" fill={primary ? 'url(#auth-primary)' : 'url(#auth-field)'} fillOpacity={primary ? 1 : 0.8}
-        stroke={primary ? '#dadce6' : focused ? '#f1f1f7' : '#838794'} strokeWidth={focused ? 1.8 : 1} />
+        stroke={primary ? '#dadce6' : '#838794'} strokeWidth={1} />
       {primary ? <Path d="M10 6L15 1M17 6L22 1M24 6L29 1M31 6L36 1M38 6L43 1" stroke="#171923" strokeWidth={2} />
         : <Path d="M6 18V12L13 5 M300 5H307L311 10 M4 39V43H13" fill="none" stroke="#b5b9c5" strokeWidth={0.7} />}
     </Svg>

@@ -1,9 +1,10 @@
-import { forwardRef, useSyncExternalStore } from 'react';
+import { forwardRef } from 'react';
 import { Text as NativeText, TextInput as NativeTextInput, StyleSheet, type TextProps, type TextInputProps, type TextStyle } from 'react-native';
-import { getFontScale, subscribeFontScale } from '@/lib/settings';
+import { useFontScale } from '@/hooks/use-font-scale';
 
 function useTextStyle(style: TextProps['style']) {
-  const scale = useSyncExternalStore(subscribeFontScale, getFontScale, () => 1);
+  const scale = useFontScale();
+  if (scale === 1) return style;
   const flat = StyleSheet.flatten(style) ?? {};
   const scaled: TextStyle = {};
   if (typeof flat.fontSize === 'number') scaled.fontSize = flat.fontSize * scale;
