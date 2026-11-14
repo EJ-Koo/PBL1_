@@ -47,7 +47,7 @@ export default function HomeScreen() {
   const { frameWidth } = useDesignFrame();
   // fffju 반응형 레이아웃: 전체 뷰포트로 그리는 화면(홈 HUD·하단바·그룹)은 이 scale을 쓴다.
   // 아직 520 프레임을 쓰는 화면(일기 작성·상점)은 useDesignFrame(frameWidth/scale)을 유지.
-  const { scale: rScale, contentLeft, contentWidth, headerTop } = useResponsiveLayout();
+  const { scale: rScale, chromeLeft, chromeWidth, headerTop } = useResponsiveLayout();
 
   const [screen, setScreen] = useState<Screen>('home');
   const [questVisible, setQuestVisible] = useState(false);
@@ -245,8 +245,8 @@ export default function HomeScreen() {
                 <Text style={styles.emptyText}>아직 이 그룹에 공유된 별이 없어요.</Text>
               </View>
             )}
-            <View style={{ position: 'absolute', top: headerTop, left: contentLeft + 20 * rScale,
-              width: contentWidth - 40 * rScale, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10 * rScale }}>
+            <View style={{ position: 'absolute', top: headerTop, left: chromeLeft + 20 * rScale,
+              width: chromeWidth - 40 * rScale, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10 * rScale }}>
               <SpaceButton scale={rScale} label="‹ 목록" onPress={() => setActiveGroupId(null)} />
               <View style={{ flex: 1, minWidth: 70 }}>
                 <Text numberOfLines={1} style={{ color: '#fff', fontSize: 16 * rScale }}>{activeGroup.name}</Text>
