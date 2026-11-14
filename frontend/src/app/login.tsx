@@ -1,6 +1,7 @@
+import { Text, TextInput } from '@/components/app-text';
 import { useRef, useState } from 'react';
 import { router } from 'expo-router';
-import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GoogleAuthButton } from '@/components/google-auth-button';
 import { AuthFieldFrame, AuthIcon, AuthLogoFrame, AuthPanelFrame, AuthScreenChrome } from '@/components/ui/auth-decoration';
@@ -11,6 +12,7 @@ import { useDiary } from '@/store/diary-context';
 export default function LoginScreen() {
   const { login } = useDiary();
   const insets = useSafeAreaInsets();
+  const [focusedField, setFocusedField] = useState<'email' | 'password' | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -53,15 +55,17 @@ export default function LoginScreen() {
           <View style={styles.panel}>
             <AuthPanelFrame />
             <View style={styles.field}>
-              <AuthFieldFrame /><AuthIcon kind="email" />
+              <AuthFieldFrame focused={focusedField === 'email'} /><AuthIcon kind="email" />
               <TextInput accessibilityLabel="이메일" style={styles.input} placeholder="이메일" placeholderTextColor="#9094a3"
                 autoCapitalize="none" autoCorrect={false} keyboardType="email-address" autoComplete="email" textContentType="emailAddress"
+                onFocus={() => setFocusedField('email')} onBlur={() => setFocusedField(null)}
                 value={email} onChangeText={setEmail} editable={!isLoggingIn} returnKeyType="next"
                 onSubmitEditing={() => passwordRef.current?.focus()} blurOnSubmit={false} />
             </View>
             <View style={styles.field}>
-              <AuthFieldFrame /><AuthIcon kind="lock" />
+              <AuthFieldFrame focused={focusedField === 'password'} /><AuthIcon kind="lock" />
               <TextInput ref={passwordRef} accessibilityLabel="비밀번호" style={styles.input} placeholder="비밀번호" placeholderTextColor="#9094a3"
+                onFocus={() => setFocusedField('password')} onBlur={() => setFocusedField(null)}
                 secureTextEntry={!showPassword} value={password} onChangeText={setPassword} editable={!isLoggingIn}
                 autoComplete="current-password" textContentType="password" autoCapitalize="none" returnKeyType="done" onSubmitEditing={handleLogin} />
               <Pressable accessibilityRole="button" accessibilityLabel={showPassword ? '비밀번호 숨기기' : '비밀번호 표시'}
@@ -99,7 +103,7 @@ const styles = StyleSheet.create({
   subtitle: { color: '#b9bac7', fontFamily: DesignFonts.regular, fontSize: 12, lineHeight: 20, textAlign: 'center', marginTop: 16, marginBottom: 24 },
   panel: { width: '100%', padding: 22, gap: 12 },
   field: { height: 48, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
-  input: { flex: 1, minWidth: 0, height: '100%', padding: 0, fontFamily: DesignFonts.regular, fontSize: 13, color: '#f1f1f7', zIndex: 1 },
+  input: { ...Platform.select({ web: { outlineWidth: 0 } }), flex: 1, minWidth: 0, height: '100%', padding: 0, fontFamily: DesignFonts.regular, fontSize: 13, color: '#f1f1f7', zIndex: 1 },
   loginButton: { height: 46, alignItems: 'center', justifyContent: 'center' },
   loginButtonText: { color: '#121520', fontFamily: DesignFonts.bold, fontSize: 14, fontWeight: '700', zIndex: 1 },
   loginArrow: { position: 'absolute', right: 14, top: 5, fontSize: 30, lineHeight: 34, color: '#171c28' },

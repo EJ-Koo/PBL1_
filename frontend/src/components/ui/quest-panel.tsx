@@ -1,4 +1,5 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Text } from '@/components/app-text';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { SpaceButton, SpaceIcon, SpaceSurface } from './space-ui';
 

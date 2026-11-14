@@ -1,4 +1,5 @@
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Text } from '@/components/app-text';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { DesignFonts, DesignPaint } from '@/constants/ui-design';
 import { getBottomNavItems } from '@/lib/responsive-layout';

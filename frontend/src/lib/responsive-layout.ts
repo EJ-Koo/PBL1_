@@ -12,7 +12,7 @@ export function getResponsiveLayout(width: number, height: number, insets: Inset
   const chromeLeft = insets.left + chromeInset;
   const chromeWidth = Math.max(0, availableWidth - 2 * chromeInset);
   const compact = height < 600;
-  const headerTop = Math.max((compact ? 12 : 54) * scale, insets.top + 12);
+  const headerTop = Math.max((compact ? 12 : 27) * scale, insets.top + 12);
   const navBottom = Math.max((compact ? 12 : 34) * scale, insets.bottom);
   const navHeight = Math.max(44, (wide ? 58 : 30) * scale);
   const bottomSpace = navBottom + navHeight + 16 * scale;

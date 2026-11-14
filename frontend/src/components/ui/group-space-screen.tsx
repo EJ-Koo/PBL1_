@@ -1,6 +1,7 @@
+import { Text } from '@/components/app-text';
 import { Image } from 'expo-image';
 import { useId } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 
 import { GroupMemberStars } from './group-member-stars';

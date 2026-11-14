@@ -1,6 +1,7 @@
+import { Text } from '@/components/app-text';
 import { useCallback, useEffect, useState } from 'react';
 import { router } from 'expo-router';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 
 import { AdminConfigPanel, AdminItemsPanel, AdminWalletsPanel } from '@/components/admin/admin-shop-panels';
 

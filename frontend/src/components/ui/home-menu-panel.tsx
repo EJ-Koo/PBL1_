@@ -1,3 +1,4 @@
+import { Text } from '@/components/app-text';
 // [MODIFIED 2026-11-05] fffju 메뉴 외관은 그대로 두고, 동작을 서버 구조에 맞게 연결함.
 //  - "일기 내용 검색" → 검색 화면(/search, 최근 검색어 표시), 달력 아이콘 → 검색 화면을 달력이 펼쳐진 채로 연다.
 //    (기존 fffju의 팝업 JournalDialog는 삭제)
@@ -5,8 +6,8 @@
 //  - 로그아웃 → 실제 로그아웃 후 로그인 화면
 //  - 서버 기능이 아직 없는 항목(배경음악·테마·소리·알림·회원 탈퇴·이용약관)은 값만 보여주고 눌러도 반응하지 않는다.
 //    펼치기/접기(아코디언)만 동작한다. 나중에 기능이 생기면 하나씩 연결.
-import { useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState, useSyncExternalStore, type ReactNode } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { MenuCalendarIcon, MenuChevron, MenuDecoration, MenuNotificationToggle, MenuSearchIcon } from './menu-decoration';
 import { MenuSlider } from './menu-slider';
@@ -14,7 +15,7 @@ import { MenuSlider } from './menu-slider';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 
 import { DesignFonts, DesignPaint } from '@/constants/ui-design';
-import { ROTATE_SENSITIVITY_MAX, ROTATE_SENSITIVITY_MIN } from '@/lib/settings';
+import { FONT_SCALE_MIN, FONT_SCALE_MAX, getFontScale, setFontScale, subscribeFontScale, ROTATE_SENSITIVITY_MAX, ROTATE_SENSITIVITY_MIN } from '@/lib/settings';
 
 type AccordionId = 'logout' | 'delete-account';
 
@@ -61,10 +62,12 @@ function Inactive({ children }: { children: ReactNode }) {
 }
 
 export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, sensitivity, onSensitivity }: Props) {
+  const fontScale = useSyncExternalStore(subscribeFontScale, getFontScale, () => 1);
   const [expanded, setExpanded] = useState<Partial<Record<AccordionId, boolean>>>({});
   const [sensitivityPreview, setSensitivityPreview] = useState<number | null>(null);
-  const { height, chromeLeft, headerTop, bottomSpace } = useResponsiveLayout();
+  const { height, chromeLeft, chromeWidth, headerTop, bottomSpace } = useResponsiveLayout();
   const top = headerTop + 79 * scale;
+  const panelWidth = Math.min(262 * scale * Math.max(1, fontScale), chromeWidth - 30 * scale);
   const visibleHeight = Math.min(558 * scale, Math.max(0, height - top - bottomSpace - 14 * scale));
   const type = (fontSize = 16, lineHeight = 24) => ({ fontSize: fontSize * scale, lineHeight: lineHeight * scale });
   const toggle = (id: AccordionId) => setExpanded((value) => ({ ...value, [id]: !value[id] }));
@@ -73,7 +76,7 @@ export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, 
   const volumeRow = (label: string, value: number) => (
     <Inactive>
       <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 34 * scale, marginLeft: 10 * scale }}>
-        <Text style={[styles.label, { width: 50 * scale }, type(14, 22)]}>{label}</Text>
+        <Text style={[styles.label, { width: 50 * scale * Math.max(1, fontScale) }, type(14, 22)]}>{label}</Text>
         <MenuSlider scale={scale} label={label} value={value} onPreview={() => {}} onChange={() => {}} />
         <Text style={[styles.label, { width: 41 * scale, textAlign: 'right' }, type(14, 22)]}>{value}%</Text>
       </View>
@@ -85,8 +88,8 @@ export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, 
   return (
     <View style={styles.overlay} pointerEvents="box-none">
       <Pressable accessibilityLabel="메뉴 닫기" onPress={onClose} style={StyleSheet.absoluteFill} />
-      <View style={[styles.panel, { left: chromeLeft + 15 * scale, top, width: 262 * scale, height: visibleHeight }]}>
-        <View style={StyleSheet.absoluteFill} pointerEvents="none"><MenuDecoration scale={scale} height={visibleHeight} /></View>
+      <View style={[styles.panel, { left: chromeLeft + 15 * scale, top, width: panelWidth, height: visibleHeight }]}>
+        <View style={StyleSheet.absoluteFill} pointerEvents="none"><MenuDecoration scale={scale} height={visibleHeight} width={panelWidth} /></View>
         {/* 아코디언을 펼치면 내용이 길어지므로 메뉴 안에서 세로 스크롤된다. */}
         <ScrollView
           accessibilityLabel="설정 메뉴"
@@ -117,9 +120,9 @@ export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, 
           {volumeRow('효과음', PLACEHOLDER.effectVolume)}
 
           {divider}
-          {heading('회전 민감도')}
+          {heading('사용자 설정')}
           <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 34 * scale, marginLeft: 10 * scale }}>
-            <Text style={[styles.label, { width: 50 * scale }, type(14, 22)]}>민감도</Text>
+            <Text style={[styles.label, { width: 50 * scale * Math.max(1, fontScale) }, type(14, 22)]}>민감도</Text>
             <MenuSlider scale={scale} label="우주 회전 민감도" value={sensitivityValue}
               min={Math.round(ROTATE_SENSITIVITY_MIN * 100)} max={Math.round(ROTATE_SENSITIVITY_MAX * 100)}
               onPreview={setSensitivityPreview}
@@ -128,6 +131,25 @@ export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, 
                 onSensitivity(value / 100);
               }} />
             <Text style={[styles.label, { width: 41 * scale, textAlign: 'right' }, type(14, 22)]}>{(sensitivityValue / 100).toFixed(1)}배</Text>
+          </View>
+
+          <View style={{ marginLeft: 10 * scale, marginTop: 8 * scale, gap: 8 * scale }}>
+            <Text style={[styles.label, type(14, 22)]}>글자 크기</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Pressable accessibilityRole="button" accessibilityLabel="글자 크기 줄이기"
+                disabled={fontScale <= FONT_SCALE_MIN} accessibilityState={{ disabled: fontScale <= FONT_SCALE_MIN }}
+                onPress={() => setFontScale(fontScale - 0.1)}
+                style={[styles.sizeButton, fontScale <= FONT_SCALE_MIN && styles.inactive]}>
+                <Text style={[styles.label, type(22, 28)]}>−</Text>
+              </Pressable>
+              <Text accessibilityLiveRegion="polite" style={[styles.label, type(14, 22)]}>{Math.round(fontScale * 100)}%</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel="글자 크기 키우기"
+                disabled={fontScale >= FONT_SCALE_MAX} accessibilityState={{ disabled: fontScale >= FONT_SCALE_MAX }}
+                onPress={() => setFontScale(fontScale + 0.1)}
+                style={[styles.sizeButton, fontScale >= FONT_SCALE_MAX && styles.inactive]}>
+                <Text style={[styles.label, type(22, 28)]}>+</Text>
+              </Pressable>
+            </View>
           </View>
 
           {divider}
@@ -177,5 +199,6 @@ const styles = StyleSheet.create({
   label: { color: DesignPaint.menuText, fontFamily: DesignFonts.regular, includeFontPadding: false },
   heading: { fontFamily: DesignFonts.bold, fontWeight: '700' },
   accountButton: { borderWidth: 1, borderColor: DesignPaint.menuText, alignItems: 'center' },
+  sizeButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: DesignPaint.menuText },
   inactive: { opacity: 0.4 },
 });

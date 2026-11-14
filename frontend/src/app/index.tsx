@@ -1,3 +1,4 @@
+import { Text, TextInput } from '@/components/app-text';
 // [MODIFIED 2026-11-05] fffju 브랜치 index.jsx의 화면 구성·디자인으로 교체하고, 데이터는 서버(로그인)로 연결.
 //  - 화면: 가운데=나의 우주 / 왼쪽=일기 작성 / 오른쪽=그룹 우주 / 상점 (fffju 하단 네비·HUD·퀘스트 그대로)
 //  - 별·일기·그룹: 서버(useDiary). fffju의 기기 저장(useJournal)은 사용하지 않는다.
@@ -7,14 +8,7 @@
 //  - 폰은 fffju 배율 그대로, 웹·PC는 폭 최대 520px 가운데 정렬(useDesignFrame).
 import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
-import {
-  Modal,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Modal, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 import { CreateGroupDialog } from '@/components/ui/create-group-dialog';
 import { SpaceButton } from '@/components/ui/space-ui';

@@ -1,7 +1,25 @@
-// 앱 설정 값 (기기에 저장). 지금은 우주 회전 민감도 하나.
+// 기기에 저장하는 사용자 설정: 우주 회전 민감도와 글자 크기.
 // 우주 화면(universe-scene.tsx)은 드래그할 때마다 getRotateSensitivity()를 읽으므로,
 // 메뉴에서 값을 바꾸면 화면을 다시 그리지 않아도 바로 적용된다.
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const FONT_KEY = 'settings:fontScale';
+export const FONT_SCALE_MIN = 0.8;
+export const FONT_SCALE_MAX = 1.4;
+let fontScale = 1;
+const fontListeners = new Set<() => void>();
+export const getFontScale = () => fontScale;
+export function subscribeFontScale(listener: () => void) {
+  fontListeners.add(listener);
+  return () => { fontListeners.delete(listener); };
+}
+export function setFontScale(value: number) {
+  if (!Number.isFinite(value)) return fontScale;
+  fontScale = Math.round(Math.max(FONT_SCALE_MIN, Math.min(FONT_SCALE_MAX, value)) * 10) / 10;
+  fontListeners.forEach(listener => listener());
+  AsyncStorage.setItem(FONT_KEY, String(fontScale)).catch(() => {});
+  return fontScale;
+}
 
 const ROTATE_KEY = 'settings:rotateSensitivity';
 
@@ -30,6 +48,14 @@ export async function loadSettings(): Promise<void> {
   } catch {
     // 읽기 실패 시 기본값 사용
   }
+  try {
+    const raw = await AsyncStorage.getItem(FONT_KEY);
+    const value = raw === null ? NaN : Number(raw);
+    if (Number.isFinite(value)) {
+      fontScale = Math.round(Math.max(FONT_SCALE_MIN, Math.min(FONT_SCALE_MAX, value)) * 10) / 10;
+      fontListeners.forEach(listener => listener());
+    }
+  } catch { /* 기본 글자 크기 유지 */ }
   loaded = true;
 }
 

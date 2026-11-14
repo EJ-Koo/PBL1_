@@ -1,8 +1,9 @@
+import { Text } from '@/components/app-text';
 // [MODIFIED 2026-11-05] 사진 여러 장(최대 5장)을 가로로 넘겨 보기, 넓은 화면에서는 폭 최대 520px 가운데 정렬.
 // [MODIFIED 2026-11-12] '행성 꾸미기' 버튼: 산 특수 효과를 이 행성에 적용·변경·해제 (components/planet-decorator.tsx)
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { PlanetPreview } from '@/components/universe-scene';
 import { PLANET_BASE_RADIUS, planetScaleForText } from '@/lib/planet-visual';

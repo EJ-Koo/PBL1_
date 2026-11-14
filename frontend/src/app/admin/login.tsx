@@ -1,6 +1,7 @@
+import { Text, TextInput } from '@/components/app-text';
 import { useRef, useState } from 'react';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { showNotice } from '@/lib/notice';
 import { useAdmin } from '@/store/admin-context';

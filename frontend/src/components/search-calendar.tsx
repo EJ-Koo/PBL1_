@@ -1,6 +1,7 @@
+import { Text } from '@/components/app-text';
 // 일기 검색 화면의 날짜 검색용 월 달력. 일기를 쓴 날에는 점을 찍어 표시한다.
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { toDateKey } from '@/lib/search';
 

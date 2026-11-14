@@ -1,5 +1,6 @@
+import { Text } from '@/components/app-text';
 import { useEffect, useState } from 'react';
-import { AccessibilityInfo, Animated, AppState, Easing, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, AppState, Easing, View } from 'react-native';
 import { SpaceIcon } from './space-ui';
 import { DesignFonts } from '@/constants/ui-design';
 import type { MemberStar } from '@/lib/group-attendance';

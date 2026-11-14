@@ -1,5 +1,6 @@
+import { Text } from '@/components/app-text';
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
 import { DesignFonts, DesignPaint } from '@/constants/ui-design';
