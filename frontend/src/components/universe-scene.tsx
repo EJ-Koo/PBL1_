@@ -53,6 +53,7 @@ import {
   layoutConstellation,
   type ConstellationTemplate,
 } from '@/lib/constellation';
+import { controlsFor, frontView, rotateView, setView, zoomView, type UniverseControls } from '@/lib/universe-controls';
 import { getRotateSensitivity, loadSettings } from '@/lib/settings';
 import type { DiaryEntry } from '@/store/diary-context';
 
@@ -131,7 +132,7 @@ const STARFIELD_UNIFORMS = { map: { value: DOT_TEXTURE } };
  * 대부분은 작고 어두운 별, 소수만 조금 크고 밝은 별이라 깊이감만 더한다(개수는 품질 설정 stars).
  * 위치는 고정 난수라 화면을 다시 열어도 같은 하늘이다.
  */
-function Starfield({ count }: { count: number }) {
+function Starfield({ count, sizeScale = 1 }: { count: number; sizeScale?: number }) {
   const pointsRef = useRef<Points>(null);
 
   const { positions, sizes, brights, tints } = useMemo(() => {
@@ -150,12 +151,14 @@ function Starfield({ count }: { count: number }) {
       pos[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
       pos[i * 3 + 2] = radius * Math.cos(phi);
       // 세제곱 분포: 대부분 작고 어둡고, 드물게 크고 밝다
-      siz[i] = 0.45 + 1.2 * d ** 3;
+      // Slightly enlarge the warm/yellow background glints without changing
+      // their positions, density or the colder distant stars.
+      siz[i] = (0.45 + 1.2 * d ** 3) * (f > 0.65 ? 1.18 : 1) * sizeScale;
       bri[i] = 0.3 + 0.7 * e ** 2;
       tin[i] = f;
     }
     return { positions: pos, sizes: siz, brights: bri, tints: tin };
-  }, [count]);
+  }, [count, sizeScale]);
 
   useFrame((_, delta) => {
     if (pointsRef.current) {
@@ -181,12 +184,6 @@ function Starfield({ count }: { count: number }) {
     </points>
   );
 }
-
-// 손가락으로 민 거리를 기억해서 우주 전체 회전 각도에 반영하는 값
-let targetRotX = 0;
-let targetRotY = 0;
-// 두 손가락 핀치(또는 웹 마우스 휠)로 조절하는 카메라 거리. 작을수록 확대, 클수록 축소.
-let targetCameraZ = 5;
 
 // ---------------------------------------------------------------- 행성
 // 표면 = 대표색 계열 색 줄(planetBandStrip)을 '흐르는 좌표'로 읽어 만든 가는 구름층·광물층.
@@ -699,18 +696,12 @@ function Planet({
  * r3f가 별 클릭(onClick)에 쓰는 것과 같은 자체 포인터 이벤트 시스템으로 통일함.
  */
 const CAMERA_FOV = 50;
-const ZOOM_MIN = 1.2;
-// [MODIFIED 2026-11-03] 최대 축소 거리 10 → 25 (휠·핀치로 더 멀리 볼 수 있게)
-const ZOOM_MAX_DEFAULT = 25;
-// 행성이 넓게 퍼져 있으면 처음 화면 거리가 10보다 멀 수 있어 최대 축소 거리도 함께 늘린다(아래 UniverseScene)
-let zoomMax = ZOOM_MAX_DEFAULT;
-
 function pointerDistance(points: Map<number, { x: number; y: number }>) {
   const [a, b] = Array.from(points.values());
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
-function DragPlane() {
+function DragPlane({ controls }: { controls: UniverseControls }) {
   const dragging = useRef(false);
   const lastPoint = useRef({ x: 0, y: 0 });
   // 동시에 눌려 있는 포인터(손가락/마우스)를 id별로 추적 — 2개가 되면 핀치 줌으로 전환
@@ -737,8 +728,7 @@ function DragPlane() {
         if (activePointers.current.size >= 2) {
           const currentDist = pointerDistance(activePointers.current);
           if (lastPinchDist.current !== null) {
-            const distDelta = currentDist - lastPinchDist.current;
-            targetCameraZ = Math.min(Math.max(targetCameraZ - distDelta * 0.015, ZOOM_MIN), zoomMax);
+            zoomView(controls, lastPinchDist.current / Math.max(currentDist, 1));
           }
           lastPinchDist.current = currentDist;
           return;
@@ -747,9 +737,7 @@ function DragPlane() {
         if (!dragging.current) return;
         const deltaX = e.nativeEvent.pageX - lastPoint.current.x;
         const deltaY = e.nativeEvent.pageY - lastPoint.current.y;
-        const speed = 0.01 * getRotateSensitivity();
-        targetRotX += deltaX * speed;
-        targetRotY += deltaY * speed;
+        rotateView(controls, deltaX, deltaY, getRotateSensitivity());
         lastPoint.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
       }}
       onPointerUp={(e: ThreeEvent<PointerEvent>) => {
@@ -776,34 +764,25 @@ function DragPlane() {
   );
 }
 
-// @react-three/fiber/native의 포인터 이벤트는 터치/드래그는 잘 잡지만(DragPlane 참고),
-// 웹 마우스 휠(wheel) 이벤트는 전달하지 않는다 — RN용 이벤트 매니저라 DOM wheel을 안 다룸.
-// 그래서 window에 직접 wheel 리스너를 붙여서 웹 줌을 구현한다.
-// [MODIFIED 2026-11-05] 휠 줌이 가끔 안 먹던 문제 대응:
-//  1) 화면(컴포넌트)마다 붙였다 떼던 리스너 → 앱 전체에서 한 번만 붙이고 떼지 않는다.
-//  2) 브라우저·마우스에 따라 deltaY가 줄(1)·페이지(2) 단위로 오면 값이 작아 거의 안 움직였다 → 픽셀로 환산.
-//  3) 우주 화면(UniverseCanvas, data-universe-zoom) 위에서 굴린 휠만 줌으로 쓴다. 메뉴·목록 스크롤과 분리.
-//  4) 현재 거리에 비례해 움직인다(휠 한 칸에 약 16%) — 가까이서도 멀리서도 같은 느낌.
+// One wheel dispatcher routes to the canvas under the pointer; control state is scoped per universe.
 const WHEEL_PIXELS_PER_LINE = 16;
 const WHEEL_STEP_LIMIT = 300;
-let wheelZoomInstalled = false;
-
+let wheelUsers = 0;
+let removeWheel: (() => void) | undefined;
 function installWheelZoom() {
-  if (Platform.OS !== 'web' || wheelZoomInstalled || typeof window === 'undefined') return;
-  wheelZoomInstalled = true;
-  window.addEventListener(
-    'wheel',
-    (e: WheelEvent) => {
-      // 캔버스 위에는 r3f가 이벤트용 div를 덧씌우므로 대상이 캔버스 자체가 아닐 수 있다.
-      if (!(e.target as Element | null)?.closest?.('[data-universe-zoom]')) return;
-      const unit =
-        e.deltaMode === 1 ? WHEEL_PIXELS_PER_LINE : e.deltaMode === 2 ? window.innerHeight : 1;
-      const dy = Math.min(Math.max(e.deltaY * unit, -WHEEL_STEP_LIMIT), WHEEL_STEP_LIMIT);
-      const next = targetCameraZ * Math.exp(dy * 0.0015);
-      targetCameraZ = Math.min(Math.max(next, ZOOM_MIN), zoomMax);
-    },
-    { passive: true }
-  );
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  wheelUsers++;
+  if (wheelUsers > 1) return () => { if (--wheelUsers === 0) removeWheel?.(); };
+  const onWheel = (e: WheelEvent) => {
+    const scene = (e.target as Element | null)?.closest?.('[data-universe-scene]')?.getAttribute('data-universe-scene');
+    if (!scene) return;
+    const unit = e.deltaMode === 1 ? WHEEL_PIXELS_PER_LINE : e.deltaMode === 2 ? window.innerHeight : 1;
+    const dy = Math.min(Math.max(e.deltaY * unit, -WHEEL_STEP_LIMIT), WHEEL_STEP_LIMIT);
+    zoomView(controlsFor(scene), Math.exp(dy * 0.0015));
+  };
+  window.addEventListener('wheel', onWheel, { passive: true });
+  removeWheel = () => window.removeEventListener('wheel', onWheel);
+  return () => { if (--wheelUsers === 0) removeWheel?.(); };
 }
 
 type Framing = { center: [number, number, number]; spread: number; distance: number };
@@ -842,8 +821,7 @@ export type ConstellationRequest = {
  * 별자리 보기에 들어가기 직전의 화면 각도·거리. 나올 때 그대로 되돌린다.
  * 화면(컴포넌트)이 다시 만들어져도 남도록 모듈 변수로 둔다(targetRotX 등과 같은 방식).
  */
-let constellationSavedView: { rotX: number; rotY: number; camZ: number } | null = null;
-const TWO_PI = Math.PI * 2;
+let constellationSavedView: UniverseControls | null = null;
 /**
  * 별자리 밖 행성을 어둡게 하는 값(uDim). 셰이더는 선형 색에서 곱한 뒤 sRGB로 바꾸므로,
  * 눈에 보이는 밝기(dimOthers, 0~1)를 선형 값으로 바꿔 준다(0.3 → 약 0.07배).
@@ -858,6 +836,7 @@ export function UniverseScene({
   sceneKey = 'home',
   constellation = null,
   frontViewRequest = 0,
+  backgroundStarScale = 1,
 }: {
   entries: DiaryEntry[];
   onStarPress: (id: string) => void;
@@ -867,7 +846,9 @@ export function UniverseScene({
   constellation?: ConstellationRequest | null;
   /** [2026-11-13] 값이 바뀔 때마다 별자리를 정면·처음 거리로 다시 본다('정면으로 보기' 버튼) */
   frontViewRequest?: number;
+  backgroundStarScale?: number;
 }) {
+  const controls = useMemo(() => controlsFor(sceneKey), [sceneKey]);
   const groupRef = useRef<Group>(null);
   // 화면이 다시 만들어졌을 때 첫 프레임은 저장된 각도·거리로 바로 맞춘다(서서히 돌아가며 초기화되는 것처럼 보이지 않게).
   const synced = useRef(false);
@@ -876,8 +857,7 @@ export function UniverseScene({
   const size = useThree((s) => s.size);
 
   useEffect(() => {
-    installWheelZoom();
-    loadSettings();
+    void loadSettings();
   }, []);
 
   // 처음 화면 맞추기: 행성들의 중심을 회전 중심으로 삼고, 대부분의 행성이 화면에 들어오는 거리에서 시작한다.
@@ -888,12 +868,7 @@ export function UniverseScene({
   if (!framing && entries.length > 0) setFraming(computeFraming(entries, size.width / Math.max(size.height, 1)));
   useEffect(() => {
     if (!framing) return;
-    zoomMax = Math.max(ZOOM_MAX_DEFAULT, framing.distance * 1.6);
-    // 이 화면을 처음 열 때만 카메라 거리를 맞춘다. 다시 돌아온 경우에는 사용자가 확대·축소한 거리를 유지한다.
-    if (!framingCache.has(sceneKey)) {
-      framingCache.set(sceneKey, framing);
-      targetCameraZ = framing.distance;
-    }
+    if (!framingCache.has(sceneKey)) framingCache.set(sceneKey, framing);
   }, [framing, sceneKey]);
 
   // ---------------------------------------------------------------- 별자리 보기
@@ -946,20 +921,14 @@ export function UniverseScene({
       let i = 0;
       for (const [id, pos] of rt.positions) sendHome(id, pos, i++);
       if (constellationSavedView) {
-        targetRotX = constellationSavedView.rotX;
-        targetRotY = constellationSavedView.rotY;
-        targetCameraZ = constellationSavedView.camZ;
+        setView(controls, constellationSavedView);
         constellationSavedView = null;
       }
       return;
     }
 
     // 들어가기 전 화면을 한 번만 기억하고, 우주 회전을 가장 가까운 '정면'(360도의 배수)으로 돌린다 → 별자리가 화면과 나란하다
-    if (!constellationSavedView) {
-      constellationSavedView = { rotX: targetRotX, rotY: targetRotY, camZ: targetCameraZ };
-    }
-    targetRotX = Math.round(targetRotX / TWO_PI) * TWO_PI;
-    targetRotY = Math.round(targetRotY / TWO_PI) * TWO_PI;
+    if (!constellationSavedView) constellationSavedView = { ...controls };
 
     const center = framing?.center ?? [0, 0, 0];
     const centerVec = new Vector3(...center);
@@ -1008,9 +977,9 @@ export function UniverseScene({
     }
 
     // 카메라: 별자리 전체(가장자리 행성 포함)가 남은 영역에 들어오는 거리
-    targetCameraZ = planeZ + layout.cameraDistance;
-    fittedCameraZ.current = targetCameraZ;
-    zoomMax = Math.max(zoomMax, targetCameraZ * 1.4);
+    // (카메라 거리 = 무리 기본 거리 × zoom 이므로 zoom 으로 바꿔 넣는다)
+    fittedCameraZ.current = planeZ + layout.cameraDistance;
+    frontView(controls, fittedCameraZ.current / Math.max(framing?.distance ?? 5, 0.1));
     // layoutKey(별자리·구성 행성·화면 크기)가 바뀔 때만 다시 배치한다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layoutKey]);
@@ -1018,9 +987,7 @@ export function UniverseScene({
   // '정면으로 보기': 드래그로 돌리거나 확대·축소했어도 별자리 정면·처음 거리로 부드럽게 돌아온다(별자리 보기 중에만)
   useEffect(() => {
     if (fittedCameraZ.current == null) return;
-    targetRotX = Math.round(targetRotX / TWO_PI) * TWO_PI;
-    targetRotY = Math.round(targetRotY / TWO_PI) * TWO_PI;
-    targetCameraZ = fittedCameraZ.current;
+    frontView(controls, fittedCameraZ.current / Math.max(framing?.distance ?? 5, 0.1));
   }, [frontViewRequest]);
 
   // 선택: 웹은 마우스를 올린 행성, 터치는 누른 행성. 누른 강조는 잠깐 보였다가(일기 화면으로 넘어가는 동안) 서서히 꺼진다.
@@ -1115,9 +1082,9 @@ export function UniverseScene({
 
   useFrame((state, delta) => {
     if (!synced.current && groupRef.current) {
-      groupRef.current.rotation.y = targetRotX;
-      groupRef.current.rotation.x = targetRotY;
-      state.camera.position.z = targetCameraZ;
+      groupRef.current.rotation.y = controls.yaw;
+      groupRef.current.rotation.x = controls.pitch;
+      state.camera.position.z = Math.max(1.2, (framing?.distance ?? 5) * controls.zoom);
       synced.current = true;
     }
     lodClock.current += delta;
@@ -1145,13 +1112,14 @@ export function UniverseScene({
         EFFECT_TIERS.set(r.id, tier);
       });
     }
+    const smoothing = 1 - Math.exp(-delta * 9);
     if (groupRef.current) {
-      groupRef.current.rotation.y += (targetRotX - groupRef.current.rotation.y) * 0.1;
-      groupRef.current.rotation.x += (targetRotY - groupRef.current.rotation.x) * 0.1;
+      groupRef.current.rotation.y += (controls.yaw - groupRef.current.rotation.y) * smoothing;
+      groupRef.current.rotation.x += (controls.pitch - groupRef.current.rotation.x) * smoothing;
     }
     const focus = SCENE_UNIFORMS.uFocus;
     focus.value += ((selectedId ? 1 : 0) - focus.value) * Math.min(1, delta * 8);
-    state.camera.position.z += (targetCameraZ - state.camera.position.z) * 0.1;
+    state.camera.position.z += (Math.max(1.2, (framing?.distance ?? 5) * controls.zoom) - state.camera.position.z) * smoothing;
     // 무리 중심보다 먼 행성일수록 조금 어둡게(셰이더 uDepthFade)
     const camZ = state.camera.position.z;
     SCENE_UNIFORMS.uDepthFade.value.set(camZ, camZ + (framing?.spread ?? 3) * 1.2);
@@ -1160,9 +1128,9 @@ export function UniverseScene({
   const center = framing?.center ?? [0, 0, 0];
   return (
     <>
-      <DragPlane />
+      <DragPlane controls={controls} />
       <group ref={groupRef}>
-        <Starfield count={QUALITY_SETTINGS[quality].stars} />
+        <Starfield count={QUALITY_SETTINGS[quality].stars} sizeScale={backgroundStarScale} />
 
         <group position={[-center[0], -center[1], -center[2]]}>
           <ConstellationLines runtimeRef={runtimeRef} />
@@ -1209,6 +1177,7 @@ export function UniverseCanvas({
   sceneKey,
   constellation,
   frontViewRequest,
+  backgroundStarScale = 1,
 }: {
   entries: DiaryEntry[];
   onStarPress: (id: string) => void;
@@ -1217,13 +1186,16 @@ export function UniverseCanvas({
   constellation?: ConstellationRequest | null;
   /** [2026-11-13] 바뀔 때마다 별자리를 정면으로 다시 본다 */
   frontViewRequest?: number;
+  backgroundStarScale?: number;
 }) {
+  useEffect(() => installWheelZoom(), []);
   return (
     // dataSet은 웹에서 data-universe-zoom 속성이 된다 (휠 줌 대상 판단용, installWheelZoom 참고).
-    <View style={{ flex: 1 }} {...({ dataSet: { universeZoom: 'true' } } as object)}>
+    <View style={{ flex: 1 }} {...({ dataSet: { universeZoom: 'true', universeScene: sceneKey ?? 'home' } } as object)}>
       {/* 시야각 50도(기본 75도): 화면 가장자리 행성이 타원처럼 늘어나는 왜곡과 가까운 행성만 크게 보이는 차이를 줄인다 */}
       <Canvas style={{ flex: 1 }} camera={{ fov: CAMERA_FOV, position: [0, 0, 5] }}>
-        <UniverseScene entries={entries} onStarPress={onStarPress} sceneKey={sceneKey}
+        <UniverseScene key={sceneKey} entries={entries} onStarPress={onStarPress} sceneKey={sceneKey}
+          backgroundStarScale={backgroundStarScale}
           constellation={constellation}
           frontViewRequest={frontViewRequest}
         />

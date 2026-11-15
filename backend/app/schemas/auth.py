@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 class SignUpRequest(BaseModel):
@@ -27,3 +27,7 @@ class SignUpResponse(BaseModel):
     access_token: str | None = None
     refresh_token: str | None = None
     email_confirmation_required: bool = False
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(min_length=1, max_length=8192)

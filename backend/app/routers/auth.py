@@ -5,6 +5,7 @@ from app.dependencies import get_current_user_id
 from app.schemas.auth import (
     GoogleAuthRequest,
     LoginRequest,
+    RefreshRequest,
     SignUpRequest,
     SignUpResponse,
     TokenResponse,
@@ -79,7 +80,7 @@ def google(payload: GoogleAuthRequest):
 def logout(authorization: str = Header(...)):
     token = authorization.removeprefix("Bearer ")
     try:
-        supabase.auth.admin.sign_out(token)
+        supabase.auth.admin.sign_out(token, scope="local")
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     return {"status": "ok"}
@@ -88,3 +89,17 @@ def logout(authorization: str = Header(...)):
 @router.get("/me")
 def me(user_id: str = Depends(get_current_user_id)):
     return {"user_id": user_id}
+
+
+@router.post("/refresh", response_model=TokenResponse)
+def refresh(payload: RefreshRequest):
+    try:
+        result = new_auth_client().auth.refresh_session(payload.refresh_token)
+    except Exception as error:
+        if str(getattr(error, "status", "")) in ("400", "401", "403"):
+            raise HTTPException(status_code=401, detail="로그인이 만료됐어요. 다시 로그인해주세요.")
+        raise HTTPException(status_code=503, detail="로그인 서버에 연결하지 못했어요. 잠시 후 다시 시도해주세요.")
+    if not result.session or not result.user:
+        raise HTTPException(status_code=401, detail="로그인이 만료됐어요. 다시 로그인해주세요.")
+    return TokenResponse(access_token=result.session.access_token,
+                         refresh_token=result.session.refresh_token, user_id=result.user.id)

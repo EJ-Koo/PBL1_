@@ -7,14 +7,14 @@ import { StyleSheet, View } from 'react-native';
 
 import { DiaryComposer } from '@/components/diary-composer';
 import { DesignPaint } from '@/constants/ui-design';
-import { useDesignFrame } from '@/hooks/use-design-frame';
+import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { goBackSafe } from '@/lib/navigation';
 import { useDiary } from '@/store/diary-context';
 
 export default function WriteRoute() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { isLoggedIn, getEntry } = useDiary();
-  const { frameWidth, scale } = useDesignFrame();
+  const { scale } = useResponsiveLayout();
 
   // 웹에서 새로고침하면 로그인 정보가 사라지므로 로그인 화면으로 보낸다.
   useEffect(() => {
@@ -31,14 +31,11 @@ export default function WriteRoute() {
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.frame, { width: frameWidth }]}>
-        <DiaryComposer scale={scale} editId={entry.id} onBack={goBackSafe} onSaved={goBackSafe} />
-      </View>
+      <DiaryComposer scale={scale} editId={entry.id} onBack={goBackSafe} onSaved={goBackSafe} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: DesignPaint.background, alignItems: 'center' },
-  frame: { flex: 1 },
+  screen: { flex: 1, backgroundColor: DesignPaint.background },
 });

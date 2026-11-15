@@ -1,3 +1,4 @@
+import { Text } from '@/components/app-text';
 // [ADDED 2026-11-12] 행성 꾸미기 팝업: 산 특수 효과를 원하는 일기 행성에 적용·변경·해제한다. 상점 팝업과 같은 모양.
 //  - 상점에서 열기(방법 A): 효과를 고른 채로 열림 → 내 일기(행성) 목록에서 행성 고르기 → 미리보기 → 적용
 //  - 행성 상세에서 열기(방법 B): 그 행성으로 바로 열림 → 효과 고르기 → 미리보기 → 적용/변경/해제
@@ -5,17 +6,7 @@
 //    해제하거나 다른 효과로 바꾸면 그 1개는 다시 남은 개수로 돌아온다. 적용·해제 권한과 개수는 서버가 다시 확인한다.
 //  - 행성 본체(감정 색·무늬·크기·위치)는 바뀌지 않는다. 효과는 바깥에만 더해진다.
 import { useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 
 import { PlanetPreview } from '@/components/universe-scene';
 import { showMessage } from '@/lib/feedback';

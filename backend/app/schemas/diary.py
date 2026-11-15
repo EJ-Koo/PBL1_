@@ -1,6 +1,7 @@
 from typing import Literal
 
 from pydantic import BaseModel, Field
+from app.schemas.quest import DailyQuestStatus
 
 Visibility = Literal["public", "friends", "private"]
 # 일기 주제(선택). 고르지 않아도 된다. [2026-11-13] diaries.topic 에 저장해 별자리 해금·표시에 쓴다
@@ -32,6 +33,11 @@ class DiaryUpdate(BaseModel):
     topic: Topic | None = None
 
 
+class DiaryAuthor(BaseModel):
+    nickname: str
+    avatar_url: str | None = None
+
+
 class Diary(BaseModel):
     id: str
     user_id: str
@@ -47,6 +53,8 @@ class Diary(BaseModel):
     updated_at: str
     # [2026-11-13] 일기 주제(선택). diaries.topic 열이 아직 없거나 고르지 않았으면 None.
     topic: Topic | None = None
+    quest_result: DailyQuestStatus | None = None
+    author_profile: DiaryAuthor | None = None
 
 
 class RelatedDiary(BaseModel):

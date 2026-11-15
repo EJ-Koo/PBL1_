@@ -103,7 +103,7 @@ def test_create_diary_tags_member_groups(monkeypatch):
     monkeypatch.setattr(diaries, "supabase", fake)
 
     diaries.create_diary(
-        DiaryCreate(content="hello", group_ids=["group-1", "group-2"]), user_id="user-1"
+        DiaryCreate(content="hello", visibility="friends", group_ids=["group-1", "group-2"]), user_id="user-1"
     )
 
     tagged_group_ids = {row["group_id"] for row in fake.diary_group_inserts}
@@ -117,7 +117,7 @@ def test_create_diary_rejects_group_not_member(monkeypatch):
 
     with pytest.raises(HTTPException) as exc_info:
         diaries.create_diary(
-            DiaryCreate(content="hello", group_ids=["group-1", "not-mine"]), user_id="user-1"
+            DiaryCreate(content="hello", visibility="friends", group_ids=["group-1", "not-mine"]), user_id="user-1"
         )
 
     assert exc_info.value.status_code == 404
@@ -275,3 +275,70 @@ def test_related_diaries_empty_without_ai(monkeypatch):
     monkeypatch.setattr(diaries.ai_client, "related_diaries", lambda *a: None)
 
     assert diaries.get_related_diaries(query_id, user_id="user-1") == []
+
+
+# --- 그룹 공유 우주: 남의 별 상세를 같은 그룹 멤버면 읽을 수 있어야 한다 ---
+
+class _ViewFakeTable:
+    def __init__(self, name, db):
+        self._name = name
+        self._db = db
+        self._eq = {}
+        self._in = None
+
+    def select(self, *_a, **_k):
+        return self
+
+    def eq(self, field, value):
+        self._eq[field] = value
+        return self
+
+    def in_(self, _field, values):
+        self._in = set(values)
+        return self
+
+    def execute(self):
+        rows = [r for r in self._db.get(self._name, []) if all(r.get(k) == v for k, v in self._eq.items())]
+        if self._in is not None:
+            rows = [r for r in rows if r.get("group_id") in self._in]
+        return _FakeResult(rows)
+
+
+class _ViewFakeSupabase:
+    def __init__(self, db):
+        self._db = db
+
+    def table(self, name):
+        return _ViewFakeTable(name, self._db)
+
+
+_DID = "22222222-2222-2222-2222-222222222222"
+
+
+def _view_db(**extra):
+    return {"diaries": [{"id": _DID, "user_id": "owner", "content": "x", "visibility": "friends"}], **extra}
+
+
+def test_get_viewable_diary_owner(monkeypatch):
+    monkeypatch.setattr(diaries, "supabase", _ViewFakeSupabase(_view_db()))
+    assert diaries._get_viewable_diary(_DID, user_id="owner")["id"] == _DID
+
+
+def test_get_viewable_diary_group_comember_allowed(monkeypatch):
+    db = _view_db(
+        diary_groups=[{"diary_id": _DID, "group_id": "g1"}],
+        group_members=[{"group_id": "g1", "user_id": "friend"}],
+    )
+    monkeypatch.setattr(diaries, "supabase", _ViewFakeSupabase(db))
+    assert diaries._get_viewable_diary(_DID, user_id="friend")["id"] == _DID
+
+
+def test_get_viewable_diary_stranger_denied(monkeypatch):
+    db = _view_db(
+        diary_groups=[{"diary_id": _DID, "group_id": "g1"}],
+        group_members=[{"group_id": "g1", "user_id": "friend"}],
+    )
+    monkeypatch.setattr(diaries, "supabase", _ViewFakeSupabase(db))
+    with pytest.raises(HTTPException) as exc:
+        diaries._get_viewable_diary(_DID, user_id="stranger")  # 그룹 멤버 아님
+    assert exc.value.status_code == 404

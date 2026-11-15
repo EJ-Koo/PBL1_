@@ -13,6 +13,7 @@ from app.routers import (
     groups,
     legal,
     profiles,
+    quests,
     shop,
     stars,
     uploads,
@@ -50,6 +51,7 @@ app.include_router(stars.router)
 app.include_router(constellations.router)
 app.include_router(uploads.router)
 app.include_router(shop.router)
+app.include_router(quests.router)
 app.include_router(legal.router)
 
 

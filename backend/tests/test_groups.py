@@ -1,8 +1,91 @@
 import pytest
+from uuid import UUID
+from postgrest.exceptions import APIError
 from fastapi import HTTPException
 
 from app.routers import groups
 from app.schemas.group import GroupCreate, GroupJoin
+
+
+def test_same_group_creation_action_is_idempotent(monkeypatch):
+    fake = _FakeSupabase()
+    monkeypatch.setattr(groups, 'supabase', fake)
+    request = GroupCreate(name='우리 우주', request_id=UUID('11111111-1111-4111-8111-111111111111'))
+    first = groups.create_group(request, 'owner')
+    second = groups.create_group(request, 'owner')
+    assert first['id'] == second['id']
+    assert len(fake._db['groups']) == 1
+    assert len(fake._db['group_members']) == 1
+
+
+def test_concurrent_insert_conflict_recovers_the_same_group(monkeypatch):
+    fake = _FakeSupabase()
+    original_table = fake.table
+    raced = [False]
+    def table(name):
+        query = original_table(name)
+        execute = query.execute
+        def run():
+            if name == 'groups' and query._payload is None and 'id' in query._eq and not raced[0]:
+                raced[0] = True
+                fake._db['groups'].append({'id': query._eq['id'], 'user_id': 'owner', 'name': '우리 우주', 'invite_code': 'RACE1234', 'created_at': '2026-11-15T00:00:00Z'})
+                return _FakeResult([])
+            if name == 'groups' and query._payload is not None:
+                raise APIError({'code': '23505', 'message': 'duplicate key', 'details': '', 'hint': ''})
+            return execute()
+        query.execute = run
+        return query
+    monkeypatch.setattr(fake, 'table', table)
+    monkeypatch.setattr(groups, 'supabase', fake)
+    request = GroupCreate(name='우리 우주', request_id=UUID('11111111-1111-4111-8111-111111111111'))
+    result = groups.create_group(request, 'owner')
+    assert result['id'] == fake._db['groups'][0]['id']
+    assert len(fake._db['groups']) == 1
+    assert len(fake._db['group_members']) == 1
+
+
+def test_new_action_or_other_user_can_create_a_distinct_group_with_same_name(monkeypatch):
+    fake = _FakeSupabase()
+    monkeypatch.setattr(groups, 'supabase', fake)
+    first = GroupCreate(name='우리 우주', request_id=UUID('11111111-1111-4111-8111-111111111111'))
+    other = GroupCreate(name='우리 우주', request_id=UUID('22222222-2222-4222-8222-222222222222'))
+    ids = {groups.create_group(first, 'a')['id'], groups.create_group(first, 'b')['id'], groups.create_group(other, 'a')['id']}
+    assert len(ids) == 3
+
+
+def test_reusing_action_with_changed_name_is_rejected(monkeypatch):
+    fake = _FakeSupabase()
+    monkeypatch.setattr(groups, 'supabase', fake)
+    action = UUID('11111111-1111-4111-8111-111111111111')
+    groups.create_group(GroupCreate(name='원래 이름', request_id=action), 'owner')
+    with pytest.raises(HTTPException) as error:
+        groups.create_group(GroupCreate(name='다른 이름', request_id=action), 'owner')
+    assert error.value.status_code == 409
+    assert len(fake._db['groups']) == 1
+
+
+def test_membership_failure_can_be_repaired_by_same_action_without_second_group(monkeypatch):
+    fake = _FakeSupabase()
+    table = fake.table
+    fail = [True]
+    def make_table(name):
+        query = table(name)
+        if name == 'group_members' and fail[0]:
+            original = query.upsert
+            def upsert(*args, **kwargs):
+                fail[0] = False
+                raise RuntimeError('temporary membership outage')
+            query.upsert = upsert
+        return query
+    monkeypatch.setattr(fake, 'table', make_table)
+    monkeypatch.setattr(groups, 'supabase', fake)
+    request = GroupCreate(name='우리 우주', request_id=UUID('11111111-1111-4111-8111-111111111111'))
+    with pytest.raises(HTTPException):
+        groups.create_group(request, 'owner')
+    assert len(fake._db['groups']) == 1
+    groups.create_group(request, 'owner')
+    assert len(fake._db['groups']) == 1
+    assert len(fake._db['group_members']) == 1
 
 
 class _FakeResult:
@@ -56,7 +139,7 @@ class _FakeTable:
         if self._name == "groups":
             if self._payload is not None:  # insert
                 row = {
-                    "id": "group-new",
+                    "id": self._payload.get("id", "group-new"),
                     "user_id": self._payload["user_id"],
                     "name": self._payload["name"],
                     "invite_code": self._payload["invite_code"],
@@ -68,6 +151,7 @@ class _FakeTable:
             return _FakeResult([{**g, "diary_groups": []} for g in rows])
         if self._name == "group_members":
             if self._payload is not None:  # insert/upsert: 조회 목록에도 반영
+                self._db["group_members"] = [r for r in self._db["group_members"] if (r.get('group_id'), r.get('user_id')) != (self._payload.get('group_id'), self._payload.get('user_id'))]
                 self._db["group_members"].append(self._payload)
                 return _FakeResult([self._payload])
             rows = self._db["group_members"]

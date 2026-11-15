@@ -2,6 +2,8 @@
 // 서버 호출 없이, 로그인할 때 이미 받아 둔 내 일기 목록(useDiary().entries)을 거른다.
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { parseSearchHistory, rememberSearch, type RecentSearch, type SearchQuery } from './search-history';
+
 import type { DiaryEntry } from '@/store/diary-context';
 
 // 날짜는 기기 시간(한국에서는 KST) 기준 'YYYY-MM-DD' 문자열로 비교한다.
@@ -55,49 +57,42 @@ export function makeSnippet(text: string, keyword: string, radius = 18): Snippet
   };
 }
 
-// 최근 검색어: 기기 저장소(AsyncStorage)에 남겨 새로고침·재실행 후에도 유지한다.
-// 서버로 보내지 않으므로 검색 기록은 이 기기에만 남는다. 로그아웃해도 지우지 않는다.
+// Keep the storage key so existing keyword history can be migrated in place.
 const RECENT_KEY = 'search:recentKeywords';
-const MAX_RECENT = 10;
-let recentKeywords: string[] = [];
-let loaded = false;
+let recentSearches: RecentSearch[] = [];
+let loadingHistory: Promise<RecentSearch[]> | null = null;
+let persistence = Promise.resolve();
 
 function persist() {
-  // 저장 실패(용량 부족 등)는 검색 기능에 영향이 없으므로 조용히 무시한다.
-  AsyncStorage.setItem(RECENT_KEY, JSON.stringify(recentKeywords)).catch(() => {});
+  const snapshot = JSON.stringify(recentSearches);
+  // Serialize writes so a slow earlier save cannot undo a later clear/delete.
+  persistence = persistence.then(() => AsyncStorage.setItem(RECENT_KEY, snapshot)).catch(() => {});
 }
 
-export async function loadRecentKeywords(): Promise<string[]> {
-  if (loaded) return recentKeywords;
-  try {
-    const raw = await AsyncStorage.getItem(RECENT_KEY);
-    const parsed: unknown = raw ? JSON.parse(raw) : [];
-    recentKeywords = Array.isArray(parsed)
-      ? parsed.filter((v): v is string => typeof v === 'string').slice(0, MAX_RECENT)
-      : [];
-  } catch {
-    recentKeywords = [];
+export function loadRecentSearches(): Promise<RecentSearch[]> {
+  if (!loadingHistory) {
+    loadingHistory = AsyncStorage.getItem(RECENT_KEY).then(raw => {
+      recentSearches = parseSearchHistory(raw ? JSON.parse(raw) : []);
+      return recentSearches;
+    }).catch(() => { recentSearches = []; return recentSearches; });
   }
-  loaded = true;
-  return recentKeywords;
+  return loadingHistory.then(() => [...recentSearches]);
 }
-
-export function addRecentKeyword(keyword: string): string[] {
-  const k = keyword.trim();
-  if (!k) return recentKeywords;
-  recentKeywords = [k, ...recentKeywords.filter((r) => r !== k)].slice(0, MAX_RECENT);
+export async function addRecentSearch(query: SearchQuery): Promise<RecentSearch[]> {
+  await loadRecentSearches();
+  recentSearches = rememberSearch(recentSearches, query);
   persist();
-  return recentKeywords;
+  return [...recentSearches];
 }
-
-export function removeRecentKeyword(keyword: string): string[] {
-  recentKeywords = recentKeywords.filter((r) => r !== keyword);
+export async function removeRecentSearch(id: string): Promise<RecentSearch[]> {
+  await loadRecentSearches();
+  recentSearches = recentSearches.filter(item => item.id !== id);
   persist();
-  return recentKeywords;
+  return [...recentSearches];
 }
-
-export function clearRecentKeywords(): string[] {
-  recentKeywords = [];
+export async function clearRecentSearches(): Promise<RecentSearch[]> {
+  await loadRecentSearches();
+  recentSearches = [];
   persist();
-  return recentKeywords;
+  return [];
 }

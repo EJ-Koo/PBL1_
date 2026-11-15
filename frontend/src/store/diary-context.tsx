@@ -1,9 +1,16 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { randomUUID } from 'expo-crypto';
+import { GroupCreation } from '@/lib/group-creation';
+import { GroupCache } from '@/lib/group-cache';
+import { publishQuest } from '@/lib/quest-events';
+import { authSession, signOut } from '@/lib/auth-session';
+import { apiGetProfile, apiSaveProfile, apiUploadAvatar, type ApiProfile, type ProfileDraft } from '@/lib/profile-api';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 
 import {
   apiCreateDiary,
   apiCreateGroup,
   apiGoogleAuth,
+  apiGroupStars,
   apiJoinGroup,
   apiLeaveGroup,
   apiListDiaries,
@@ -15,6 +22,7 @@ import {
   apiUploadPhoto,
   type ApiDiary,
   type ApiGroup,
+  type ApiGroupStar,
   type ApiStar,
 } from '@/lib/api';
 import { fallbackVisual, type PlanetVisual } from '@/lib/planet-visual';
@@ -28,6 +36,7 @@ export type DiaryPhoto = { id: string; uri: string; path?: string };
 
 export type DiaryEntry = {
   id: string;
+  authorId: string;
   text: string;
   photoUri: string | null;
   photos: DiaryPhoto[];
@@ -54,6 +63,12 @@ export type SaveResult = { ok: true } | { ok: false; error: string };
 
 type DiaryContextValue = {
   isLoggedIn: boolean;
+  isRestoring: boolean;
+  dataLoading: boolean;
+  loadError: string | null;
+  retryLoad: () => void;
+  profile: ApiProfile | null;
+  saveProfile: (draft: ProfileDraft) => Promise<SaveResult>;
   accessToken: string | null;
   // 로그인한 이메일 (일기 작성 화면의 작성자 표시용)
   userEmail: string | null;
@@ -77,7 +92,9 @@ type DiaryContextValue = {
     /** [2026-11-13] 주제 바꾸기. undefined 면 그대로, null 이면 주제 없음 */
     topic?: DiaryTopic | null
   ) => Promise<SaveResult>;
-  getEntry: (id: string) => DiaryEntry | undefined;
+  getEntry: (id: string, groupId?: string) => DiaryEntry | undefined;
+  /** 이 일기가 '본인' 것인지(그룹 공유 우주의 남의 별과 구분 — 수정/꾸미기 숨김용). */
+  isOwnEntry: (id: string) => boolean;
   /** [2026-11-12] 서버에 효과 적용·해제가 저장된 뒤 화면의 행성 효과를 바로 바꾼다(상점 store가 부른다). */
   setEntryEffect: (id: string, effect: SpecialType | null) => void;
   isEditableToday: (id: string) => boolean;
@@ -85,6 +102,8 @@ type DiaryContextValue = {
   createGroup: (name: string) => Promise<SaveResult>;
   joinGroup: (inviteCode: string) => Promise<SaveResult>;
   leaveGroup: (groupId: string) => Promise<SaveResult>;
+  /** 그룹 공유 우주: 멤버 전체가 이 그룹에 태그한 별을 불러온다(본인 것만이 아님). */
+  loadGroupStars: (groupId: string) => Promise<DiaryEntry[]>;
 };
 
 function isSameDay(timestamp: number) {
@@ -129,10 +148,11 @@ function starVisual(star: ApiStar | undefined): PlanetVisual {
   return star?.planet ?? fallbackVisual(star?.color ?? null);
 }
 
-function toEntry(diary: ApiDiary, colorIndex: number, star?: ApiStar): DiaryEntry {
+export function toEntry(diary: ApiDiary, colorIndex: number, star?: ApiStar): DiaryEntry {
   const photos = toPhotos(diary);
   return {
     id: diary.id,
+    authorId: diary.user_id,
     text: diary.content,
     photoUri: photos[0]?.uri ?? null,
     photos,
@@ -145,6 +165,27 @@ function toEntry(diary: ApiDiary, colorIndex: number, star?: ApiStar): DiaryEntr
     effect: asSpecialType(star?.effect),
     // [2026-11-13] 주제: 일기 행(diaries.topic)이 먼저, 없으면 별 목록(예전 AI 저장소 보충값)
     topic: asDiaryTopic(diary.topic) ?? asDiaryTopic(star?.topic),
+  };
+}
+
+// 그룹 공유 우주의 별 하나(다른 멤버 포함)를 화면용 DiaryEntry로 바꾼다.
+function groupStarToEntry(g: ApiGroupStar): DiaryEntry {
+  const planet = g.planet ?? fallbackVisual(g.color);
+  return {
+    id: g.diary_id,
+    authorId: '',
+    text: g.content,
+    photoUri: null,
+    photos: [],
+    visibility: 'friends',
+    createdAt: new Date(g.created_at).getTime(),
+    color: planet.base_color,
+    brightness: g.brightness,
+    position: [g.x, g.y, g.z],
+    planet,
+    effect: asSpecialType(g.effect),
+    // 그룹 우주는 별자리 보기를 쓰지 않으므로 주제가 필요 없다
+    topic: null,
   };
 }
 
@@ -161,45 +202,104 @@ function emailFromIdToken(idToken: string): string | null {
 
 // 로그인/구글로그인 후 공통: 일기(핵심)·별·그룹을 불러온다. 별/그룹은 보조라 실패해도
 // 일기를 비우지 않도록 각각 격리한다. (그룹 API 미배포 시 /groups 404가 나도 일기·별은 그대로)
-async function loadUserData(
-  token: string,
-  setEntries: (entries: DiaryEntry[]) => void,
-  setGroups: (groups: ApiGroup[]) => void
-) {
-  try {
-    const diaryList = await apiListDiaries(token);
-    const starList = await apiListStars(token).catch(() => []);
-    const groupList = await apiListGroups(token).catch(() => []);
-    const starByDiaryId = new Map(starList.map((s) => [s.diary_id, s]));
-    setEntries(diaryList.map((d, i) => toEntry(d, i, starByDiaryId.get(d.id))));
-    setGroups(groupList);
-  } catch {
-    setEntries([]);
-    setGroups([]);
-  }
+async function loadUserData(token: string) {
+  const [diaries, stars, groups, profile] = await Promise.all([
+    apiListDiaries(token), apiListStars(token).catch(() => []),
+    apiListGroups(token).catch(() => []), apiGetProfile(token).catch(() => null),
+  ]);
+  const byId = new Map(stars.map(star => [star.diary_id, star]));
+  return { entries: diaries.map((diary, i) => toEntry(diary, i, byId.get(diary.id))), groups, profile };
 }
+
+const EMPTY_ENTRIES: DiaryEntry[] = [];
+const EMPTY_GROUPS: ApiGroup[] = [];
 
 const DiaryContext = createContext<DiaryContextValue | null>(null);
 
 export function DiaryProvider({ children }: { children: ReactNode }) {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [entries, setEntries] = useState<DiaryEntry[]>([]);
-  const [groups, setGroups] = useState<ApiGroup[]>([]);
+  const { session, ready } = useSyncExternalStore(authSession.subscribe, authSession.getSnapshot, authSession.getServerSnapshot);
+  const isLoggedIn = !!session;
+  const accessToken = session?.access_token ?? null;
+  const userEmail = session?.email ?? null;
+  const epoch = authSession.getRevision();
+  const mutations = useRef({ entries: 0, groups: 0, profile: 0 });
+  const [reload, setReload] = useState(0);
+  const [data, setData] = useState<{ epoch: number; token: string | null; entries: DiaryEntry[]; groups: ApiGroup[]; profile: ApiProfile | null; error: string | null }>({
+    epoch: -1, token: null, entries: [], groups: [], profile: null, error: null,
+  });
+  // 그룹 공유 우주에서 받아온 멤버 전체의 별(본인 것 포함). getEntry가 상세 화면에서 남의 별도 찾게 한다.
+  const groupCreation = useMemo(() => ({ epoch, action: new GroupCreation() }), [epoch]);
+  const groupCache = useMemo(() => new GroupCache<DiaryEntry>(epoch), [epoch]);
+  const loadGroupStars = useCallback(async (groupId: string): Promise<DiaryEntry[]> => {
+    if (!accessToken || authSession.getRevision() !== epoch) throw new Error('로그인이 필요합니다.');
+    const rows = await groupCache.load(groupId, async () => (await apiGroupStars(accessToken, groupId)).map(groupStarToEntry));
+    if (authSession.getRevision() !== epoch) throw new Error('로그인 계정이 변경됐어요.');
+    return rows;
+  }, [accessToken, epoch, groupCache]);
+  const own = data.epoch === epoch;
+  const entries = own ? data.entries : EMPTY_ENTRIES;
+  const groups = own ? data.groups : EMPTY_GROUPS;
+  const profile = own ? data.profile : null;
+  const patch = useCallback((fn: (prev: typeof data) => typeof data) => {
+    if (authSession.getRevision() !== epoch) return;
+    setData(prev => fn(prev.epoch === epoch ? prev : { epoch, token: null, entries: [], groups: [], profile: null, error: null }));
+  }, [epoch]);
+  const setEntries = useCallback((value: DiaryEntry[] | ((prev: DiaryEntry[]) => DiaryEntry[])) => {
+    if (authSession.getRevision() !== epoch) return;
+    mutations.current.entries++;
+    patch(prev => ({ ...prev, entries: typeof value === 'function' ? value(prev.entries) : value }));
+  }, [patch, epoch]);
+  const setGroups = useCallback((value: ApiGroup[] | ((prev: ApiGroup[]) => ApiGroup[])) => {
+    if (authSession.getRevision() !== epoch) return;
+    mutations.current.groups++;
+    patch(prev => ({ ...prev, groups: typeof value === 'function' ? value(prev.groups) : value }));
+  }, [patch, epoch]);
+  useEffect(() => { void authSession.restore(); }, []);
+  useEffect(() => {
+    if (!accessToken || !ready) return;
+    let alive = true;
+    const before = { ...mutations.current };
+    loadUserData(accessToken).then(result => {
+      if (alive && authSession.getRevision() === epoch) setData(prev => ({
+        ...result, epoch, token: accessToken, error: null,
+        // A slow reload must not undo a diary/profile save that completed after it began.
+        entries: prev.epoch === epoch && before.entries !== mutations.current.entries ? prev.entries : result.entries,
+        groups: prev.epoch === epoch && before.groups !== mutations.current.groups ? prev.groups : result.groups,
+        profile: prev.epoch === epoch && before.profile !== mutations.current.profile ? prev.profile : result.profile,
+      }));
+    }).catch(() => {
+      if (alive && authSession.getRevision() === epoch) patch(prev => ({ ...prev, token: accessToken, error: '기록을 불러오지 못했어요. 서버 연결을 확인하고 다시 시도해주세요.' }));
+    });
+    return () => { alive = false; };
+  }, [accessToken, ready, epoch, reload, patch]);
+  const retryLoad = useCallback(() => setReload(value => value + 1), []);
 
   const value = useMemo<DiaryContextValue>(
     () => ({
       isLoggedIn,
+      isRestoring: !ready,
+      dataLoading: !!accessToken && (!own || data.token !== accessToken),
+      loadError: own ? data.error : null,
+      retryLoad,
+      profile,
+      saveProfile: async (draft) => {
+        if (!accessToken || !session) return { ok: false, error: '로그인이 필요합니다.' };
+        try {
+          const avatar_path = draft.avatarUri ? await apiUploadAvatar(accessToken, draft.avatarUri) : draft.avatar_path;
+          const saved = await apiSaveProfile(accessToken, { nickname: draft.nickname, bio: draft.bio, avatar_path });
+          if (authSession.getRevision() !== epoch) return { ok: false, error: '로그인 계정이 변경됐어요. 다시 확인해주세요.' };
+          mutations.current.profile++;
+          mutations.current.groups++;
+          patch(prev => ({ ...prev, profile: saved, groups: prev.groups.map(group => ({ ...group, members: group.members.map(member => member.user_id === session.user_id ? { ...member, nickname: saved.nickname } : member) })) }));
+          return { ok: true };
+        } catch (error) { return { ok: false, error: error instanceof Error ? error.message : '프로필 저장에 실패했어요.' }; }
+      },
       accessToken,
       userEmail,
       login: async (email: string, password: string): Promise<LoginResult> => {
         try {
           const result = await apiLogin(email, password);
-          setAccessToken(result.access_token);
-          setUserEmail(email);
-          setIsLoggedIn(true);
-          await loadUserData(result.access_token, setEntries, setGroups);
+          await authSession.establish({ ...result, email });
           return { ok: true };
         } catch (err) {
           return {
@@ -211,11 +311,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
       loginWithGoogle: async (idToken: string): Promise<LoginResult> => {
         try {
           const result = await apiGoogleAuth(idToken);
-          setAccessToken(result.access_token);
-          // 구글 계정 이메일은 ID 토큰(JWT) payload의 email 클레임에서 꺼낸다.
-          setUserEmail(emailFromIdToken(idToken));
-          setIsLoggedIn(true);
-          await loadUserData(result.access_token, setEntries, setGroups);
+          await authSession.establish({ ...result, email: emailFromIdToken(idToken) });
           return { ok: true };
         } catch (err) {
           return {
@@ -227,12 +323,8 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
       signup: async (email: string, password: string): Promise<SignupResult> => {
         try {
           const result = await apiSignup(email, password);
-          if (result.access_token) {
-            setAccessToken(result.access_token);
-            setUserEmail(email);
-            setIsLoggedIn(true);
-            setEntries([]);
-            setGroups([]);
+          if (result.access_token && result.refresh_token) {
+            await authSession.establish({ ...result, access_token: result.access_token, refresh_token: result.refresh_token, email });
           }
           return { ok: true, emailConfirmationRequired: result.email_confirmation_required };
         } catch (err) {
@@ -242,13 +334,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           };
         }
       },
-      logout: () => {
-        setAccessToken(null);
-        setUserEmail(null);
-        setIsLoggedIn(false);
-        setEntries([]);
-        setGroups([]);
-      },
+      logout: signOut,
       entries,
       addEntry: async (
         text: string,
@@ -275,6 +361,9 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           const star = starList.find((s) => s.diary_id === created.id);
           const groupList = await apiListGroups(accessToken).catch(() => null);
           if (groupList) setGroups(groupList);
+          if (created.quest_result && authSession.getRevision() === epoch) {
+            publishQuest({ userId: created.user_id, revision: epoch, quest: created.quest_result });
+          }
           const entry = toEntry(created, entries.length, star);
           // 서버가 주제를 아직 못 돌려줘도(AI 서비스 지연 등) 방금 고른 주제로 별자리에 바로 반영한다
           if (!entry.topic && topic) entry.topic = topic;
@@ -344,7 +433,9 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           };
         }
       },
-      getEntry: (id: string) => entries.find((e) => e.id === id),
+      // 본인 일기 우선, 없으면 그룹 공유 우주에서 받아온 남의 별에서 찾는다(상세 보기용).
+      getEntry: (id: string, groupId?: string) => entries.find((e) => e.id === id) ?? (groupId ? groupCache.rows.get(groupId)?.find((e) => e.id === id) : undefined),
+      isOwnEntry: (id: string) => entries.some((e) => e.id === id),
       setEntryEffect: (id: string, effect: SpecialType | null) =>
         setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, effect } : e))),
       isEditableToday: (id: string) => {
@@ -357,8 +448,9 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           return { ok: false, error: '로그인이 필요합니다.' };
         }
         try {
-          const created = await apiCreateGroup(accessToken, name);
-          setGroups((prev) => [created, ...prev]);
+          const created = await groupCreation.action.run(name, randomUUID, requestId => apiCreateGroup(accessToken, name, requestId));
+          if (authSession.getRevision() !== epoch) return { ok: false, error: '로그인 계정이 변경됐어요.' };
+          setGroups((prev) => [created, ...prev.filter(group => group.id !== created.id)]);
           return { ok: true };
         } catch (err) {
           return {
@@ -398,8 +490,9 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           };
         }
       },
+      loadGroupStars,
     }),
-    [isLoggedIn, accessToken, userEmail, entries, groups]
+    [isLoggedIn, accessToken, userEmail, entries, groups, groupCreation, groupCache, loadGroupStars, profile, session, ready, own, data.token, data.error, retryLoad, patch, setEntries, setGroups, epoch]
   );
 
   return <DiaryContext.Provider value={value}>{children}</DiaryContext.Provider>;

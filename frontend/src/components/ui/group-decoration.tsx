@@ -1,20 +1,21 @@
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle, G, Path } from 'react-native-svg';
 
 import { DesignColors, DesignPaint } from '@/constants/ui-design';
 
-export function GroupHeaderFrame({ scale }: { scale: number }) {
+export function GroupHeaderFrame({ scale, width = 363 * scale }: { scale: number; width?: number }) {
+  const w = scale > 0 ? width / scale : 363;
   return (
-    <Svg width={363 * scale} height={63 * scale} viewBox="0 0 363 63" pointerEvents="none">
+    <Svg width={width} height={63 * scale} viewBox={`0 0 ${w} 63`} pointerEvents="none">
       <Path
-        d="M15 1H1V10 M22 .5H340 M347 1H362V10 M1 50V60H16 M22 60.5H182L204 38H361V27"
+        d={`M15 1H1V10 M22 .5H${w-23} M${w-16} 1H${w-1}V10 M1 50V60H16 M22 60.5H${w-181}L${w-159} 38H${w-2}V27`}
         fill="none"
         stroke={DesignPaint.ink}
         strokeWidth={1.2}
       />
-      <Path
+      <G transform={`translate(${w-363} 0)`}><Path
         d="M210 31L231 9H245L224 31Z M232 31L253 9H267L246 31Z M254 31L275 9H289L268 31Z M276 31L297 9H360V31Z"
         fill={DesignPaint.groupHatching}
-      />
+      /></G>
     </Svg>
   );
 }

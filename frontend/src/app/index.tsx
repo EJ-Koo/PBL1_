@@ -1,3 +1,9 @@
+import { GroupDiaryCard } from '@/components/ui/group-diary-card';
+import { authSession } from '@/lib/auth-session';
+import { useGroupUniverse } from '@/hooks/use-group-universe';
+import { useQuest } from '@/store/quest-context';
+import { QuestRewardAnimation } from '@/components/quest-reward-animation';
+import { Text, TextInput } from '@/components/app-text';
 // [MODIFIED 2026-11-05] fffju 브랜치 index.jsx의 화면 구성·디자인으로 교체하고, 데이터는 서버(로그인)로 연결.
 //  - 화면: 가운데=나의 우주 / 왼쪽=일기 작성 / 오른쪽=그룹 우주 / 상점 (fffju 하단 네비·HUD·퀘스트 그대로)
 //  - 별·일기·그룹: 서버(useDiary). fffju의 기기 저장(useJournal)은 사용하지 않는다.
@@ -10,19 +16,14 @@
 //  - [ADDED 2026-11-15] Level 4 나만의 별자리: 같은 주제 일기 30개 이상이면 동의 후 서버(LLM)가 만든다.
 //    만든 결과는 서버에 저장되고, 볼 때는 저장된 좌표만 불러와 기존 별자리 애니메이션으로 그린다.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { router } from 'expo-router';
-import {
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Modal, Pressable, StyleSheet, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CreateGroupDialog } from '@/components/ui/create-group-dialog';
+import { SpaceButton } from '@/components/ui/space-ui';
+import { GroupMemberStars } from '@/components/ui/group-member-stars';
+import { getMemberStars } from '@/lib/group-attendance';
 import { DiaryComposer } from '@/components/diary-composer';
 import { SearchScreen } from '@/components/search-screen';
 import { PopupWindow } from '@/components/ui/popup-window';
@@ -63,25 +64,15 @@ import { useShop } from '@/store/shop-context';
 
 type Screen = 'home' | 'diary' | 'group';
 
-/** fffju 디자인 영역: 폰은 화면 전체 폭, 넓은 화면은 최대 520px로 가운데. */
-function Frame({ width, children, box = false }: { width: number; children: ReactNode; box?: boolean }) {
-  return (
-    <View style={styles.frameOuter} pointerEvents={box ? 'box-none' : 'auto'}>
-      <View style={[styles.frameInner, { width }]} pointerEvents={box ? 'box-none' : 'auto'}>
-        {children}
-      </View>
-    </View>
-  );
-}
-
 export default function HomeScreen() {
-  const { isLoggedIn, accessToken, entries, groups, createGroup, joinGroup, leaveGroup, logout } = useDiary();
+  const { isLoggedIn, isRestoring, dataLoading, loadError, retryLoad, accessToken, entries, groups, createGroup, joinGroup, leaveGroup, logout } = useDiary();
   const { coins, activeEffects, refresh: refreshShop } = useShop();
-  const { frameWidth, scale } = useDesignFrame();
+  const { frameWidth } = useDesignFrame();
+  const { refresh: refreshQuest, rewardEvent, clearReward } = useQuest();
   // fffju 반응형 레이아웃: 전체 뷰포트로 그리는 화면(홈 HUD·하단바·그룹)은 이 scale을 쓴다.
   // 아직 520 프레임을 쓰는 화면(일기 작성·상점)은 useDesignFrame(frameWidth/scale)을 유지.
   const responsive = useResponsiveLayout();
-  const rScale = responsive.scale;
+  const { scale: rScale, chromeLeft, chromeWidth, headerTop } = responsive;
   const insets = useSafeAreaInsets();
 
   const [screen, setScreen] = useState<Screen>('home');
@@ -94,7 +85,13 @@ export default function HomeScreen() {
   const [createGroupVisible, setCreateGroupVisible] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [creatingGroup, setCreatingGroup] = useState(false);
-  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  const createGroupLock = useRef(false);
+  const { groupId: routeGroupId } = useLocalSearchParams<{ groupId?: string }>();
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(routeGroupId ?? null);
+  // 그룹 공유 우주: 그룹을 열면 멤버 전체의 별을 서버에서 받아온다(본인 것만이 아님).
+  const { entries: groupStars, loading: groupLoading, error: groupError, reload: reloadGroup } = useGroupUniverse(activeGroupId);
+  // 그룹 우주에서 별을 눌러 행성 상세로 갈 때, 돌아오면 목록이 아니라 그 그룹 우주로 복귀하려고 기억해둔다.
+  const [sharedDiaryId, setSharedDiaryId] = useState<string | null>(null);
   const [inviteVisible, setInviteVisible] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -264,8 +261,8 @@ export default function HomeScreen() {
   );
 
   useEffect(() => {
-    if (!isLoggedIn) router.replace('/login');
-  }, [isLoggedIn]);
+    if (!isRestoring && !isLoggedIn) router.replace('/login');
+  }, [isLoggedIn, isRestoring]);
 
   // 기기에 저장된 회전 민감도를 불러와 메뉴 슬라이더에 반영한다.
   useEffect(() => {
@@ -284,10 +281,15 @@ export default function HomeScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  if (!isLoggedIn) return <View style={styles.container} />;
+  // Keep this callback stable: setting the return target must not reopen the modal before navigation.
+  useFocusEffect(useCallback(() => {
+    const groupId = routeGroupId;
+    if (groupId) { setScreen('group'); setActiveGroupId(groupId); }
+  }, [routeGroupId]));
+
+  if (isRestoring || !isLoggedIn) return <View style={styles.container} />;
 
   const checkCount = new Set(entries.map((e) => localDateKey(new Date(e.createdAt)))).size;
-  const todayComplete = entries.some((e) => localDateKey(new Date(e.createdAt)) === today);
   const groupEntries = (diaryIds: string[]) => entries.filter((e) => diaryIds.includes(e.id));
   const activeGroup = groups.find((g) => g.id === activeGroupId) ?? null;
 
@@ -297,9 +299,15 @@ export default function HomeScreen() {
   };
 
   const handleCreateGroup = async () => {
-    if (creatingGroup) return;
+    if (createGroupLock.current) return;
+    if (newGroupName.trim().length > 24) {
+      showMessage('그룹 이름', '그룹 이름은 24자 이내로 입력해주세요.');
+      return;
+    }
+    createGroupLock.current = true;
     setCreatingGroup(true);
     const result = await createGroup(newGroupName.trim() || `그룹${groups.length + 1}`);
+    createGroupLock.current = false;
     setCreatingGroup(false);
     if (!result.ok) {
       showMessage('그룹 생성 실패', result.error);
@@ -354,19 +362,23 @@ export default function HomeScreen() {
         // [MODIFIED 2026-11-12] 배경 사진(night-sky.png) 제거 → 단색 배경 + 3D 우주의 배경 별만 사용
         <View style={[styles.fill, styles.spaceBackground]}>
           <BackgroundTint effects={activeEffects} />
+          {/* Comets sit behind the transparent 3D canvas so planets occlude them. */}
+          <CometLayer effects={activeEffects} />
           <UniverseCanvas
+            sceneKey={`${authSession.getRevision()}:home`}
             entries={entries}
             onStarPress={(id) => router.push(`/planet/${id}`)}
             constellation={constellationRequest}
             frontViewRequest={frontViewRequest}
           />
-          <CometLayer effects={activeEffects} />
 
           {entries.length === 0 && (
             <View style={styles.emptyState} pointerEvents="none">
-              <Text style={styles.emptyText}>아직 기록이 없어요.{'\n'}아래 왼쪽 버튼으로 첫 별을 띄워보세요.</Text>
+              <Text style={styles.emptyText}>{dataLoading ? '기록을 불러오는 중…' : loadError ?? '아직 기록이 없어요. 아래 왼쪽 버튼으로 첫 별을 띄워보세요.'}</Text>
             </View>
           )}
+
+          {loadError && <TouchableOpacity onPress={retryLoad} style={{ position: 'absolute', top: headerTop + 100, alignSelf: 'center', padding: 12 }}><Text style={styles.whiteText}>다시 불러오기</Text></TouchableOpacity>}
 
           {/* HUD는 fffju 반응형(전체 뷰포트). 520 프레임으로 감싸지 않는다. */}
           <HomeHud
@@ -378,7 +390,7 @@ export default function HomeScreen() {
               refreshShop();
               setShopVisible(true);
             }}
-            onQuest={() => setQuestVisible(true)}
+            onQuest={() => { void refreshQuest(); setQuestVisible(true); }}
             menuProps={{
               onSearch: () => setSearchPopup({ mode: 'keyword', key: Date.now() }),
               onCalendar: () => setSearchPopup({ mode: 'calendar', key: Date.now() }),
@@ -433,9 +445,7 @@ export default function HomeScreen() {
 
       {/* ===== 왼쪽: 일기 작성 — 다른 탭에 갔다 와도 쓰던 내용이 남도록 화면을 숨기기만 한다 ===== */}
       <View style={[styles.fill, screen !== 'diary' && styles.hidden]}>
-        <Frame width={frameWidth}>
-          <DiaryComposer scale={scale} onBack={() => setScreen('home')} onSaved={() => setScreen('home')} />
-        </Frame>
+        <DiaryComposer scale={rScale} onBack={() => setScreen('home')} onSaved={() => setScreen('home')} />
       </View>
 
       {/* ===== 오른쪽: 그룹 우주 (반응형 그리드 — 전체 뷰포트, useResponsiveLayout 사용) ===== */}
@@ -446,6 +456,7 @@ export default function HomeScreen() {
             groups={groups.map((g) => ({
               id: g.id,
               name: g.name,
+              members: getMemberStars(g, entries, today),
               stars: groupEntries(g.diary_ids).map((e) => ({
                 color: e.color,
                 size: 0.36,
@@ -454,7 +465,7 @@ export default function HomeScreen() {
                 previewY: `${Math.round(50 - Math.max(-1, Math.min(1, e.position[1] / 12)) * 40)}%`,
               })),
             }))}
-            onSelectGroup={(g) => setActiveGroupId(g.id)}
+            onSelectGroup={(g) => { setSharedDiaryId(null); setActiveGroupId(g.id); }}
             onAddGroup={() => setCreateGroupVisible(true)}
             onJoinByCode={() => setJoinVisible(true)}
           />
@@ -465,37 +476,35 @@ export default function HomeScreen() {
       <ShopSheet visible={shopVisible} width={frameWidth} onClose={() => setShopVisible(false)} />
 
       {/* ===== 그룹 카드를 눌렀을 때: 그 그룹의 우주를 3D로 크게 보기 ===== */}
-      <Modal transparent={false} visible={activeGroup !== null} animationType="slide" onRequestClose={() => setActiveGroupId(null)}>
+      <Modal transparent={false} visible={activeGroup !== null} animationType="slide" onRequestClose={() => sharedDiaryId ? setSharedDiaryId(null) : setActiveGroupId(null)}>
         {activeGroup && (
           <View style={[styles.fill, styles.spaceBackground]}>
             <UniverseCanvas
-              sceneKey={`group-${activeGroup.id}`}
-              entries={groupEntries(activeGroup.diary_ids)}
+              key={activeGroup.id}
+              sceneKey={`${authSession.getRevision()}:group-${activeGroup.id}`}
+              entries={groupStars}
+              backgroundStarScale={1.4}
               onStarPress={(id) => {
-                setActiveGroupId(null);
-                router.push(`/planet/${id}`);
+                if (groupStars.some(entry => entry.id === id)) setSharedDiaryId(id);
               }}
             />
-            {activeGroup.diary_ids.length === 0 && (
-              <View style={styles.emptyState} pointerEvents="none">
-                <Text style={styles.emptyText}>아직 이 그룹에 공유된 별이 없어요.</Text>
+            {(groupLoading || groupError || groupStars.length === 0) && (
+              <View style={styles.emptyState} pointerEvents={groupError ? 'auto' : 'none'}>
+                <Text style={styles.emptyText}>{groupError ?? (groupLoading ? '그룹의 별을 불러오는 중…' : '아직 이 그룹에 공유된 별이 없어요.')}</Text>
+                {groupError && <SpaceButton scale={rScale} label="다시 불러오기" onPress={reloadGroup} />}
               </View>
             )}
-            <Frame width={frameWidth} box>
-              <View style={[styles.topBar, { top: insets.top + 20 }]} pointerEvents="box-none">
-                <TouchableOpacity style={styles.questButton} onPress={() => setActiveGroupId(null)}>
-                  <Text style={styles.questText}>{'< 목록으로'}</Text>
-                </TouchableOpacity>
-                <View style={styles.statsPill}>
-                  <Text style={styles.statsText}>
-                    {activeGroup.name}의 우주 (★ {groupEntries(activeGroup.diary_ids).length})
-                  </Text>
-                </View>
-                <TouchableOpacity style={styles.inviteButton} onPress={() => { setConfirmLeave(false); setInviteVisible(true); }}>
-                  <Text style={styles.inviteButtonText}>＋친구</Text>
-                </TouchableOpacity>
+            <View style={{ position: 'absolute', top: headerTop, left: chromeLeft + 20 * rScale,
+              width: chromeWidth - 40 * rScale, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10 * rScale }}>
+              <SpaceButton scale={rScale} label="‹ 목록" onPress={() => setActiveGroupId(null)} />
+              <View style={{ flex: 1, minWidth: 70 }}>
+                <Text numberOfLines={1} style={{ color: '#fff', fontSize: 16 * rScale }}>{activeGroup.name}</Text>
+                <Text style={{ color: '#aeb7c4', fontSize: 11 * rScale }}>별 {groupStars.length}개</Text>
               </View>
-            </Frame>
+              <SpaceButton scale={rScale} label="친구 초대" onPress={() => { setConfirmLeave(false); setInviteVisible(true); }} />
+              <GroupMemberStars scale={rScale} dark members={getMemberStars(activeGroup, entries, today)} />
+            </View>
+            {sharedDiaryId && <GroupDiaryCard key={sharedDiaryId} id={sharedDiaryId} onClose={() => setSharedDiaryId(null)} />}
           </View>
         )}
       </Modal>
@@ -569,16 +578,15 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* ===== 퀘스트 (진행률은 오늘 일기 작성 여부만 실제 값) ===== */}
+      {/* ===== 퀘스트 (서버 진행률·보상 기록) ===== */}
       <Modal transparent visible={questVisible} animationType="fade" onRequestClose={() => setQuestVisible(false)}>
-        <Pressable style={styles.frameOuter} onPress={() => setQuestVisible(false)}>
-          <View style={[styles.frameInner, { width: frameWidth }]}>
-            <QuestPanel scale={scale} todayComplete={todayComplete} onClose={() => setQuestVisible(false)} />
-          </View>
-        </Pressable>
+        <QuestPanel scale={rScale}
+          onWriteDiary={() => { setQuestVisible(false); setScreen('diary'); }}
+          onClose={() => setQuestVisible(false)} />
       </Modal>
 
       {/* ===== 공통: 하단 네비게이션 (fffju 반응형 — 전체 뷰포트) ===== */}
+      {rewardEvent && <QuestRewardAnimation key={rewardEvent.id} event={rewardEvent} onDone={clearReward} />}
       <UniverseBottomNav
         scale={rScale}
         activeScreen={screen}
@@ -588,37 +596,16 @@ export default function HomeScreen() {
       />
 
       {/* ===== 새 그룹 만들기 팝업 (✕ · 바깥 · 취소로 닫힘) ===== */}
-      <PopupWindow
-        visible={createGroupVisible}
-        onClose={() => setCreateGroupVisible(false)}
-        title="🪐 새로운 그룹 우주"
-        width={Math.min(frameWidth, 444)}
-        testID="group-create-popup">
-        <Text style={styles.inviteModalDesc}>
-          일기를 작성할 때 그룹을 선택하면 내 우주와 그룹 우주에 함께 별이 떠요!
-        </Text>
-        <TextInput
-          style={styles.inviteInput}
-          placeholder={`그룹 이름 (비워두면 '그룹${groups.length + 1}')`}
-          placeholderTextColor="#888"
-          value={newGroupName}
-          onChangeText={setNewGroupName}
-        />
-        <View style={styles.inviteModalButtonRow}>
-          <TouchableOpacity style={styles.inviteCancelBtn} onPress={() => setCreateGroupVisible(false)}>
-            <Text style={styles.whiteText}>취소</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.inviteConfirmBtn} onPress={handleCreateGroup} disabled={creatingGroup}>
-            <Text style={styles.inviteConfirmText}>{creatingGroup ? '만드는 중…' : '생성하기'}</Text>
-          </TouchableOpacity>
-        </View>
-      </PopupWindow>
+      <CreateGroupDialog visible={createGroupVisible} scale={rScale} name={newGroupName}
+        defaultName={`그룹${groups.length + 1}`} saving={creatingGroup} onChangeName={setNewGroupName}
+        onClose={() => { if (!creatingGroup) setCreateGroupVisible(false); }} onCreate={handleCreateGroup} />
 
       {/* ===== 일기 검색 팝업 (메뉴의 검색·달력에서 열림) ===== */}
       <PopupWindow
         visible={searchPopup !== null}
         onClose={() => setSearchPopup(null)}
-        title={searchPopup?.mode === 'calendar' ? '날짜로 찾기' : '일기 검색'}
+        title="일기 검색"
+        appearance="search"
         width={frameWidth}
         height="80%"
         testID="search-popup">

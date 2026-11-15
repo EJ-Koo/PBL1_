@@ -10,6 +10,8 @@ from app import ai_client
 from app.config import settings
 from app.db import supabase
 from app.dependencies import get_current_user_id
+from app.routers.quests import sync_daily_quest
+from app.routers.profiles import _shape as shape_profile
 from app.schemas.diary import Diary, DiaryCreate, DiaryUpdate, RelatedDiary
 
 router = APIRouter(prefix="/diaries", tags=["diaries"])
@@ -233,6 +235,36 @@ def _get_owned_diary(diary_id: UUID, user_id: str) -> dict:
     return result.data[0]
 
 
+def _shares_group(diary_id: UUID, user_id: str) -> bool:
+    """요청자가, 이 일기가 태그된 그룹 중 한 곳의 멤버인가. (공유 우주에서 남의 별을 눌러 상세 보기 허용)"""
+    tags = (
+        supabase.table("diary_groups").select("group_id").eq("diary_id", str(diary_id)).execute().data
+    )
+    group_ids = [t["group_id"] for t in tags]
+    if not group_ids:
+        return False
+    mine = (
+        supabase.table("group_members")
+        .select("group_id")
+        .eq("user_id", user_id)
+        .in_("group_id", group_ids)
+        .execute()
+        .data
+    )
+    return bool(mine)
+
+
+def _get_viewable_diary(diary_id: UUID, user_id: str) -> dict:
+    """읽기 전용 조회: 소유자이거나, 같은 그룹 멤버면 볼 수 있다. (수정·삭제는 _get_owned_diary로 소유자만)"""
+    result = supabase.table("diaries").select("*").eq("id", str(diary_id)).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Diary not found")
+    diary = result.data[0]
+    if diary["user_id"] != user_id and (diary.get("visibility", "private") == "private" or not _shares_group(diary_id, user_id)):
+        raise HTTPException(status_code=404, detail="Diary not found")
+    return diary
+
+
 def _is_editable_today(created_at: str) -> bool:
     created = datetime.fromisoformat(created_at)
     return created.astimezone(timezone.utc).date() == datetime.now(timezone.utc).date()
@@ -252,7 +284,18 @@ def list_diaries(user_id: str = Depends(get_current_user_id)):
 
 @router.get("/{diary_id}", response_model=Diary)
 def get_diary(diary_id: UUID, user_id: str = Depends(get_current_user_id)):
-    return _with_signed_photo_url(_get_owned_diary(diary_id, user_id))
+    # 그룹 공유 우주에서 남의 별을 눌러도 상세를 볼 수 있게, 같은 그룹 멤버면 읽기 허용.
+    diary = _get_viewable_diary(diary_id, user_id)
+    response = _with_signed_photo_url(diary)
+    # Only expose the author's display name and signed avatar after diary permission succeeds.
+    try:
+        rows = supabase.table('profiles').select('user_id,nickname,avatar_path').eq('user_id', diary['user_id']).execute().data
+        if rows:
+            profile = shape_profile(rows[0], diary['user_id'])
+            response['author_profile'] = {'nickname': profile['nickname'], 'avatar_url': profile['avatar_url']}
+    except Exception:
+        response['author_profile'] = None
+    return response
 
 
 @router.get("/{diary_id}/related", response_model=list[RelatedDiary])
@@ -285,7 +328,8 @@ def get_related_diaries(diary_id: UUID, user_id: str = Depends(get_current_user_
 
 @router.post("", response_model=Diary)
 def create_diary(diary: DiaryCreate, user_id: str = Depends(get_current_user_id)):
-    _assert_member_of_groups(diary.group_ids, user_id)
+    group_ids = diary.group_ids if diary.visibility != "private" else []
+    _assert_member_of_groups(group_ids, user_id)
     paths = diary.photo_paths or ([diary.photo_url] if diary.photo_url else [])
     row = {
         "user_id": user_id,
@@ -299,8 +343,14 @@ def create_diary(diary: DiaryCreate, user_id: str = Depends(get_current_user_id)
     result = _write_diary(lambda r: supabase.table("diaries").insert(r), row)
     created = result.data[0]
     _create_star_for_diary(created["id"], diary.content, user_id, diary.topic)
-    _tag_diary_groups(created["id"], diary.group_ids)
-    return _with_signed_photo_url(created)
+    _tag_diary_groups(created["id"], group_ids)
+    response = _with_signed_photo_url(created)
+    # 일기 저장 성공은 유지하고, 보상 장애 시 앱의 퀘스트 동기화로 다시 시도합니다.
+    try:
+        response['quest_result'] = sync_daily_quest(user_id).model_dump(mode='json')
+    except HTTPException:
+        response['quest_result'] = None
+    return response
 
 
 @router.patch("/{diary_id}", response_model=Diary)
@@ -335,6 +385,10 @@ def update_diary(
         .eq("user_id", user_id),
         update_data,
     )
+
+    if update_data.get("visibility") == "private":
+        # Revoking sharing also removes old group tags; later visibility changes do not reshare silently.
+        supabase.table("diary_groups").delete().eq("diary_id", str(diary_id)).execute()
 
     if "content" in update_data:
         supabase.table("stars").update(

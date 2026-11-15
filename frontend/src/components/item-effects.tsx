@@ -40,7 +40,7 @@ export function CometLayer({ effects }: { effects: ItemEffect[] }) {
       progress.setValue(0);
       Animated.timing(progress, {
         toValue: 1,
-        duration: 1400,
+        duration: 1750,
         easing: Easing.out(Easing.quad),
         useNativeDriver: false,
       }).start();
@@ -50,6 +50,7 @@ export function CometLayer({ effects }: { effects: ItemEffect[] }) {
     return () => {
       alive = false;
       clearInterval(timer);
+      progress.stopAnimation();
     };
   }, [comet, intervalSec, size.width, progress]);
 

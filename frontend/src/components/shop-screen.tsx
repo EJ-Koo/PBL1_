@@ -1,3 +1,5 @@
+import { CoinIcon } from '@/components/coin-icon';
+import { Text } from '@/components/app-text';
 // [MODIFIED 2026-11-10] 상점 팝업 (fffju 상점 카드 디자인 + 서버 코인·구매·장착).
 //  - 화면 가운데 뜨는 창 (2026-11-10 아래 → 가운데로 변경). ✕ 버튼, 창 바깥 누르기, 안드로이드 뒤로가기로 닫힘
 //  - 탭: 배경(이펙트 줄 / 테마 줄) · 음악 · 소모품
@@ -9,18 +11,11 @@
 //      위에 샘플 행성 미리보기(카드를 누르면 그 효과로 바뀜). 소모품: 1개 = 행성 1개.
 //      [구매]로 개수를 늘리고, 남은 개수가 있으면 [적용]으로 원하는 일기 행성에 적용(해제·변경하면 1개가 돌아온다)
 import { useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 
+import { SpaceSurface, SpaceIcon } from '@/components/ui/space-ui';
+import { DesignFonts } from '@/constants/ui-design';
+import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { PlanetDecorator } from '@/components/planet-decorator';
 import { PlanetPreview } from '@/components/universe-scene';
 import { showMessage } from '@/lib/feedback';
@@ -150,7 +145,7 @@ function Card({
         {description}
       </Text>
       {/* 가격 줄은 항상 같은 높이 → 구매 후에도 버튼 위치가 그대로 */}
-      <Text style={styles.price}>{priceText}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><CoinIcon size={18} /><Text style={styles.price}>{priceText}</Text></View>
       <View style={styles.buttonRow}>
         <TouchableOpacity
           testID={`${testID}-action`}
@@ -204,10 +199,11 @@ function EffectPreview({ item, visible }: { item: ShopItem | undefined; visible:
   );
 }
 
-export function ShopSheet({ visible, width, onClose }: { visible: boolean; width: number; onClose: () => void }) {
+export function ShopSheet({ visible, onClose }: { visible: boolean; width: number; onClose: () => void }) {
   const { coins, items, loading, error, refresh, purchase, setEquipped, resetAllowed, resetShop } = useShop();
   const { entries } = useDiary();
-  const { height } = useWindowDimensions();
+  const { height, width: viewportWidth } = useWindowDimensions();
+  const { scale } = useResponsiveLayout();
   const [tabId, setTabId] = useState(TABS[0].id);
   const [busyId, setBusyId] = useState<string | null>(null);
   // 행성 효과 줄: 미리보기 중인 아이템, 행성 꾸미기 팝업(적용하기)
@@ -266,19 +262,19 @@ export function ShopSheet({ visible, width, onClose }: { visible: boolean; width
       <View style={styles.backdrop}>
         {/* 창 바깥(어두운 부분)을 누르면 닫힘 */}
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="상점 닫기" testID="shop-backdrop" />
-        <View
+        <SpaceSurface
           testID="shop-sheet"
           style={[
             styles.sheet,
-            { width: width - 24, height: Math.min(height * 0.72, 680), paddingBottom: 12 },
+            { width: Math.min(viewportWidth - 24, 960), maxHeight: height - 48, height: Math.min(height * 0.8, 760), paddingBottom: 12 },
           ]}>
           <View style={styles.header}>
             {/* 왼쪽 칸은 나중에 넣을 기능 자리 (예전 뒤로가기 위치) */}
-            <View style={styles.headerSide} />
-            <Text style={styles.title}>🛍️ 상점</Text>
+            <SpaceIcon kind="group" size={28 * scale} />
+            <Text style={styles.title}>SPACE SHOP</Text>
             <View style={[styles.headerSide, styles.headerRight]}>
               <View style={styles.coinPill} testID="shop-coins">
-                <Text style={styles.coinText}>🪙 {coins ?? '…'}</Text>
+                <CoinIcon size={25} /><Text style={styles.coinText}>{coins?.toLocaleString() ?? '…'}</Text>
               </View>
               <TouchableOpacity onPress={onClose} accessibilityLabel="닫기" testID="shop-close" hitSlop={10} style={styles.close}>
                 <Text style={styles.closeText}>✕</Text>
@@ -410,7 +406,7 @@ export function ShopSheet({ visible, width, onClose }: { visible: boolean; width
               </TouchableOpacity>
             ) : null}
           </ScrollView>
-        </View>
+        </SpaceSurface>
       </View>
       {/* 적용하기 → 행성 고르기 → 미리보기 → 적용 */}
       <PlanetDecorator visible={decorating !== null} effect={decorating} onClose={() => setDecorating(null)} />
@@ -423,8 +419,8 @@ const CARD_WIDTH = 140;
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center' },
   sheet: {
-    backgroundColor: '#000',
-    borderRadius: 18,
+    backgroundColor: 'rgba(12,16,24,0.96)',
+    borderRadius: 0,
     borderWidth: 1,
     borderColor: '#3A3A4A',
     paddingTop: 14,
@@ -433,9 +429,9 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   headerSide: { width: 120 },
   headerRight: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 10 },
-  title: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
-  coinPill: { backgroundColor: '#7f8c8d', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
-  coinText: { color: '#000', fontWeight: 'bold', fontSize: 14 },
+  title: { color: '#fff', fontFamily: DesignFonts.bold, fontSize: 18, fontWeight: 'bold', flexShrink: 1 },
+  coinPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#171c28', borderColor: '#c6aa704f', borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 18 },
+  coinText: { color: '#ffedb4', fontWeight: 'bold', fontSize: 14 },
   close: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
   closeText: { color: '#fff', fontSize: 20, fontWeight: '600' },
   tabs: { flexDirection: 'row', gap: 8, marginBottom: 12 },
@@ -448,7 +444,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#2f2f3d',
   },
-  tabActive: { backgroundColor: '#FED240', borderColor: '#FED240' },
+  tabActive: { backgroundColor: '#ffffff', borderColor: '#ffffff' },
   tabText: { color: '#c8c8d8', fontWeight: '600', fontSize: 14 },
   tabTextActive: { color: '#000' },
   errorBox: { backgroundColor: '#3A1F2E', borderRadius: 10, padding: 12, marginBottom: 12 },
@@ -461,15 +457,15 @@ const styles = StyleSheet.create({
   empty: { color: '#9C9CC0', fontSize: 12, marginBottom: 6, marginTop: 4 },
   row: { gap: 10, paddingRight: 4 },
   card: {
-    backgroundColor: '#b2bec3',
+    backgroundColor: 'rgba(16,21,31,0.82)',
     width: CARD_WIDTH,
     borderRadius: 10,
     padding: 12,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: 'rgba(255,255,255,0.24)',
   },
-  cardEquipped: { borderColor: '#FED240' },
+  cardEquipped: { borderColor: '#ffffff' },
   cardPreviewing: { borderColor: '#B888FF' },
   preview: {
     height: 170,
@@ -490,18 +486,18 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
     color: '#000',
-    backgroundColor: '#FED240',
+    backgroundColor: '#ffffff',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
     overflow: 'hidden',
   },
   icon: { fontSize: 40, marginTop: 8, marginBottom: 8 },
-  name: { fontSize: 14, fontWeight: 'bold', marginBottom: 4, color: '#000' },
-  desc: { fontSize: 10, lineHeight: 14, color: '#2d3436', textAlign: 'center', marginBottom: 8, height: 28 },
-  price: { fontWeight: 'bold', fontSize: 14, lineHeight: 20, color: '#000', marginBottom: 8 },
+  name: { fontFamily: DesignFonts.bold, fontSize: 14, fontWeight: 'bold', marginBottom: 4, color: '#fff' },
+  desc: { fontSize: 10, lineHeight: 14, color: '#aeb7c4', textAlign: 'center', marginBottom: 8, height: 28 },
+  price: { fontWeight: 'bold', fontSize: 14, lineHeight: 20, color: '#fff', marginBottom: 8 },
   button: {
-    backgroundColor: '#FED240',
+    backgroundColor: '#ffffff',
     borderRadius: 8,
     paddingVertical: 7,
     alignSelf: 'stretch',

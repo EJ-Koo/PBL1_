@@ -1,7 +1,12 @@
+import { GroupProfileControl } from './group-profile-control';
+import { Text } from '@/components/app-text';
 import { Image } from 'expo-image';
 import { useId } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
+
+import { GroupMemberStars } from './group-member-stars';
+import type { MemberStar } from '@/lib/group-attendance';
 
 import { GroupAddIcon, GroupCardFrame, GroupHeaderFrame, GroupLabelFrame } from './group-decoration';
 
@@ -20,6 +25,7 @@ type GroupData = {
   id: string;
   name: string;
   stars: PreviewStar[];
+  members: MemberStar[];
 };
 
 type Props = {
@@ -69,59 +75,61 @@ function GroupPreview({ stars, scale }: { stars: PreviewStar[]; scale: number })
 }
 
 export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup, onJoinByCode }: Props) {
-  const { headerTop, bottomSpace, contentLeft, gridLeft, gridWidth } = useResponsiveLayout();
-  const gap = 16 * scale;
-  const innerWidth = gridWidth - 32 * scale;
-  const columns = Math.max(1, Math.min(3, Math.floor((innerWidth + gap) / (320 + gap))));
-  const cardWidth = Math.min(362 * scale, (innerWidth - gap * (columns - 1)) / columns);
+  const { headerTop, bottomSpace, pageLeft, pageWidth, pagePadding, pageGap, innerWidth, groupCardWidth } = useResponsiveLayout();
+  const cardWidth = groupCardWidth;
   const cardScale = cardWidth / 362;
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.positioned, { left: contentLeft + 16 * scale, top: headerTop, width: 363 * scale, height: 63 * scale }]}>
-        <GroupHeaderFrame scale={scale} />
-        <Text style={[styles.positioned, styles.text, {
-          left: 18 * scale, top: 14 * scale, width: 176 * scale, height: 38 * scale,
-          fontSize: 28 * scale, lineHeight: 36 * scale,
-        }]}>OUR SPACE</Text>
-        <Text style={[styles.positioned, styles.text, {
-          left: 203.5 * scale, top: 39 * scale, width: 158 * scale, height: 15 * scale,
-          fontSize: 9.5 * scale, lineHeight: 13 * scale,
-        }]}>별일을 함께 나누는 우리의 우주</Text>
-      </View>
-
-      <ScrollView
-        style={[styles.positioned, { left: gridLeft, top: headerTop + 86 * scale, width: gridWidth, bottom: bottomSpace }]}
-        showsVerticalScrollIndicator={false}
-        contentInsetAdjustmentBehavior="never"
-        contentContainerStyle={{ paddingHorizontal: 16 * scale, paddingBottom: 24 * scale }}>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'center', gap }}>
+      <ScrollView style={{ flex: 1, marginBottom: bottomSpace }}
+        showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never"
+        contentContainerStyle={{ width: pageWidth, marginLeft: pageLeft, paddingHorizontal: pagePadding,
+          paddingTop: headerTop, paddingBottom: 24 * scale }}>
+        <View style={{ width: innerWidth, marginBottom: 24 * scale }}>
+          <View style={{ height: 63 * scale }}>
+            <GroupHeaderFrame scale={scale} width={innerWidth} /><GroupProfileControl scale={scale} />
+            <Text numberOfLines={1} adjustsFontSizeToFit accessibilityRole="header" style={[styles.positioned, styles.text, {
+              left: 18 * scale, top: 14 * scale, maxWidth: innerWidth - 92 * scale, fontSize: 28 * scale, lineHeight: 36 * scale,
+            }]}>OUR SPACE</Text>
+          </View>
+          <Text style={[styles.text, { fontSize: Math.max(12, 13 * scale), lineHeight: Math.max(20, 20 * scale), marginTop: 10 * scale, paddingHorizontal: 18 * scale, flexShrink: 1 }]}>
+            별일을 함께 나누는 우리의 우주
+          </Text>
+        </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start',
+          justifyContent: innerWidth < 640 ? 'center' : 'flex-start', gap: pageGap }}>
           {groups.map((group, i) => {
             const s = cardScale;
             const first = i === 0;
+            const allKnown = group.members.length > 0 && group.members.every((member) => member.known);
+            const footerTextHeight = Math.max(16, 13 * s) * (allKnown ? 2 : 3);
+            const cardHeight = Math.max(CARD_HEIGHT, 207 + Math.ceil(group.members.length / 6) * 22 + footerTextHeight / s + 8);
             return (
               <TouchableOpacity
                 key={group.id}
                 activeOpacity={0.85}
                 accessibilityLabel={group.name}
                 onPress={() => onSelectGroup(group)}
-                style={{ width: cardWidth, height: CARD_HEIGHT * s }}>
+                style={{ width: cardWidth, height: cardHeight * s }}>
                 <View style={[styles.positioned, styles.card, {
-                  left: 8 * s, top: 5 * s, width: 343 * s, height: (CARD_HEIGHT - 6) * s, borderRadius: 12 * s,
+                  left: 8 * s, top: 5 * s, width: 343 * s, height: (cardHeight - 6) * s, borderRadius: 12 * s,
                 }]} />
-                <GroupCardFrame scale={s} height={CARD_HEIGHT} />
+                <GroupCardFrame scale={s} height={cardHeight} />
                 <View style={[styles.positioned, styles.preview, {
                   left: (first ? 16 : 15) * s, top: 11 * s, width: 329 * s, height: 186 * s, borderRadius: 11 * s,
                 }]}>
                   <GroupPreview stars={group.stars} scale={s} />
                 </View>
                 <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                  <GroupLabelFrame scale={s} first={first} height={CARD_HEIGHT} />
+                  <GroupLabelFrame scale={s} first={first} height={cardHeight} />
                 </View>
                 <Text numberOfLines={1} style={[styles.positioned, styles.groupName, {
                   left: (first ? 20 : 19) * s, top: 208 * s, width: 171 * s, height: 30 * s,
-                  fontSize: 20 * s, lineHeight: 28 * s,
+                  fontSize: Math.max(16, 20 * s), lineHeight: 28 * s,
                 }]}>{group.name}</Text>
+                <View pointerEvents="none" style={{ position: 'absolute', left: 222 * s, top: 205 * s }}>
+                  <GroupMemberStars members={group.members} scale={s} readable />
+                </View>
               </TouchableOpacity>
             );
           })}
@@ -129,7 +137,7 @@ export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup, onJ
         <TouchableOpacity
           accessibilityLabel="그룹 추가"
           onPress={onAddGroup}
-          style={{ alignSelf: 'center', marginTop: 33 * scale, width: 44 * scale, height: 44 * scale }}>
+          style={{ alignSelf: 'center', alignItems: 'center', justifyContent: 'center', marginTop: 33 * scale, width: Math.max(44, 44 * scale), height: Math.max(44, 44 * scale) }}>
           <GroupAddIcon scale={scale} />
         </TouchableOpacity>
         <TouchableOpacity
