@@ -12,6 +12,7 @@ import {
   type ShopItem,
 } from '@/lib/shop-api';
 import { asSpecialType } from '@/lib/special-planet';
+import { visibleShopItems } from '@/lib/shop-catalog';
 import { useDiary } from '@/store/diary-context';
 
 export type ShopResult = { ok: true } | { ok: false; error: string };
@@ -92,7 +93,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
 
   const current = state.token !== null && state.token === accessToken;
   const coins = current ? state.coins : null;
-  const items = current ? state.items : EMPTY;
+  const items = useMemo(() => current ? visibleShopItems(state.items) : EMPTY, [current, state.items]);
   const setCoins = (value: number) => setState((prev) => ({ ...prev, coins: value }));
   const setItems = (fn: (prev: ShopItem[]) => ShopItem[]) => setState((prev) => ({ ...prev, items: fn(prev.items) }));
 
