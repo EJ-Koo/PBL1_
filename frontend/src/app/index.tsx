@@ -1,3 +1,5 @@
+import { useQuest } from '@/store/quest-context';
+import { QuestRewardAnimation } from '@/components/quest-reward-animation';
 import { Text, TextInput } from '@/components/app-text';
 // [MODIFIED 2026-11-05] fffju 브랜치 index.jsx의 화면 구성·디자인으로 교체하고, 데이터는 서버(로그인)로 연결.
 //  - 화면: 가운데=나의 우주 / 왼쪽=일기 작성 / 오른쪽=그룹 우주 / 상점 (fffju 하단 네비·HUD·퀘스트 그대로)
@@ -39,6 +41,7 @@ export default function HomeScreen() {
   const { isLoggedIn, isRestoring, dataLoading, loadError, retryLoad, entries, groups, createGroup, joinGroup, leaveGroup, loadGroupStars, logout } = useDiary();
   const { coins, activeEffects, refresh: refreshShop } = useShop();
   const { frameWidth } = useDesignFrame();
+  const { refresh: refreshQuest, rewardEvent, clearReward } = useQuest();
   // fffju 반응형 레이아웃: 전체 뷰포트로 그리는 화면(홈 HUD·하단바·그룹)은 이 scale을 쓴다.
   // 아직 520 프레임을 쓰는 화면(일기 작성·상점)은 useDesignFrame(frameWidth/scale)을 유지.
   const { scale: rScale, chromeLeft, chromeWidth, headerTop } = useResponsiveLayout();
@@ -116,7 +119,6 @@ export default function HomeScreen() {
   if (isRestoring || !isLoggedIn) return <View style={styles.container} />;
 
   const checkCount = new Set(entries.map((e) => localDateKey(new Date(e.createdAt)))).size;
-  const todayComplete = entries.some((e) => localDateKey(new Date(e.createdAt)) === today);
   const groupEntries = (diaryIds: string[]) => entries.filter((e) => diaryIds.includes(e.id));
   const activeGroup = groups.find((g) => g.id === activeGroupId) ?? null;
 
@@ -209,7 +211,7 @@ export default function HomeScreen() {
               refreshShop();
               setShopVisible(true);
             }}
-            onQuest={() => setQuestVisible(true)}
+            onQuest={() => { void refreshQuest(); setQuestVisible(true); }}
             menuProps={{
               onSearch: () => setSearchPopup({ mode: 'keyword', key: Date.now() }),
               onCalendar: () => setSearchPopup({ mode: 'calendar', key: Date.now() }),
@@ -355,14 +357,15 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* ===== 퀘스트 (진행률은 오늘 일기 작성 여부만 실제 값) ===== */}
+      {/* ===== 퀘스트 (서버 진행률·보상 기록) ===== */}
       <Modal transparent visible={questVisible} animationType="fade" onRequestClose={() => setQuestVisible(false)}>
-        <QuestPanel scale={rScale} todayComplete={todayComplete}
+        <QuestPanel scale={rScale}
           onWriteDiary={() => { setQuestVisible(false); setScreen('diary'); }}
           onClose={() => setQuestVisible(false)} />
       </Modal>
 
       {/* ===== 공통: 하단 네비게이션 (fffju 반응형 — 전체 뷰포트) ===== */}
+      {rewardEvent && <QuestRewardAnimation key={rewardEvent.id} event={rewardEvent} onDone={clearReward} />}
       <UniverseBottomNav
         scale={rScale}
         activeScreen={screen}

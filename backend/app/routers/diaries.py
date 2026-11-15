@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from app import ai_client
 from app.db import supabase
 from app.dependencies import get_current_user_id
+from app.routers.quests import sync_daily_quest
 from app.schemas.diary import Diary, DiaryCreate, DiaryUpdate, RelatedDiary
 
 router = APIRouter(prefix="/diaries", tags=["diaries"])
@@ -294,7 +295,13 @@ def create_diary(diary: DiaryCreate, user_id: str = Depends(get_current_user_id)
     created = result.data[0]
     _create_star_for_diary(created["id"], diary.content, user_id, diary.topic)
     _tag_diary_groups(created["id"], diary.group_ids)
-    return _with_signed_photo_url(created)
+    response = _with_signed_photo_url(created)
+    # 일기 저장 성공은 유지하고, 보상 장애 시 앱의 퀘스트 동기화로 다시 시도합니다.
+    try:
+        response['quest_result'] = sync_daily_quest(user_id).model_dump(mode='json')
+    except HTTPException:
+        response['quest_result'] = None
+    return response
 
 
 @router.patch("/{diary_id}", response_model=Diary)

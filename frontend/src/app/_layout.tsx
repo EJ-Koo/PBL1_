@@ -1,3 +1,4 @@
+import { QuestProvider } from '@/store/quest-context';
 import { SessionGuard } from '@/components/session-guard';
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
@@ -23,6 +24,7 @@ export default function RootLayout() {
     <AdminProvider>
       <DiaryProvider>
         <ShopProvider>
+          <QuestProvider>
           {/* [ADDED 2026-11-10] 상점에서 장착한 배경음악 (모든 화면에서 이어서 재생) */}
           <ShopMusic />
           <StatusBar style="light" />
@@ -37,6 +39,7 @@ export default function RootLayout() {
             <Stack.Screen name="admin/index" />
           </Stack>
           <NoticeDialogHost /><SessionGuard />
+          </QuestProvider>
         </ShopProvider>
       </DiaryProvider>
     </AdminProvider>

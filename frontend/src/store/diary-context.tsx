@@ -1,3 +1,4 @@
+import { publishQuest } from '@/lib/quest-events';
 import { authSession, signOut } from '@/lib/auth-session';
 import { apiGetProfile, apiSaveProfile, apiUploadAvatar, type ApiProfile, type ProfileDraft } from '@/lib/profile-api';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
@@ -342,6 +343,9 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           const star = starList.find((s) => s.diary_id === created.id);
           const groupList = await apiListGroups(accessToken).catch(() => null);
           if (groupList) setGroups(groupList);
+          if (created.quest_result && authSession.getRevision() === epoch) {
+            publishQuest({ userId: created.user_id, revision: epoch, quest: created.quest_result });
+          }
           const entry = toEntry(created, entries.length, star);
           setEntries((prev) => [entry, ...prev]);
           return { ok: true };

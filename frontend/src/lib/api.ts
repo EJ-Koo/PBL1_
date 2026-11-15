@@ -1,3 +1,4 @@
+import type { DailyQuest } from './quest-api';
 import { apiFetch } from './auth-session';
 import { API_BASE_URL } from './api-config';
 import { Platform } from 'react-native';
@@ -15,6 +16,7 @@ export { API_BASE_URL } from './api-config';
 export type ApiVisibility = 'public' | 'friends' | 'private';
 
 export type ApiDiary = {
+  quest_result?: DailyQuest | null;
   id: string;
   user_id: string;
   content: string;

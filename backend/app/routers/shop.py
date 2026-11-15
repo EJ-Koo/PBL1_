@@ -79,7 +79,7 @@ def _is_int(v):
 CONFIG_KEYS = {
     "start_coins": ("처음 가입한 사람이 받는 코인 (테스트 999, 배포 0)", "int", 0, _is_int),
     "allow_test_reset": (
-        "상점의 '내 상점 초기화(테스트용)' 버튼 허용 (배포할 때 끄기)",
+        "상점·퀘스트 개발용 초기화 허용 (배포할 때 끄기)",
         "bool",
         True,
         lambda v: isinstance(v, bool),

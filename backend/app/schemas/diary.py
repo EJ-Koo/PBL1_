@@ -1,6 +1,7 @@
 from typing import Literal
 
 from pydantic import BaseModel, Field
+from app.schemas.quest import DailyQuestStatus
 
 Visibility = Literal["public", "friends", "private"]
 # 일기 주제(선택). 고르지 않아도 된다. AI가 특수 행성을 고를 때 보조 정보로만 쓴다(ai/configs/special_planet.json).
@@ -42,6 +43,7 @@ class Diary(BaseModel):
     visibility: Visibility
     created_at: str
     updated_at: str
+    quest_result: DailyQuestStatus | None = None
 
 
 class RelatedDiary(BaseModel):
