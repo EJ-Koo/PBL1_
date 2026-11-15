@@ -33,8 +33,8 @@ export function DiaryComposer({ scale, editId, onBack, onSaved }: Props) {
   const [text, setText] = useState(editing?.text ?? '');
   const [photos, setPhotos] = useState<DiaryPhoto[]>(editing?.photos ?? []);
   const [groupIds, setGroupIds] = useState<string[]>([]);
-  // 오늘의 주제는 선택 사항(안 골라도 저장). AI가 특수 행성을 고를 때 보조 정보로만 쓴다.
-  const [topic, setTopic] = useState<DiaryTopic | null>(null);
+  // 오늘의 주제는 선택 사항(안 골라도 저장). [2026-11-13] 일기에 저장해 별자리에 쓰고, 수정할 때도 바꿀 수 있다.
+  const [topic, setTopic] = useState<DiaryTopic | null>(editing?.topic ?? null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [openedAt] = useState(() => Date.now());
@@ -79,7 +79,7 @@ export function DiaryComposer({ scale, editId, onBack, onSaved }: Props) {
       ? editing.visibility
       : groupIds.length > 0 ? 'friends' : 'private';
     const result = editing
-      ? await updateEntry(editing.id, content, photos, visibility)
+      ? await updateEntry(editing.id, content, photos, visibility, topic !== editing.topic ? topic : undefined)
       : await addEntry(content, photos, visibility, groupIds, topic);
     busy.current = false;
     setSaving(false);
@@ -118,9 +118,8 @@ export function DiaryComposer({ scale, editId, onBack, onSaved }: Props) {
       }
       onBack={onBack}
       onSubmit={submit}
-      // 수정할 때는 주제를 바꾸지 않는다(서버에 주제 수정 경로 없음).
-      // 새 일기에만 '오늘의 주제'(선택) 줄을 보인다. 끄고 켜기: lib/special-planet.ts 의 SHOW_TOPIC_PICKER
-      topics={editing || !SHOW_TOPIC_PICKER ? undefined : DIARY_TOPICS}
+      // '오늘의 주제'(선택) 줄. [2026-11-13] 수정할 때도 보인다(서버 PATCH topic). 끄고 켜기: lib/special-planet.ts 의 SHOW_TOPIC_PICKER
+      topics={SHOW_TOPIC_PICKER ? DIARY_TOPICS : undefined}
       selectedTopic={topic}
       onToggleTopic={(id) => setTopic((prev) => (prev === id ? null : (id as DiaryTopic)))}
     />

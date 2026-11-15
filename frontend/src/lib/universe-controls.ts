@@ -15,3 +15,12 @@ export function rotateView(view: UniverseControls, dx: number, dy: number, sensi
 export function zoomView(view: UniverseControls, factor: number) {
   view.zoom = Math.min(5, Math.max(0.25, view.zoom * factor));
 }
+// [2026-11-15] 별자리 보기: 정면(기울기 0, 가장 가까운 한 바퀴)으로 돌리고 거리를 맞춘다. 저장해 둔 화면으로 되돌릴 때도 쓴다.
+export function setView(view: UniverseControls, next: Partial<UniverseControls>) {
+  Object.assign(view, next);
+}
+export function frontView(view: UniverseControls, zoom?: number) {
+  view.pitch = 0;
+  view.yaw = Math.round(view.yaw / (Math.PI * 2)) * Math.PI * 2;
+  if (zoom != null && Number.isFinite(zoom)) view.zoom = zoom;
+}

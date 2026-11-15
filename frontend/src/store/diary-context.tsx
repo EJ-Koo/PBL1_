@@ -26,7 +26,7 @@ import {
   type ApiStar,
 } from '@/lib/api';
 import { fallbackVisual, type PlanetVisual } from '@/lib/planet-visual';
-import { asSpecialType, type DiaryTopic, type SpecialType } from '@/lib/special-planet';
+import { asDiaryTopic, asSpecialType, type DiaryTopic, type SpecialType } from '@/lib/special-planet';
 
 export type Visibility = 'public' | 'friends' | 'private';
 
@@ -51,6 +51,8 @@ export type DiaryEntry = {
   planet: PlanetVisual;
   /** [2026-11-12] 사용자가 상점에서 산 효과를 직접 적용한 특수 효과. 없으면 null(일반 행성). 본체(색·무늬·크기·위치)와 무관. */
   effect: SpecialType | null;
+  /** [2026-11-12] 일기를 쓸 때 고른 주제(선택). 없으면 null. 별자리 해금·표시에만 쓴다(좌표·외형과 무관). */
+  topic: DiaryTopic | null;
 };
 
 export type LoginResult = { ok: true } | { ok: false; error: string };
@@ -87,7 +89,9 @@ type DiaryContextValue = {
     id: string,
     text: string,
     photos: DiaryPhoto[],
-    visibility: Visibility
+    visibility: Visibility,
+    /** [2026-11-13] 주제 바꾸기. undefined 면 그대로, null 이면 주제 없음 */
+    topic?: DiaryTopic | null
   ) => Promise<SaveResult>;
   getEntry: (id: string, groupId?: string) => DiaryEntry | undefined;
   /** 이 일기가 '본인' 것인지(그룹 공유 우주의 남의 별과 구분 — 수정/꾸미기 숨김용). */
@@ -161,6 +165,8 @@ export function toEntry(diary: ApiDiary, colorIndex: number, star?: ApiStar): Di
     position: star ? [star.x, star.y, star.z] : fallbackPosition(colorIndex),
     planet: starVisual(star),
     effect: asSpecialType(star?.effect),
+    // [2026-11-13] 주제: 일기 행(diaries.topic)이 먼저, 없으면 별 목록(예전 AI 저장소 보충값)
+    topic: asDiaryTopic(diary.topic) ?? asDiaryTopic(star?.topic),
   };
 }
 
@@ -180,6 +186,8 @@ function groupStarToEntry(g: ApiGroupStar): DiaryEntry {
     position: [g.x, g.y, g.z],
     planet,
     effect: asSpecialType(g.effect),
+    // 그룹 우주는 별자리 보기를 쓰지 않으므로 주제가 필요 없다
+    topic: null,
   };
 }
 
@@ -368,6 +376,8 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
             publishQuest({ userId: created.user_id, revision: epoch, quest: created.quest_result });
           }
           const entry = toEntry(created, entries.length, star);
+          // 서버가 주제를 아직 못 돌려줘도(AI 서비스 지연 등) 방금 고른 주제로 별자리에 바로 반영한다
+          if (!entry.topic && topic) entry.topic = topic;
           setEntries((prev) => [entry, ...prev]);
           return { ok: true, entryId: entry.id };
         } catch (err) {
@@ -381,7 +391,8 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
         id: string,
         text: string,
         photos: DiaryPhoto[],
-        visibility: Visibility
+        visibility: Visibility,
+        topic?: DiaryTopic | null
       ): Promise<SaveResult> => {
         if (!accessToken) {
           return { ok: false, error: '로그인이 필요합니다.' };
@@ -392,6 +403,8 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
             content: text,
             visibility,
             photo_paths,
+            // 주제는 바꿨을 때만 보낸다(예전 요청과 같음)
+            ...(topic !== undefined ? { topic } : {}),
           });
           const updatedPhotos = toPhotos(updated);
           setEntries((prev) =>
@@ -403,6 +416,8 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
                     photoUri: updatedPhotos[0]?.uri ?? null,
                     photos: updatedPhotos,
                     visibility: updated.visibility,
+                    // 서버가 주제를 저장했으면 그 값, 예전 서버면(주제 열 없음) 화면에서만 바꾼 값
+                    topic: topic === undefined ? e.topic : asDiaryTopic(updated.topic) ?? topic,
                   }
                 : e
             )

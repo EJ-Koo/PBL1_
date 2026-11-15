@@ -153,6 +153,38 @@ def forget_diary(user_id: str, diary_id: str) -> None:
         logger.warning("AI 저장소에서 일기 삭제 실패(무시): %s", exc)
 
 
+_TOPIC_BATCH = 2000
+
+
+def diary_topics(user_id: str, diary_ids: list[str], allowed: set[str]) -> dict[str, str] | None:
+    """[ADDED 2026-11-12] 별자리용: {diary_id: 사용자가 고른 주제}. 주제를 고르지 않은 일기는 빠진다.
+    주제는 DB가 아니라 AI 서비스에 저장돼 있어(/layout/add) 읽기만 한다. AI 서비스가 없거나 실패하면 None.
+    allowed 에 없는 값(예전·잘못된 값)은 버린다."""
+    if not settings.ai_service_url or not diary_ids:
+        return None
+    out: dict[str, str] = {}
+    try:
+        for i in range(0, len(diary_ids), _TOPIC_BATCH):
+            chunk = diary_ids[i:i + _TOPIC_BATCH]
+            topics = _post("/topics/batch", {"user_id": user_id, "diary_ids": chunk}).json()["topics"]
+            out.update({str(d): str(t) for d, t in topics.items() if str(t) in allowed})
+    except Exception as exc:
+        logger.warning("일기 주제 조회 실패(별자리 없이 진행): %s", exc)
+        return None
+    return out
+
+
+def set_diary_topic(user_id: str, diary_id: str, topic: str | None) -> None:
+    """[ADDED 2026-11-13] 일기 수정으로 바뀐 주제를 AI 서비스 저장소에도 맞춘다(null = 주제 없음).
+    DB(diaries.topic)가 원본이고, 이 저장소는 DB에 주제가 없을 때만 보충용으로 읽는다. 실패해도 무시한다."""
+    if not settings.ai_service_url:
+        return
+    try:
+        _post("/topics/set", {"user_id": user_id, "diary_id": diary_id, "topic": topic})
+    except Exception as exc:
+        logger.warning("AI 저장소 주제 갱신 실패(무시): %s", exc)
+
+
 def related_diaries(user_id: str, diary_id: str) -> list[dict] | None:
     """[{"diary_id", "similarity"}] (유사도 높은 순, 없으면 빈 목록) 또는 None(AI 서비스 없음·실패·미등록 일기)."""
     if not settings.ai_service_url:

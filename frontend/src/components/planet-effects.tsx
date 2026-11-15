@@ -81,13 +81,17 @@ const NOISE_GLSL = `
 `;
 
 // 선택 강조·먼 행성 어둡게(행성 본체와 같은 규칙)
+// [2026-11-13] uDim: 별자리 보기에서 별자리 밖 행성을 어둡게 할 때 본체(universe-scene uDim)와 같은 값으로
+// 막·판·궤도·수정·입자를 모두 함께 어둡게 한다(0이면 예전과 똑같다). 효과 저장값과는 무관한 화면 처리.
 const FADE_GLSL = `
   uniform float uHighlight;
   uniform float uFocus;
   uniform vec2 uDepthFade;
+  uniform float uDim;
   float sceneFade(float viewZ) {
     return (1.0 - 0.45 * smoothstep(uDepthFade.x, uDepthFade.y, -viewZ))
-         * (1.0 + 0.6 * uHighlight) * (1.0 - 0.35 * uFocus * (1.0 - uHighlight));
+         * (1.0 + 0.6 * uHighlight) * (1.0 - 0.35 * uFocus * (1.0 - uHighlight))
+         * (1.0 - uDim);
   }
 `;
 
@@ -439,13 +443,17 @@ type EffectProps = {
   quality: PlanetQuality;
   /** 행성 선택 강조 값(0~1, Planet이 매 프레임 갱신) */
   highlight: { current: number };
+  /** [2026-11-13] 어둡게 할 정도(0~1, Planet 본체와 같은 값. 별자리 밖 행성). 없으면 0 */
+  dim?: { current: number };
   shared: SharedUniforms;
   /** 단계 고정(미리보기). 없으면 선택 여부·EFFECT_TIERS(거리)로 정한다. */
   fixedTier?: EffectTier;
 };
 
 /** 특수 행성 효과 하나. Planet의 위치·기울기 그룹 안에 둔다(자전 그룹 밖 → 효과는 자기 속도로 움직인다). */
-export function SpecialEffect({ id, type, radius, palette, intensity, speed, quality, highlight, shared, fixedTier }: EffectProps) {
+const NO_DIM = { current: 0 };
+
+export function SpecialEffect({ id, type, radius, palette, intensity, speed, quality, highlight, dim = NO_DIM, shared, fixedTier }: EffectProps) {
   // 효과마다 재질은 최대 두 개(막·판·궤도) + 입자 하나
   const mat0 = useRef<ShaderMaterial>(null);
   const mat1 = useRef<ShaderMaterial>(null);
@@ -462,6 +470,7 @@ export function SpecialEffect({ id, type, radius, palette, intensity, speed, qua
       uTime: { value: 0 },
       uIntensity: { value: intensity },
       uHighlight: { value: 0 },
+      uDim: { value: 0 },
       uFocus: shared.uFocus,
       uDepthFade: shared.uDepthFade,
       uSeed: { value: [rand[0] * 30, rand[1] * 30, rand[2] * 30] },
@@ -511,6 +520,7 @@ export function SpecialEffect({ id, type, radius, palette, intensity, speed, qua
       if (!m) continue;
       m.uniforms.uTime.value = time.current;
       m.uniforms.uHighlight.value = highlight.current;
+      if (m.uniforms.uDim) m.uniforms.uDim.value = dim.current;
     }
     const pts = pointsRef.current;
     if (pts) {

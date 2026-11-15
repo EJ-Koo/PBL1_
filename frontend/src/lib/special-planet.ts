@@ -33,6 +33,11 @@ export const DIARY_TOPICS: { id: DiaryTopic; label: string }[] = [
  */
 export const SHOW_TOPIC_PICKER = true;
 
+/** 서버가 준 주제 값 → 앱이 아는 주제. 모르는 값·없음은 null(주제 없는 일기). */
+export function asDiaryTopic(value: unknown): DiaryTopic | null {
+  return typeof value === 'string' && DIARY_TOPICS.some((t) => t.id === value) ? (value as DiaryTopic) : null;
+}
+
 export const SPECIAL_NAMES: Record<SpecialType, string> = {
   ocean: '바다 행성',
   cloud: '구름 행성',

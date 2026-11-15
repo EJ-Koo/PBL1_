@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { PlanetDecorator } from '@/components/planet-decorator';
 import { StarDiaryPopup } from '@/components/ui/star-diary-popup';
-import { UniverseCanvas } from '@/components/universe-scene';
+import { UniverseCanvas, type ConstellationRequest } from '@/components/universe-scene';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { apiReadDiary, type ApiDiary } from '@/lib/api';
 import { authSession } from '@/lib/auth-session';
@@ -12,10 +12,12 @@ import type { StarPopupAnchor } from '@/lib/star-popup-layout';
 import { useDiary, toEntry, type DiaryEntry } from '@/store/diary-context';
 
 /** fffju's anchored UI, test's exact-ID permission checks, and a shared camera per login. */
-export function DiaryUniverse({ entries, sceneKey, groupId, selection, newStar, onNewStarFound, backgroundStarScale = 1 }: {
+export function DiaryUniverse({ entries, sceneKey, groupId, selection, newStar, onNewStarFound, backgroundStarScale = 1, constellation, frontViewRequest }: {
   entries: DiaryEntry[]; sceneKey: string; groupId?: string;
   selection?: { id: string | null; onChange: (id: string | null) => void };
   newStar?: NewStarHighlight; onNewStarFound?: () => void; backgroundStarScale?: number;
+  /** [2026-11-15] 별자리 보기(홈 우주에서만). 없으면 예전과 같다. */
+  constellation?: ConstellationRequest | null; frontViewRequest?: number;
 }) {
   const { isOwnEntry, isEditableToday, accessToken, profile } = useDiary();
   const revision = authSession.getRevision();
@@ -58,7 +60,8 @@ export function DiaryUniverse({ entries, sceneKey, groupId, selection, newStar, 
   const owned = !!entry && isOwnEntry(entry.id);
   return <View style={styles.fill} onLayout={event => setSize(event.nativeEvent.layout)}>
     <UniverseCanvas entries={entries} sceneKey={sceneKey} onStarPress={select} newStar={newStar}
-      selectedEntryId={entry?.id} onStarPositionChange={setAnchor} onBackgroundPress={close} backgroundStarScale={backgroundStarScale} />
+      selectedEntryId={entry?.id} onStarPositionChange={setAnchor} onBackgroundPress={close} backgroundStarScale={backgroundStarScale}
+      constellation={constellation} frontViewRequest={frontViewRequest} />
     {resolved && anchor?.id === resolved.id && <StarDiaryPopup key={resolved.id} entry={resolved} anchor={anchor}
       author={author} viewport={{ ...size, topInset: headerTop + 84 * scale, bottomInset: groupId ? 20 : bottomSpace }}
       owned={owned} editable={owned && isEditableToday(resolved.id)} loading={!!groupId && !verified} error={verified?.error}
