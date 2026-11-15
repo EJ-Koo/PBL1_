@@ -9,6 +9,7 @@ from app import ai_client
 from app.db import supabase
 from app.dependencies import get_current_user_id
 from app.routers.quests import sync_daily_quest
+from app.routers.profiles import _shape as shape_profile
 from app.schemas.diary import Diary, DiaryCreate, DiaryUpdate, RelatedDiary
 
 router = APIRouter(prefix="/diaries", tags=["diaries"])
@@ -249,7 +250,17 @@ def list_diaries(user_id: str = Depends(get_current_user_id)):
 @router.get("/{diary_id}", response_model=Diary)
 def get_diary(diary_id: UUID, user_id: str = Depends(get_current_user_id)):
     # 그룹 공유 우주에서 남의 별을 눌러도 상세를 볼 수 있게, 같은 그룹 멤버면 읽기 허용.
-    return _with_signed_photo_url(_get_viewable_diary(diary_id, user_id))
+    diary = _get_viewable_diary(diary_id, user_id)
+    response = _with_signed_photo_url(diary)
+    # Only expose the author's display name and signed avatar after diary permission succeeds.
+    try:
+        rows = supabase.table('profiles').select('user_id,nickname,avatar_path').eq('user_id', diary['user_id']).execute().data
+        if rows:
+            profile = shape_profile(rows[0], diary['user_id'])
+            response['author_profile'] = {'nickname': profile['nickname'], 'avatar_url': profile['avatar_url']}
+    except Exception:
+        response['author_profile'] = None
+    return response
 
 
 @router.get("/{diary_id}/related", response_model=list[RelatedDiary])

@@ -1,5 +1,7 @@
 import secrets
 import string
+from uuid import uuid5, NAMESPACE_URL
+from postgrest.exceptions import APIError
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 
@@ -105,23 +107,38 @@ def create_group(group: GroupCreate, user_id: str = Depends(get_current_user_id)
     name = group.name.strip()
     if not name:
         raise HTTPException(status_code=422, detail="그룹 이름을 입력해주세요.")
-    code = _unique_invite_code()
-    result = (
-        supabase.table("groups")
-        .insert({"user_id": user_id, "name": name, "invite_code": code})
-        .execute()
-    )
-    created = result.data[0]
-    # 소유자 멤버십이 없으면 접근 자체가 막히므로(권한은 group_members 기준), 실패하면 그룹을 되돌린다.
-    # shortcut: 두 insert 사이에 프로세스가 죽으면 유령 그룹이 남는다(드묾). 원자성이 필요하면 DB RPC로 합칠 것.
+    # Existing groups.id primary key provides cross-worker retry protection; no new SQL needed.
+    group_id = str(uuid5(NAMESPACE_URL, f'star2day:group:{user_id}:{group.request_id}')) if group.request_id else None
+    existing = supabase.table('groups').select('*, diary_groups(diary_id)').eq('id', group_id).eq('user_id', user_id).execute().data if group_id else []
+    if existing:
+        created = existing[0]
+        if created['name'] != name:
+            raise HTTPException(status_code=409, detail='다른 이름으로 재시도하려면 새 그룹 만들기를 열어주세요.')
+    else:
+        row = {"user_id": user_id, "name": name, "invite_code": _unique_invite_code()}
+        if group_id:
+            row['id'] = group_id
+        try:
+            created = supabase.table('groups').insert(row).execute().data[0]
+        except APIError as error:
+            if not group_id or error.code != '23505':
+                raise
+            # A concurrent request may have inserted the same action first.
+            found = supabase.table('groups').select('*, diary_groups(diary_id)').eq('id', group_id).eq('user_id', user_id).execute().data
+            if not found or found[0]['name'] != name:
+                raise HTTPException(status_code=409, detail='그룹 생성 결과를 확인해주세요.')
+            created = found[0]
+    # A retry can repair owner membership without creating another group.
     try:
-        supabase.table("group_members").insert(
-            {"group_id": created["id"], "user_id": user_id}
-        ).execute()
+        supabase.table("group_members").upsert(
+            {"group_id": created["id"], "user_id": user_id},
+            on_conflict='group_id,user_id').execute()
     except Exception:
-        supabase.table("groups").delete().eq("id", created["id"]).execute()
+        # Preserve an idempotent row so the same action can repair owner membership on retry.
+        if not group_id:
+            supabase.table("groups").delete().eq("id", created["id"]).execute()
         raise HTTPException(status_code=500, detail="그룹을 만들지 못했어요. 다시 시도해주세요.")
-    return _shape({**created, "diary_groups": []}, _members_by_group([created["id"]]))
+    return _shape({**created, "diary_groups": created.get("diary_groups", [])}, _members_by_group([created["id"]]))
 
 
 @router.post("/join", response_model=Group)

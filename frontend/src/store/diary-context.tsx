@@ -1,3 +1,5 @@
+import { randomUUID } from 'expo-crypto';
+import { GroupCreation } from '@/lib/group-creation';
 import { GroupCache } from '@/lib/group-cache';
 import { publishQuest } from '@/lib/quest-events';
 import { authSession, signOut } from '@/lib/auth-session';
@@ -218,6 +220,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
     epoch: -1, token: null, entries: [], groups: [], profile: null, error: null,
   });
   // 그룹 공유 우주에서 받아온 멤버 전체의 별(본인 것 포함). getEntry가 상세 화면에서 남의 별도 찾게 한다.
+  const groupCreation = useMemo(() => ({ epoch, action: new GroupCreation() }), [epoch]);
   const groupCache = useMemo(() => new GroupCache<DiaryEntry>(epoch), [epoch]);
   const loadGroupStars = useCallback(async (groupId: string): Promise<DiaryEntry[]> => {
     if (!accessToken || authSession.getRevision() !== epoch) throw new Error('로그인이 필요합니다.');
@@ -430,8 +433,9 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           return { ok: false, error: '로그인이 필요합니다.' };
         }
         try {
-          const created = await apiCreateGroup(accessToken, name);
-          setGroups((prev) => [created, ...prev]);
+          const created = await groupCreation.action.run(name, randomUUID, requestId => apiCreateGroup(accessToken, name, requestId));
+          if (authSession.getRevision() !== epoch) return { ok: false, error: '로그인 계정이 변경됐어요.' };
+          setGroups((prev) => [created, ...prev.filter(group => group.id !== created.id)]);
           return { ok: true };
         } catch (err) {
           return {
@@ -473,7 +477,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
       },
       loadGroupStars,
     }),
-    [isLoggedIn, accessToken, userEmail, entries, groups, groupCache, loadGroupStars, profile, session, ready, own, data.token, data.error, retryLoad, patch, setEntries, setGroups, epoch]
+    [isLoggedIn, accessToken, userEmail, entries, groups, groupCreation, groupCache, loadGroupStars, profile, session, ready, own, data.token, data.error, retryLoad, patch, setEntries, setGroups, epoch]
   );
 
   return <DiaryContext.Provider value={value}>{children}</DiaryContext.Provider>;

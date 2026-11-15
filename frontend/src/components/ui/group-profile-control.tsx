@@ -8,7 +8,7 @@ import { pickPhotos } from '@/lib/photos';
 import { useDiary, type SaveResult } from '@/store/diary-context';
 
 type Anchor = { x: number; y: number; width: number; height: number };
-function Avatar({ uri, size }: { uri?: string | null; size: number }) {
+export function Avatar({ uri, size }: { uri?: string | null; size: number }) {
   const [failed, setFailed] = useState<string | null>(null);
   return <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: '#05060a', borderWidth: 1, borderColor: '#e0e2ea' }}>
     {uri && uri !== failed ? <Image source={{ uri }} style={{ width: '100%', height: '100%' }} onError={() => setFailed(uri)} />

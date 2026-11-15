@@ -1,8 +1,10 @@
 from pydantic import BaseModel, Field
+from uuid import UUID
 
 
 class GroupCreate(BaseModel):
     name: str = Field(min_length=1, max_length=50)
+    request_id: UUID | None = None
 
 
 class GroupJoin(BaseModel):

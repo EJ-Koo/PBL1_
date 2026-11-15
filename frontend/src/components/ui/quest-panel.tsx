@@ -57,6 +57,7 @@ export function QuestPanel({ scale, onClose, onWriteDiary }: Props) {
             <SpaceButton scale={scale} label={todayComplete ? '확인' : '일기 쓰러 가기'} onPress={todayComplete ? onClose : onWriteDiary}
               primary={!todayComplete} disabled={loading} style={{ marginTop: 16 * scale }} />
             {quest.reset_allowed && <SpaceButton scale={scale} label="개발용 퀘스트 초기화" disabled={loading} onPress={resetQuest} style={{ marginTop: 10 * scale }} />}
+            {!quest.reset_allowed && <Text style={[styles.muted, { fontSize: 10 * scale, lineHeight: 16 * scale, marginTop: 10 * scale }]}>반복 테스트: 관리자 설정에서 ‘상점·퀘스트 개발용 초기화 허용’을 켜면 초기화 버튼이 표시됩니다.</Text>}
             <Text style={[styles.muted, { fontSize: 10 * scale, lineHeight: 16 * scale, marginTop: 12 * scale }]}>한국 시간 기준 매일 자정에 새 퀘스트로 바뀝니다.</Text>
             </>}
             <View style={{ height: 1, backgroundColor: '#ffffff30', marginVertical: 20 * scale }} />

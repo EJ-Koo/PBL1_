@@ -69,7 +69,7 @@ export function BottomNavFrame({ scale, width = 393 * scale }: { scale: number; 
   const clipId = `bottom-stripes-${id}`;
   const frameWidth = scale > 0 ? width / scale : 393;
   const layout = getBottomNavLayout(frameWidth);
-  const { items, lineY, cut, stripeLeft, stripeRight, stripeWidth, stripeY, stripeHeight, stripePitch, stripeStroke } = layout;
+  const { items, lineY, stripeLeft, stripeRight, stripeWidth, stripeY, stripeHeight, stripePitch, stripeStroke } = layout;
   return (
     <Svg width={width} height={layout.height * scale} viewBox={`0 0 ${frameWidth} ${layout.height}`} pointerEvents="none">
       <Defs>
@@ -78,7 +78,7 @@ export function BottomNavFrame({ scale, width = 393 * scale }: { scale: number; 
           <Rect x={stripeRight} y={stripeY} width={stripeWidth} height={stripeHeight} />
         </ClipPath>
       </Defs>
-      <Path d={`M0 ${lineY}H${layout.groupLeft}L${layout.notchLeft} .5H${layout.notchRight}L${layout.groupRight} ${lineY}H${frameWidth}`}
+      <Path d={`M0 ${lineY}H${frameWidth}`}
         fill="none" stroke={DesignPaint.ink} strokeWidth={0.8} />
       <G clipPath={`url(#${clipId})`}>
         {Array.from({ length: Math.ceil(stripeWidth / stripePitch) + 3 }, (_, i) => (
@@ -88,11 +88,8 @@ export function BottomNavFrame({ scale, width = 393 * scale }: { scale: number; 
             stroke={DesignColors.gray} strokeWidth={stripeStroke} />
         ))}
       </G>
-      {items.map(({ id, x, y, width, height }, index) => (
-        <Path key={id}
-          d={index === 0 ? `M${x} ${y + height}V${y + height * 0.6}L${x + cut} ${y}H${x + width}V${y + height}Z`
-            : index === 2 ? `M${x} ${y}H${x + width - cut}L${x + width} ${y + height * 0.6}V${y + height}H${x}Z`
-              : `M${x} ${y}H${x + width}V${y + height}H${x}Z`}
+      {items.map(({ id, x, y, width, height }) => (
+        <Rect key={id} x={x} y={y} width={width} height={height}
           fill={DesignPaint.bottomBar} stroke={DesignPaint.ink} strokeWidth={1} />
       ))}
     </Svg>

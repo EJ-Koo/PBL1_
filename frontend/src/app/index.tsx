@@ -1,3 +1,5 @@
+import { GroupDiaryCard } from '@/components/ui/group-diary-card';
+import { authSession } from '@/lib/auth-session';
 import { useGroupUniverse } from '@/hooks/use-group-universe';
 import { useQuest } from '@/store/quest-context';
 import { QuestRewardAnimation } from '@/components/quest-reward-animation';
@@ -57,13 +59,13 @@ export default function HomeScreen() {
   const [createGroupVisible, setCreateGroupVisible] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [creatingGroup, setCreatingGroup] = useState(false);
+  const createGroupLock = useRef(false);
   const { groupId: routeGroupId } = useLocalSearchParams<{ groupId?: string }>();
   const [activeGroupId, setActiveGroupId] = useState<string | null>(routeGroupId ?? null);
   // 그룹 공유 우주: 그룹을 열면 멤버 전체의 별을 서버에서 받아온다(본인 것만이 아님).
   const { entries: groupStars, loading: groupLoading, error: groupError, reload: reloadGroup } = useGroupUniverse(activeGroupId);
   // 그룹 우주에서 별을 눌러 행성 상세로 갈 때, 돌아오면 목록이 아니라 그 그룹 우주로 복귀하려고 기억해둔다.
-  const returnGroupId = useRef<string | null>(null);
-  const openingStar = useRef(false);
+  const [sharedDiaryId, setSharedDiaryId] = useState<string | null>(null);
   const [inviteVisible, setInviteVisible] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -96,10 +98,8 @@ export default function HomeScreen() {
 
   // Keep this callback stable: setting the return target must not reopen the modal before navigation.
   useFocusEffect(useCallback(() => {
-    openingStar.current = false;
-    const groupId = returnGroupId.current ?? routeGroupId;
+    const groupId = routeGroupId;
     if (groupId) { setScreen('group'); setActiveGroupId(groupId); }
-    returnGroupId.current = null;
   }, [routeGroupId]));
 
   if (isRestoring || !isLoggedIn) return <View style={styles.container} />;
@@ -114,13 +114,15 @@ export default function HomeScreen() {
   };
 
   const handleCreateGroup = async () => {
-    if (creatingGroup) return;
+    if (createGroupLock.current) return;
     if (newGroupName.trim().length > 24) {
       showMessage('그룹 이름', '그룹 이름은 24자 이내로 입력해주세요.');
       return;
     }
+    createGroupLock.current = true;
     setCreatingGroup(true);
     const result = await createGroup(newGroupName.trim() || `그룹${groups.length + 1}`);
+    createGroupLock.current = false;
     setCreatingGroup(false);
     if (!result.ok) {
       showMessage('그룹 생성 실패', result.error);
@@ -177,7 +179,7 @@ export default function HomeScreen() {
           <BackgroundTint effects={activeEffects} />
           {/* Comets sit behind the transparent 3D canvas so planets occlude them. */}
           <CometLayer effects={activeEffects} />
-          <UniverseCanvas entries={entries} onStarPress={(id) => router.push(`/planet/${id}`)} />
+          <UniverseCanvas sceneKey={`${authSession.getRevision()}:home`} entries={entries} onStarPress={(id) => router.push(`/planet/${id}`)} />
 
           {entries.length === 0 && (
             <View style={styles.emptyState} pointerEvents="none">
@@ -231,7 +233,7 @@ export default function HomeScreen() {
                 previewY: `${Math.round(50 - Math.max(-1, Math.min(1, e.position[1] / 12)) * 40)}%`,
               })),
             }))}
-            onSelectGroup={(g) => setActiveGroupId(g.id)}
+            onSelectGroup={(g) => { setSharedDiaryId(null); setActiveGroupId(g.id); }}
             onAddGroup={() => setCreateGroupVisible(true)}
             onJoinByCode={() => setJoinVisible(true)}
           />
@@ -242,21 +244,16 @@ export default function HomeScreen() {
       <ShopSheet visible={shopVisible} width={frameWidth} onClose={() => setShopVisible(false)} />
 
       {/* ===== 그룹 카드를 눌렀을 때: 그 그룹의 우주를 3D로 크게 보기 ===== */}
-      <Modal transparent={false} visible={activeGroup !== null} animationType="slide" onRequestClose={() => setActiveGroupId(null)}>
+      <Modal transparent={false} visible={activeGroup !== null} animationType="slide" onRequestClose={() => sharedDiaryId ? setSharedDiaryId(null) : setActiveGroupId(null)}>
         {activeGroup && (
           <View style={[styles.fill, styles.spaceBackground]}>
             <UniverseCanvas
               key={activeGroup.id}
-              sceneKey={`group-${activeGroup.id}`}
+              sceneKey={`${authSession.getRevision()}:group-${activeGroup.id}`}
               entries={groupStars}
               backgroundStarScale={1.4}
               onStarPress={(id) => {
-                // 행성 상세를 보이게 모달은 닫되, 돌아올 그룹을 기억해 복귀한다.
-                if (openingStar.current || !groupStars.some(entry => entry.id === id)) return;
-                openingStar.current = true;
-                returnGroupId.current = activeGroup.id;
-                setActiveGroupId(null);
-                router.push({ pathname: '/planet/[id]', params: { id, groupId: activeGroup.id } });
+                if (groupStars.some(entry => entry.id === id)) setSharedDiaryId(id);
               }}
             />
             {(groupLoading || groupError || groupStars.length === 0) && (
@@ -275,6 +272,7 @@ export default function HomeScreen() {
               <SpaceButton scale={rScale} label="친구 초대" onPress={() => { setConfirmLeave(false); setInviteVisible(true); }} />
               <GroupMemberStars scale={rScale} dark members={getMemberStars(activeGroup, entries, today)} />
             </View>
+            {sharedDiaryId && <GroupDiaryCard key={sharedDiaryId} id={sharedDiaryId} onClose={() => setSharedDiaryId(null)} />}
           </View>
         )}
       </Modal>

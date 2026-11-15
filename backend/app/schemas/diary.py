@@ -30,6 +30,11 @@ class DiaryUpdate(BaseModel):
     visibility: Visibility | None = None
 
 
+class DiaryAuthor(BaseModel):
+    nickname: str
+    avatar_url: str | None = None
+
+
 class Diary(BaseModel):
     id: str
     user_id: str
@@ -44,6 +49,7 @@ class Diary(BaseModel):
     created_at: str
     updated_at: str
     quest_result: DailyQuestStatus | None = None
+    author_profile: DiaryAuthor | None = None
 
 
 class RelatedDiary(BaseModel):

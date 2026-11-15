@@ -1,6 +1,6 @@
 import { Text, TextInput } from '@/components/app-text';
 import { Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -47,6 +47,8 @@ export function DiaryWriteScreen({
 }: Props) {
   const insets = useSafeAreaInsets();
   const [preview, setPreview] = useState<Photo | null>(null);
+  const topicList = useRef<ScrollView>(null);
+  const [topicScroll, setTopicScroll] = useState({ width: 0, content: 0, offset: 0 });
   const { contentLeft, contentWidth, headerTop, bottomSpace } = useResponsiveLayout();
   const box = (left: number, top: number, width: number, height: number) => ({
     left: left * scale, top: top * scale, width: width * scale, height: height * scale,
@@ -98,13 +100,31 @@ export function DiaryWriteScreen({
 
         {topics?.length ? (
           <>
-            <Text style={[styles.text, { marginHorizontal: 27 * scale, marginTop: 16 * scale }, type(16, 22)]}>오늘의 주제</Text>
-            <Text style={[styles.text, styles.photoCount, { marginHorizontal: 27 * scale }, type(12, 18)]}>선택 안 해도 돼요</Text>
+            <View style={{ marginHorizontal: 27 * scale, marginTop: 16 * scale, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={[styles.text, type(16, 22)]}>오늘의 주제</Text>
+              <View style={{ flexDirection: 'row', gap: 4 }}>
+                {[-1, 1].map(direction => <Pressable key={direction} accessibilityRole="button" accessibilityLabel={direction < 0 ? '이전 주제 보기' : '다음 주제 보기'}
+                  onPress={() => topicList.current?.scrollTo({ x: Math.max(0, Math.min(topicScroll.content - topicScroll.width, topicScroll.offset + direction * topicScroll.width * 0.7)), animated: true })}
+                  style={{ width: 36, height: 32, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#ffffff55' }}>
+                  <Text style={[styles.text, { fontSize: 20 }]}>{direction < 0 ? '‹' : '›'}</Text>
+                </Pressable>)}
+              </View>
+            </View>
+            <Text style={[styles.text, styles.photoCount, { marginHorizontal: 27 * scale }, type(12, 18)]}>선택 안 해도 돼요 · 좌우로 넘겨 보세요</Text>
             <ScrollView
+              ref={topicList}
               horizontal
-              showsHorizontalScrollIndicator={false}
-              style={{ marginHorizontal: 27 * scale, marginTop: 8 * scale, height: 30 * scale }}
-              contentContainerStyle={{ alignItems: 'center', gap: 6 * scale }}>
+              accessibilityLabel="오늘의 주제 목록, 좌우 스크롤"
+              showsHorizontalScrollIndicator
+              persistentScrollbar
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+              onLayout={event => { const width = event.nativeEvent.layout.width; setTopicScroll(old => ({ ...old, width })); }}
+              onContentSizeChange={content => setTopicScroll(old => ({ ...old, content }))}
+              onScroll={event => { const offset = event.nativeEvent.contentOffset.x; setTopicScroll(old => ({ ...old, offset })); }}
+              scrollEventThrottle={16}
+              style={{ marginHorizontal: 27 * scale, marginTop: 8 * scale, height: Math.max(58, 58 * scale) }}
+              contentContainerStyle={{ alignItems: 'flex-start', gap: 8 * scale, paddingBottom: 12 * scale }}>
               {topics.map((t) => {
                 const selected = selectedTopic === t.id;
                 return (
@@ -114,12 +134,16 @@ export function DiaryWriteScreen({
                     disabled={saving}
                     accessibilityRole="button"
                     accessibilityState={{ selected }}
-                    style={[styles.pill, { height: 28 * scale, borderRadius: 14 * scale, borderWidth: (selected ? 1.5 : 1) * scale, paddingHorizontal: 12 * scale, opacity: selected ? 1 : 0.75 }]}>
+                    style={[styles.pill, { minHeight: Math.max(44, 44 * scale), borderRadius: 16 * scale, borderWidth: (selected ? 1.5 : 1) * scale, paddingHorizontal: 12 * scale, opacity: selected ? 1 : 0.75 }]}>
                     <Text style={[styles.text, type(13, 18)]}>{selected ? '✓ ' : ''}{t.label}</Text>
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
+            {topicScroll.content > topicScroll.width && topicScroll.width > 0 && <View pointerEvents="none" style={{ marginHorizontal: 27 * scale, height: 3, backgroundColor: '#ffffff30', borderRadius: 2 }}>
+              <View style={{ height: 3, borderRadius: 2, backgroundColor: '#e5e8f0', width: topicScroll.width ** 2 / topicScroll.content,
+                left: Math.max(0, Math.min(topicScroll.content - topicScroll.width, topicScroll.offset)) * topicScroll.width / topicScroll.content }} />
+            </View>}
           </>
         ) : null}
 

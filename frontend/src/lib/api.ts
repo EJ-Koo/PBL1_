@@ -16,6 +16,7 @@ export { API_BASE_URL } from './api-config';
 export type ApiVisibility = 'public' | 'friends' | 'private';
 
 export type ApiDiary = {
+  author_profile?: { nickname: string; avatar_url: string | null } | null;
   quest_result?: DailyQuest | null;
   id: string;
   user_id: string;
@@ -177,11 +178,11 @@ export async function apiListGroups(accessToken: string) {
   return data as ApiGroup[];
 }
 
-export async function apiCreateGroup(accessToken: string, name: string) {
+export async function apiCreateGroup(accessToken: string, name: string, requestId: string) {
   const res = await apiFetch(`${API_BASE_URL}/groups`, {
     method: 'POST',
     headers: authHeaders(accessToken),
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, request_id: requestId }),
   });
   const data = await res.json();
   if (!res.ok) {

@@ -84,3 +84,30 @@ def test_changing_to_private_removes_existing_group_tags(monkeypatch):
     assert data['deleted'] == 'diary_groups'
     assert data['deleted_id'] == _DID
     assert data['update']['visibility'] == 'private'
+
+
+def test_shared_diary_returns_its_author_profile_not_the_viewer(monkeypatch):
+    db = _view_db(diary_groups=[{'diary_id': _DID, 'group_id': 'g1'}],
+                  group_members=[{'group_id': 'g1', 'user_id': 'friend'}],
+                  profiles=[{'user_id': 'owner', 'nickname': '작성자', 'avatar_path': 'owner/profile/a.png'},
+                            {'user_id': 'friend', 'nickname': '열람자'}])
+    monkeypatch.setattr(diaries, 'supabase', _ViewFakeSupabase(db))
+    monkeypatch.setattr(diaries, '_with_signed_photo_url', lambda row: {**row})
+    calls = []
+    def shape(row, user_id):
+        calls.append(user_id)
+        return {**row, 'avatar_url': 'https://example.invalid/signed-avatar'}
+    monkeypatch.setattr(diaries, 'shape_profile', shape)
+    result = diaries.get_diary(_DID, 'friend')
+    assert result['author_profile'] == {'nickname': '작성자', 'avatar_url': 'https://example.invalid/signed-avatar'}
+    assert calls == ['owner']
+    assert 'avatar_path' not in result['author_profile']
+
+
+def test_private_diary_does_not_load_author_profile_for_other_members(monkeypatch):
+    db = _view_db(diary_groups=[{'diary_id': _DID, 'group_id': 'g1'}], group_members=[{'group_id': 'g1', 'user_id': 'friend'}])
+    db['diaries'][0]['visibility'] = 'private'
+    monkeypatch.setattr(diaries, 'supabase', _ViewFakeSupabase(db))
+    monkeypatch.setattr(diaries, 'shape_profile', lambda *args: pytest.fail('must not sign a private diary author avatar'))
+    with pytest.raises(HTTPException):
+        diaries.get_diary(_DID, 'friend')
