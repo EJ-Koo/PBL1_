@@ -46,9 +46,26 @@ import {
   type PlanetVisual,
 } from '@/lib/planet-visual';
 import { SPECIAL_EFFECT_SETTINGS, effectToDraw, type EffectTier, type SpecialType } from '@/lib/special-planet';
+import {
+  CONSTELLATION_CONFIG,
+  arriveDuration,
+  drawableConnections,
+  layoutConstellation,
+  type ConstellationTemplate,
+} from '@/lib/constellation';
 import { getRotateSensitivity, loadSettings } from '@/lib/settings';
 import type { DiaryEntry } from '@/store/diary-context';
 
+import {
+  ConstellationLines,
+  ConstellationTrails,
+  createRuntime,
+  livePosition,
+  pathPoint,
+  trackProgress,
+  type ConstellationRuntime,
+  type RuntimeRef,
+} from './constellation-visuals';
 import { EFFECT_TIERS, LIGHT_DIR_GLSL, SpecialEffect, type SharedUniforms } from './planet-effects';
 
 // pointsMaterial은 텍스처가 없으면 각 점을 네모로 그린다. 중심은 불투명, 가장자리는
@@ -217,6 +234,7 @@ const PLANET_FRAGMENT_SHADER = `
   uniform float uFocus;
   uniform vec2 uDepthFade;
   uniform vec3 uSeed;
+  uniform float uDim;
   varying vec3 vNormalV;
   varying vec3 vViewPos;
   varying vec3 vObj;
@@ -304,6 +322,8 @@ const PLANET_FRAGMENT_SHADER = `
     lit *= 1.0 - 0.45 * smoothstep(uDepthFade.x, uDepthFade.y, -vViewPos.z);
     // 선택한 행성은 조금 밝게, 다른 행성은 조금 어둡게(겹쳐 있어도 어느 행성인지 보이게)
     lit *= (1.0 + 0.18 * uHighlight) * (1.0 - 0.25 * uFocus * (1.0 - uHighlight));
+    // [2026-11-12] 별자리 보기: 별자리에 들지 않은 행성은 어둡게(0이면 예전과 똑같다)
+    lit *= 1.0 - uDim;
     gl_FragColor = vec4(lit, 1.0);
     #include <colorspace_fragment>
   }
@@ -334,6 +354,7 @@ const RING_FRAGMENT_SHADER = `
   uniform float uHighlight;
   uniform float uFocus;
   uniform vec2 uDepthFade;
+  uniform float uDim;
   varying vec2 vLocal;
   varying vec3 vViewPos;
   varying vec3 vCenter;
@@ -362,6 +383,7 @@ const RING_FRAGMENT_SHADER = `
     col *= (0.2 + 0.8 * shadow) * 1.15;
     col *= 1.0 - 0.45 * smoothstep(uDepthFade.x, uDepthFade.y, -vViewPos.z);
     col *= (1.0 + 0.18 * uHighlight) * (1.0 - 0.25 * uFocus * (1.0 - uHighlight));
+    col *= 1.0 - uDim;
     gl_FragColor = vec4(col, dens * gap * edge * 0.8);
     #include <colorspace_fragment>
   }
@@ -384,6 +406,7 @@ const ATMOSPHERE_FRAGMENT_SHADER = `
   uniform float uHighlight;
   uniform float uFocus;
   uniform vec2 uDepthFade;
+  uniform float uDim;
   varying vec3 vNormalV;
   varying vec3 vViewPos;
   void main() {
@@ -395,6 +418,7 @@ const ATMOSPHERE_FRAGMENT_SHADER = `
     f *= 1.0 - 0.45 * smoothstep(uDepthFade.x, uDepthFade.y, -vViewPos.z);
     // 선택한 행성만 대기막을 더 밝게(전체 Bloom 대신 이 행성에만)
     f *= (1.0 + 1.8 * uHighlight) * (1.0 - 0.4 * uFocus * (1.0 - uHighlight));
+    f *= 1.0 - uDim;
     gl_FragColor = vec4(uColor * f * uStrength, 1.0);
     #include <colorspace_fragment>
   }
@@ -428,6 +452,8 @@ function Planet({
   onPress,
   onPressStart,
   registerMesh,
+  dim = 0,
+  runtime,
 }: {
   id: string;
   position: [number, number, number];
@@ -450,6 +476,10 @@ function Planet({
   onPressStart?: () => void;
   /** 웹 마우스 올림 판정(UniverseScene의 광선 검사)에 쓸 본체 메시를 알려 준다 */
   registerMesh?: (mesh: Mesh | null) => void;
+  /** [2026-11-12] 어둡게 할 정도(0=그대로, 1=검정). 별자리 보기에서 별자리 밖 행성에 쓴다. 서서히 바뀐다. */
+  dim?: number;
+  /** [2026-11-12] 별자리 보기의 화면 위치. 여기에 이 행성 위치가 있으면 그 자리에 그리고, 없으면 원래 좌표(position). */
+  runtime?: RuntimeRef;
 }) {
   const bodyRef = useRef<Group>(null);
   const bodyMat = useRef<ShaderMaterial>(null);
@@ -500,6 +530,7 @@ function Planet({
       uFocus: shared.uFocus,
       uDepthFade: shared.uDepthFade,
       uSeed: { value: new Vector3(r0 * 40, r1 * 40, r2 * 40) },
+      uDim: { value: 0 },
     };
   }, [visual, palette, bandTexture, brightness, atmo, atmoColor, shared, r0, r1, r2, r6, r7, r8]);
 
@@ -516,6 +547,7 @@ function Planet({
       uHighlight: { value: 0 },
       uFocus: shared.uFocus,
       uDepthFade: shared.uDepthFade,
+      uDim: { value: 0 },
     }),
     [visual.ring.color, palette, radius, shared, r3]
   );
@@ -527,6 +559,7 @@ function Planet({
       uHighlight: { value: 0 },
       uFocus: shared.uFocus,
       uDepthFade: shared.uDepthFade,
+      uDim: { value: 0 },
     }),
     [atmoColor, atmo, shared]
   );
@@ -535,8 +568,27 @@ function Planet({
   const spinSpeed = 0.03 + r4 * 0.04;
   // 선택 강조(0~1): 약 0.3초에 걸쳐 서서히 켜지고 꺼진다
   const highlight = useRef(0);
+  // 별자리 보기: 어둡게(서서히), 화면 위치(별자리 자리 ↔ 원래 좌표)
+  const dimNow = useRef(0);
+  const moved = useRef(false);
   useFrame((_, delta) => {
     if (spinRef.current) spinRef.current.rotation.y += delta * spinSpeed;
+    dimNow.current += (dim - dimNow.current) * Math.min(1, delta * 4);
+    if (Math.abs(dimNow.current - dim) < 0.001) dimNow.current = dim;
+    for (const m of [bodyMat.current, ringMat.current, atmoMat.current]) {
+      if (m && m.uniforms.uDim) m.uniforms.uDim.value = dimNow.current;
+    }
+    const live = runtime?.current.positions.get(id);
+    if (bodyRef.current) {
+      if (live) {
+        bodyRef.current.position.copy(live);
+        moved.current = true;
+      } else if (moved.current) {
+        // 원래 자리로 돌아왔다: 원래 좌표(서버 값) 그대로
+        bodyRef.current.position.set(position[0], position[1], position[2]);
+        moved.current = false;
+      }
+    }
     const target = selected ? 1 : 0;
     if (Math.abs(highlight.current - target) > 0.001) {
       highlight.current += (target - highlight.current) * Math.min(1, delta * 8);
@@ -632,6 +684,7 @@ function Planet({
           speed={effectSpeed}
           quality={quality}
           highlight={highlight}
+          dim={dimNow}
           shared={shared}
         />
       )}
@@ -773,15 +826,47 @@ function computeFraming(entries: DiaryEntry[], aspect: number): Framing {
   return { center, spread: Math.max(spread, 1), distance };
 }
 
+// ---------------------------------------------------------------- 별자리 보기 [ADDED 2026-11-12]
+/** 별자리 보기 요청(화면이 정한다). null 이면 일반 우주. */
+export type ConstellationRequest = {
+  template: ConstellationTemplate;
+  /** 별자리를 이룰 행성(일기) id. i번째 → template.points[i] (lib/constellation.ts selectMembers) */
+  memberIds: string[];
+  /** 연결선 색 */
+  color: string;
+  /** 화면 위·아래 UI가 가리는 비율(0~1)과 좌우 여백 비율. 별자리를 남은 영역 가운데에 맞춘다. */
+  insets: { top: number; bottom: number; left: number; right: number };
+};
+
+/**
+ * 별자리 보기에 들어가기 직전의 화면 각도·거리. 나올 때 그대로 되돌린다.
+ * 화면(컴포넌트)이 다시 만들어져도 남도록 모듈 변수로 둔다(targetRotX 등과 같은 방식).
+ */
+let constellationSavedView: { rotX: number; rotY: number; camZ: number } | null = null;
+const TWO_PI = Math.PI * 2;
+/**
+ * 별자리 밖 행성을 어둡게 하는 값(uDim). 셰이더는 선형 색에서 곱한 뒤 sRGB로 바꾸므로,
+ * 눈에 보이는 밝기(dimOthers, 0~1)를 선형 값으로 바꿔 준다(0.3 → 약 0.07배).
+ */
+const DIM_OTHERS_LINEAR = 1 - Math.pow(CONSTELLATION_CONFIG.dimOthers, 2.2);
+/** 이동 중 카메라 쪽으로 떠오르는 높이: 행성마다 달라 경로가 교차해도 같은 높이에서 만나지 않는다 */
+const liftFor = (i: number) => 0.35 + (i % 5) * 0.3;
+
 export function UniverseScene({
   entries,
   onStarPress,
   sceneKey = 'home',
+  constellation = null,
+  frontViewRequest = 0,
 }: {
   entries: DiaryEntry[];
   onStarPress: (id: string) => void;
   /** 화면 위치를 기억할 이름 (홈 'home', 그룹 우주는 그룹 id) */
   sceneKey?: string;
+  /** [2026-11-12] 별자리 보기. 행성의 원래 좌표는 바꾸지 않고 화면 위치만 잠시 옮긴다. */
+  constellation?: ConstellationRequest | null;
+  /** [2026-11-13] 값이 바뀔 때마다 별자리를 정면·처음 거리로 다시 본다('정면으로 보기' 버튼) */
+  frontViewRequest?: number;
 }) {
   const groupRef = useRef<Group>(null);
   // 화면이 다시 만들어졌을 때 첫 프레임은 저장된 각도·거리로 바로 맞춘다(서서히 돌아가며 초기화되는 것처럼 보이지 않게).
@@ -810,6 +895,133 @@ export function UniverseScene({
       targetCameraZ = framing.distance;
     }
   }, [framing, sceneKey]);
+
+  // ---------------------------------------------------------------- 별자리 보기
+  // 원래 좌표(일기 의미로 정한 좌표)는 entries 그대로 두고, 옮긴 화면 위치만 runtime.positions 에 둔다.
+  // 화면마다 하나(그룹 우주 화면과 섞이지 않게). 값은 effect·useFrame 안에서만 바꾼다.
+  const runtimeRef = useRef<ConstellationRuntime>(createRuntime());
+  const entryById = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
+  const origins = useMemo(() => new Map(entries.map((e) => [e.id, new Vector3(...e.position)])), [entries]);
+  useEffect(() => {
+    runtimeRef.current.origin = (id) => origins.get(id);
+  }, [origins]);
+  const memberSet = useMemo(() => new Set(constellation?.memberIds ?? []), [constellation]);
+  const aspect = size.width / Math.max(size.height, 1);
+  const shapeKey = constellation ? `${constellation.template.id}|${constellation.memberIds.join(',')}` : '';
+  const insetKey = constellation
+    ? [constellation.insets.top, constellation.insets.bottom, constellation.insets.left, constellation.insets.right, aspect].map((v) => v.toFixed(3)).join('|')
+    : '';
+  const layoutKey = constellation ? `${shapeKey}|${insetKey}` : 'off';
+  const lastShape = useRef('');
+  /** 별자리 전체가 들어오도록 맞춘 카메라 거리('정면으로 보기'가 되돌아갈 거리). 일반 우주면 null */
+  const fittedCameraZ = useRef<number | null>(null);
+
+  useEffect(() => {
+    const rt = runtimeRef.current;
+    const T = CONSTELLATION_CONFIG.timing;
+    const now = rt.now;
+    const sameShape = shapeKey !== '' && shapeKey === lastShape.current;
+    lastShape.current = shapeKey;
+    // 다른 별자리로 바꾸거나 숨길 때: 지금 선을 먼저 서서히 지우고, 조금 뒤 행성을 옮긴다
+    const linesShown = !!rt.lines && rt.lines.fadeStart == null && now > rt.lines.drawStart;
+    if (!sameShape && rt.lines && rt.lines.fadeStart == null) rt.lines.fadeStart = now;
+    const moveDelay = !sameShape && linesShown ? T.lineFade * 0.7 : 0;
+
+    const sendHome = (id: string, from: Vector3, i: number) => {
+      const home = rt.origin(id);
+      if (!home) {
+        rt.positions.delete(id);
+        rt.tracks.delete(id);
+        return;
+      }
+      rt.tracks.set(id, { from: from.clone(), to: home.clone(), start: now + moveDelay, duration: T.returnMove, lift: liftFor(i), home: true });
+    };
+
+    const template = constellation?.template;
+    const members = (constellation?.memberIds ?? []).filter((id) => entryById.has(id));
+    if (!constellation || !template || members.length < template.points.length) {
+      // 일반 우주로: 모든 행성을 원래 좌표로, 화면 각도·거리도 들어가기 전으로
+      rt.next = null;
+      fittedCameraZ.current = null;
+      let i = 0;
+      for (const [id, pos] of rt.positions) sendHome(id, pos, i++);
+      if (constellationSavedView) {
+        targetRotX = constellationSavedView.rotX;
+        targetRotY = constellationSavedView.rotY;
+        targetCameraZ = constellationSavedView.camZ;
+        constellationSavedView = null;
+      }
+      return;
+    }
+
+    // 들어가기 전 화면을 한 번만 기억하고, 우주 회전을 가장 가까운 '정면'(360도의 배수)으로 돌린다 → 별자리가 화면과 나란하다
+    if (!constellationSavedView) {
+      constellationSavedView = { rotX: targetRotX, rotY: targetRotY, camZ: targetCameraZ };
+    }
+    targetRotX = Math.round(targetRotX / TWO_PI) * TWO_PI;
+    targetRotY = Math.round(targetRotY / TWO_PI) * TWO_PI;
+
+    const center = framing?.center ?? [0, 0, 0];
+    const centerVec = new Vector3(...center);
+    const inSet = new Set(members);
+    // 별자리 평면은 다른 행성들보다 카메라 쪽에 둔다(가려지지 않게). 너무 멀리 나오지 않게 무리 크기로 제한.
+    const frontZ = entries.reduce((m, e) => (inSet.has(e.id) ? m : Math.max(m, e.position[2] - center[2])), 0);
+    const planeZ = Math.min(Math.max(frontZ + CONSTELLATION_CONFIG.frontMargin, 0), (framing?.spread ?? 3) * 1.5);
+    const radii = members.map((id) => PLANET_BASE_RADIUS * planetScaleForText(entryById.get(id)!.text));
+    const layout = layoutConstellation(
+      template,
+      radii,
+      {
+        aspect,
+        fovDeg: CAMERA_FOV,
+        insetTop: constellation.insets.top,
+        insetBottom: constellation.insets.bottom,
+        insetLeft: constellation.insets.left,
+        insetRight: constellation.insets.right,
+      },
+      planeZ
+    );
+
+    members.forEach((id, i) => {
+      const target = new Vector3(...layout.targets[i]).add(centerVec); // 우주 그룹 안쪽 좌표
+      const current = rt.positions.get(id) ?? rt.origin(id)!;
+      const from = current.clone();
+      rt.positions.set(id, current.clone());
+      rt.tracks.set(id, {
+        from,
+        to: target,
+        // 같은 별자리에서 화면 크기만 바뀐 경우는 짧게 바로 옮긴다(선은 그대로 따라온다)
+        start: now + (sameShape ? 0 : moveDelay + i * T.stagger),
+        duration: sameShape ? 0.6 : T.move,
+        lift: sameShape ? 0 : liftFor(i),
+        home: false,
+      });
+    });
+    let i = 0;
+    for (const [id, pos] of rt.positions) if (!inSet.has(id)) sendHome(id, pos, i++);
+
+    if (!sameShape) {
+      const pairs = drawableConnections(template).map(([a, b]) => [members[a], members[b]] as [string, string]);
+      const set = { pairs, drawStart: now + moveDelay + arriveDuration(members.length), fadeStart: null, color: constellation.color };
+      if (rt.lines && rt.lines.fadeStart != null) rt.next = set;
+      else rt.lines = set;
+    }
+
+    // 카메라: 별자리 전체(가장자리 행성 포함)가 남은 영역에 들어오는 거리
+    targetCameraZ = planeZ + layout.cameraDistance;
+    fittedCameraZ.current = targetCameraZ;
+    zoomMax = Math.max(zoomMax, targetCameraZ * 1.4);
+    // layoutKey(별자리·구성 행성·화면 크기)가 바뀔 때만 다시 배치한다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutKey]);
+
+  // '정면으로 보기': 드래그로 돌리거나 확대·축소했어도 별자리 정면·처음 거리로 부드럽게 돌아온다(별자리 보기 중에만)
+  useEffect(() => {
+    if (fittedCameraZ.current == null) return;
+    targetRotX = Math.round(targetRotX / TWO_PI) * TWO_PI;
+    targetRotY = Math.round(targetRotY / TWO_PI) * TWO_PI;
+    targetCameraZ = fittedCameraZ.current;
+  }, [frontViewRequest]);
 
   // 선택: 웹은 마우스를 올린 행성, 터치는 누른 행성. 누른 강조는 잠깐 보였다가(일기 화면으로 넘어가는 동안) 서서히 꺼진다.
   const [hoverId, setHoverId] = useState<string | null>(null);
@@ -884,6 +1096,23 @@ export function UniverseScene({
   }, [framing]);
   useEffect(() => () => EFFECT_TIERS.clear(), []);
 
+  // 별자리 이동: 런타임 시계를 올리고 움직이는 행성의 화면 위치를 계산한다(Planet 이 그 위치에 그린다)
+  useFrame((_, delta) => {
+    const rt = runtimeRef.current;
+    rt.now += Math.min(delta, 0.1);
+    for (const [id, tr] of rt.tracks) {
+      if (rt.now < tr.start) continue;
+      const pos = rt.positions.get(id) ?? new Vector3();
+      pathPoint(tr, trackProgress(tr, rt.now), pos);
+      rt.positions.set(id, pos);
+      if (rt.now >= tr.start + tr.duration) {
+        rt.tracks.delete(id);
+        // 원래 자리에 도착: 화면 위치를 지운다 → Planet 이 원래 좌표(서버 값)로 그린다
+        if (tr.home) rt.positions.delete(id);
+      }
+    }
+  });
+
   useFrame((state, delta) => {
     if (!synced.current && groupRef.current) {
       groupRef.current.rotation.y = targetRotX;
@@ -899,14 +1128,20 @@ export function UniverseScene({
       const tmp = new Vector3();
       const ranked = specialEntries
         .map((e) => {
-          tmp.set(e.position[0] - cx, e.position[1] - cy, e.position[2] - cz).applyMatrix4(m);
+          // [2026-11-12] 별자리로 옮긴 행성은 지금 화면 위치로 잰다
+          const p = livePosition(runtimeRef.current, e.id);
+          if (p) tmp.set(p.x - cx, p.y - cy, p.z - cz);
+          else tmp.set(e.position[0] - cx, e.position[1] - cy, e.position[2] - cz);
+          tmp.applyMatrix4(m);
           return { id: e.id, d: tmp.distanceTo(state.camera.position) };
         })
         .sort((a, b) => a.d - b.d);
       const maxNear = SPECIAL_EFFECT_SETTINGS.maxNear[quality];
+      // [2026-11-12] 별자리 전환 중(여러 행성이 움직이는 동안)에는 입자·애니메이션을 잠시 멈춘다(효과의 바탕 층은 그대로 보임)
+      const moving = runtimeRef.current.tracks.size > 0;
       EFFECT_TIERS.clear();
       ranked.forEach((r, i) => {
-        const tier: EffectTier = i < maxNear && r.d < SPECIAL_EFFECT_SETTINGS.nearDistance ? 1 : 0;
+        const tier: EffectTier = !moving && i < maxNear && r.d < SPECIAL_EFFECT_SETTINGS.nearDistance ? 1 : 0;
         EFFECT_TIERS.set(r.id, tier);
       });
     }
@@ -930,6 +1165,8 @@ export function UniverseScene({
         <Starfield count={QUALITY_SETTINGS[quality].stars} />
 
         <group position={[-center[0], -center[1], -center[2]]}>
+          <ConstellationLines runtimeRef={runtimeRef} />
+          <ConstellationTrails runtimeRef={runtimeRef} maxPlanets={CONSTELLATION_CONFIG.thresholds[3]} />
           {entries.map((entry) => (
             <Planet
               key={entry.id}
@@ -941,6 +1178,8 @@ export function UniverseScene({
               quality={quality}
               selected={entry.id === selectedId}
               special={effectToDraw(entry.effect)}
+              runtime={runtimeRef}
+              dim={constellation && !memberSet.has(entry.id) ? DIM_OTHERS_LINEAR : 0}
               onPress={() => onStarPress(entry.id)}
               registerMesh={(mesh) => {
                 if (mesh) {
@@ -968,17 +1207,26 @@ export function UniverseCanvas({
   entries,
   onStarPress,
   sceneKey,
+  constellation,
+  frontViewRequest,
 }: {
   entries: DiaryEntry[];
   onStarPress: (id: string) => void;
   sceneKey?: string;
+  /** [2026-11-12] 별자리 보기(홈 우주에서만 사용). 없으면 예전과 같다. */
+  constellation?: ConstellationRequest | null;
+  /** [2026-11-13] 바뀔 때마다 별자리를 정면으로 다시 본다 */
+  frontViewRequest?: number;
 }) {
   return (
     // dataSet은 웹에서 data-universe-zoom 속성이 된다 (휠 줌 대상 판단용, installWheelZoom 참고).
     <View style={{ flex: 1 }} {...({ dataSet: { universeZoom: 'true' } } as object)}>
       {/* 시야각 50도(기본 75도): 화면 가장자리 행성이 타원처럼 늘어나는 왜곡과 가까운 행성만 크게 보이는 차이를 줄인다 */}
       <Canvas style={{ flex: 1 }} camera={{ fov: CAMERA_FOV, position: [0, 0, 5] }}>
-        <UniverseScene entries={entries} onStarPress={onStarPress} sceneKey={sceneKey} />
+        <UniverseScene entries={entries} onStarPress={onStarPress} sceneKey={sceneKey}
+          constellation={constellation}
+          frontViewRequest={frontViewRequest}
+        />
       </Canvas>
     </View>
   );

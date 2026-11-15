@@ -126,6 +126,8 @@ _ROWS = [{"id": "s1", "diary_id": "d1", "x": 0, "y": 0, "z": 0, "color": "#FFFFF
 def _no_applied_effects(monkeypatch, effects=None):
     # 별 목록은 사용자가 적용한 효과(planet_effects)를 읽는다. 테스트에서는 실제 DB 대신 이 값을 쓴다.
     monkeypatch.setattr(stars, "applied_effects", lambda user_id: dict(effects or {}))
+    # [2026-11-12] 별 목록은 별자리용 일기 주제도 AI 서비스에서 읽는다. 테스트에서는 실제 호출하지 않는다.
+    monkeypatch.setattr(stars.ai_client, "diary_topics", lambda user_id, ids, allowed: None)
 
 
 def test_list_stars_no_longer_auto_selects_special_planets(monkeypatch):

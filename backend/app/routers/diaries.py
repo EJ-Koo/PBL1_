@@ -1,11 +1,13 @@
 import math
 import random
+import time
 from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 
 from app import ai_client
+from app.config import settings
 from app.db import supabase
 from app.dependencies import get_current_user_id
 from app.schemas.diary import Diary, DiaryCreate, DiaryUpdate, RelatedDiary
@@ -76,7 +78,8 @@ def _create_star_for_diary(diary_id: str, content: str, user_id: str, topic: str
     size = _star_size_for_content(content)
     # [MODIFIED 2026-11-06] 위치: AI 서비스가 일기 의미로 정한 좌표를 우선 쓴다(비슷한 기억 근처).
     # AI 서비스가 없거나 실패하면, 내 기존 별들과 겹치지 않는 무작위 자리(최소 간격)로 둔다.
-    # 주제(선택)는 DB에 저장하지 않고 AI 서비스에만 넘긴다(스키마 변경 없음). 고르지 않았으면 예전과 같은 호출.
+    # 주제(선택)는 [2026-11-13]부터 diaries.topic 에 저장하고(create_diary), AI 서비스에도 예전처럼 넘긴다.
+    # 고르지 않았으면 예전과 같은 호출.
     position = ai_client.place_diary(user_id, diary_id, content, **({"topic": topic} if topic else {}))
     if position is None:
         existing = (
@@ -130,6 +133,24 @@ def _tag_diary_groups(diary_id: str, group_ids: list[str]) -> None:
 # photo_paths 컬럼은 diary_galaxy_schema.sql 맨 아래 migration을 Supabase에서 실행해야 생긴다.
 # 실행 전에도 서버가 죽지 않도록, 컬럼이 없으면 첫 장만 photo_url에 저장하는 예전 방식으로 동작한다.
 _photo_paths_column = True
+# [2026-11-13] diaries.topic 열(migrations/2026-11-13_diary_topic.sql). 실행 전에도 서버가 죽지 않도록,
+# 열이 없으면 주제만 빼고 저장한다(주제는 예전처럼 AI 서비스에만 남는다).
+# 서버를 다시 띄우지 않아도 마이그레이션 실행 후 열을 쓰도록 일정 시간(settings.topic_column_recheck_seconds)마다 다시 확인한다.
+_topic_column = True
+_topic_column_missing_at = 0.0
+
+
+def topic_column_ready() -> bool:
+    global _topic_column
+    if not _topic_column and time.monotonic() - _topic_column_missing_at >= settings.topic_column_recheck_seconds:
+        _topic_column = True
+    return _topic_column
+
+
+def mark_topic_column_missing() -> None:
+    global _topic_column, _topic_column_missing_at
+    _topic_column = False
+    _topic_column_missing_at = time.monotonic()
 
 
 def _stored_photo_paths(diary: dict) -> list[str]:
@@ -171,18 +192,32 @@ def _is_missing_photo_paths_column(error: Exception) -> bool:
     return "photo_paths" in str(error)
 
 
+def is_missing_column(error: Exception, column: str) -> bool:
+    """PostgREST/Postgres 의 '열이 없음' 오류인지. (check 제약 위반처럼 열 이름만 들어간 오류와 구별한다)"""
+    msg = str(error)
+    return column in msg and ("schema cache" in msg or "does not exist" in msg or "42703" in msg or "PGRST204" in msg)
+
+
 def _write_diary(query_builder, row: dict):
-    """photo_paths 컬럼이 아직 없으면(마이그레이션 전) 그 값만 빼고 다시 저장한다."""
+    """photo_paths·topic 열이 아직 없으면(마이그레이션 전) 그 값만 빼고 다시 저장한다."""
     global _photo_paths_column
     if not _photo_paths_column:
         row = {k: v for k, v in row.items() if k != "photo_paths"}
-    try:
-        return query_builder(row).execute()
-    except Exception as e:
-        if "photo_paths" in row and _is_missing_photo_paths_column(e):
-            _photo_paths_column = False
-            return query_builder({k: v for k, v in row.items() if k != "photo_paths"}).execute()
-        raise
+    if not topic_column_ready():
+        row = {k: v for k, v in row.items() if k != "topic"}
+    for _ in range(3):
+        try:
+            return query_builder(row).execute()
+        except Exception as e:
+            if "photo_paths" in row and _is_missing_photo_paths_column(e):
+                _photo_paths_column = False
+                row = {k: v for k, v in row.items() if k != "photo_paths"}
+            elif "topic" in row and is_missing_column(e, "topic"):
+                mark_topic_column_missing()
+                row = {k: v for k, v in row.items() if k != "topic"}
+            else:
+                raise
+    return query_builder(row).execute()
 
 
 def _get_owned_diary(diary_id: UUID, user_id: str) -> dict:
@@ -258,6 +293,8 @@ def create_diary(diary: DiaryCreate, user_id: str = Depends(get_current_user_id)
         "photo_url": paths[0] if paths else None,
         "photo_paths": paths,
         "visibility": diary.visibility,
+        # 주제를 고르지 않았으면 보내지 않는다(열 기본값 null, 예전 요청과 같음)
+        **({"topic": diary.topic} if diary.topic else {}),
     }
     result = _write_diary(lambda r: supabase.table("diaries").insert(r), row)
     created = result.data[0]
@@ -307,6 +344,10 @@ def update_diary(
             }
         ).eq("diary_id", str(diary_id)).execute()
         ai_client.update_diary_layout(user_id, str(diary_id), update_data["content"])
+
+    if "topic" in update_data:
+        # 주제 원본은 DB. 예전 AI 저장소에도 맞춰 두어, DB 에서 지운 주제가 보충값으로 되살아나지 않게 한다.
+        ai_client.set_diary_topic(user_id, str(diary_id), update_data["topic"])
 
     _remove_photos([p for p in old_paths if p not in new_paths])
 

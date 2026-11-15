@@ -5,7 +5,11 @@
 //  - 서버 기능이 아직 없는 테마·소리·알림은 화면만 보여주고 반응하지 않는다(나중에 하나씩 연결).
 //  - [MODIFIED 2026-11-07] 코인·상점은 서버 연결(useShop). HUD 코인을 누르면 상점, 장착한 배경·혜성이 나의 우주에 보인다.
 //  - 폰은 fffju 배율 그대로, 웹·PC는 폭 최대 520px 가운데 정렬(useDesignFrame).
-import { useEffect, useState, type ReactNode } from 'react';
+//  - [ADDED 2026-11-12] 별자리 보기: HUD 아래 [나의 우주 | 별자리 보기] 전환, 아래쪽 별자리 정보 패널.
+//    별자리는 화면 표시만 바꾼다(행성 원래 좌표·DB는 그대로). 규칙: lib/constellation.ts
+//  - [ADDED 2026-11-15] Level 4 나만의 별자리: 같은 주제 일기 30개 이상이면 동의 후 서버(LLM)가 만든다.
+//    만든 결과는 서버에 저장되고, 볼 때는 저장된 좌표만 불러와 기존 별자리 애니메이션으로 그린다.
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { router } from 'expo-router';
 import {
   Modal,
@@ -15,6 +19,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -25,14 +30,33 @@ import { BackgroundTint, CometLayer } from '@/components/item-effects';
 import { ShopSheet } from '@/components/shop-screen';
 import { GroupSpaceScreen } from '@/components/ui/group-space-screen';
 import { HomeHud } from '@/components/ui/home-hud';
+import { ConstellationModeToggle, ConstellationPanel } from '@/components/ui/constellation-panel';
 import { QuestPanel } from '@/components/ui/quest-panel';
 import { UniverseBottomNav } from '@/components/ui/universe-bottom-nav';
-import { UniverseCanvas } from '@/components/universe-scene';
+import { UniverseCanvas, type ConstellationRequest } from '@/components/universe-scene';
 import { DesignPaint } from '@/constants/ui-design';
 import { useDesignFrame } from '@/hooks/use-design-frame';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { showMessage } from '@/lib/feedback';
+import {
+  CONSTELLATION_TOPICS,
+  TOPIC_CONCEPTS,
+  allTopicStatus,
+  personalStatus,
+  personalTemplateId,
+  selectMembers,
+  selectPersonalMembers,
+  topicCounts,
+  type ConstellationTemplate,
+  type PersonalStatus,
+} from '@/lib/constellation';
+import {
+  apiCreatePersonalConstellation,
+  apiListPersonalConstellations,
+  type ApiPersonalConstellation,
+} from '@/lib/api';
 import { localDateKey } from '@/lib/journal';
+import type { DiaryTopic } from '@/lib/special-planet';
 import { getRotateSensitivity, loadSettings, setRotateSensitivity } from '@/lib/settings';
 import { useDiary } from '@/store/diary-context';
 import { useShop } from '@/store/shop-context';
@@ -51,12 +75,13 @@ function Frame({ width, children, box = false }: { width: number; children: Reac
 }
 
 export default function HomeScreen() {
-  const { isLoggedIn, entries, groups, createGroup, joinGroup, leaveGroup, logout } = useDiary();
+  const { isLoggedIn, accessToken, entries, groups, createGroup, joinGroup, leaveGroup, logout } = useDiary();
   const { coins, activeEffects, refresh: refreshShop } = useShop();
   const { frameWidth, scale } = useDesignFrame();
   // fffju 반응형 레이아웃: 전체 뷰포트로 그리는 화면(홈 HUD·하단바·그룹)은 이 scale을 쓴다.
   // 아직 520 프레임을 쓰는 화면(일기 작성·상점)은 useDesignFrame(frameWidth/scale)을 유지.
-  const { scale: rScale } = useResponsiveLayout();
+  const responsive = useResponsiveLayout();
+  const rScale = responsive.scale;
   const insets = useSafeAreaInsets();
 
   const [screen, setScreen] = useState<Screen>('home');
@@ -78,6 +103,165 @@ export default function HomeScreen() {
   const [joining, setJoining] = useState(false);
   const [sensitivity, setSensitivity] = useState(getRotateSensitivity());
   const [today, setToday] = useState(() => localDateKey(new Date()));
+
+  // ---------------------------------------------------------------- 별자리 보기 [ADDED 2026-11-12]
+  const [constellationOn, setConstellationOn] = useState(false);
+  const [constellationTopic, setConstellationTopic] = useState<DiaryTopic | null>(null);
+  const [constellationTemplateId, setConstellationTemplateId] = useState<string | null>(null);
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [panelHeight, setPanelHeight] = useState(0);
+  const [frontViewRequest, setFrontViewRequest] = useState(0);
+  // 해금은 저장하지 않고 지금 주제별 일기 수로 계산한다(주제 없는 일기는 세지 않음)
+  const topicStatuses = useMemo(() => allTopicStatus(entries), [entries]);
+
+  // [2026-11-15] Level 4 나만의 별자리: 서버에 저장된 결과(주제별 0~1개)
+  const [personalList, setPersonalList] = useState<Partial<Record<DiaryTopic, ApiPersonalConstellation>>>({});
+  const [personalBusy, setPersonalBusy] = useState(false);
+  const [consentTopic, setConsentTopic] = useState<DiaryTopic | null>(null);
+  const [personalDone, setPersonalDone] = useState<ApiPersonalConstellation | null>(null);
+  // 이 화면에서 생성을 시작한 주제 → 완성되면 완료 창을 띄운다
+  const watchingRef = useRef(new Set<DiaryTopic>());
+  const personalStatuses = useMemo(() => {
+    const counts = topicCounts(entries);
+    return Object.fromEntries(
+      CONSTELLATION_TOPICS.map((t) => [t, personalStatus(counts[t], personalList[t])])
+    ) as Record<DiaryTopic, PersonalStatus>;
+  }, [entries, personalList]);
+
+  const activeTemplate: ConstellationTemplate | null = useMemo(() => {
+    if (!constellationOn || !constellationTopic) return null;
+    if (constellationTemplateId === personalTemplateId(constellationTopic)) {
+      const p = personalStatuses[constellationTopic];
+      return p.state === 'ready' ? p.template : null;
+    }
+    const status = topicStatuses.find((s) => s.topic === constellationTopic);
+    return status?.levels.find((l) => l.unlocked && l.template.id === constellationTemplateId)?.template ?? null;
+  }, [constellationOn, constellationTopic, constellationTemplateId, topicStatuses, personalStatuses]);
+  const constellationMembers = useMemo(() => {
+    if (!activeTemplate) return [];
+    if (activeTemplate.level === 4) {
+      // 서버가 저장한 행성 순서(생성 당시 오래된 순 30개)를 그대로 쓴다
+      const ids = personalList[activeTemplate.topic]?.planet_ids ?? [];
+      return selectPersonalMembers(entries, activeTemplate.topic, ids, activeTemplate.requiredPlanets);
+    }
+    return selectMembers(entries, activeTemplate.topic, activeTemplate.requiredPlanets);
+  }, [entries, activeTemplate, personalList]);
+
+  const applyPersonal = useCallback((list: ApiPersonalConstellation[]) => {
+    const map: Partial<Record<DiaryTopic, ApiPersonalConstellation>> = {};
+    for (const pc of list) map[pc.topic] = pc;
+    setPersonalList(map);
+    for (const t of [...watchingRef.current]) {
+      const pc = map[t];
+      if (pc?.status === 'pending') continue;
+      watchingRef.current.delete(t);
+      if (pc?.status === 'ready') setPersonalDone(pc);
+      else if (pc?.status === 'failed') showMessage('나만의 별자리', pc.error_message ?? '나만의 별자리를 만들지 못했어요.');
+    }
+  }, []);
+  // 서버가 예전 버전이거나 연결 오류면 조용히 넘어간다: Level 4 카드는 기본 상태, Level 1~3 은 그대로
+  const refreshPersonal = useCallback(() => {
+    if (!accessToken) return;
+    apiListPersonalConstellations(accessToken).then(applyPersonal).catch(() => {});
+  }, [accessToken, applyPersonal]);
+  useEffect(() => {
+    if (!constellationOn || !accessToken) return;
+    let alive = true;
+    apiListPersonalConstellations(accessToken)
+      .then((list) => alive && applyPersonal(list))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [constellationOn, accessToken, applyPersonal]);
+  // 만드는 중인 별자리가 있으면 서버의 실제 진행 단계를 2.5초마다 다시 읽는다(LLM 을 다시 부르지 않는 조회)
+  const anyPending = Object.values(personalList).some((p) => p?.status === 'pending');
+  useEffect(() => {
+    if (!anyPending) return;
+    const timer = setInterval(refreshPersonal, 2500);
+    return () => clearInterval(timer);
+  }, [anyPending, refreshPersonal]);
+
+  const createPersonal = useCallback(async () => {
+    const topic = consentTopic;
+    if (!topic || !accessToken || personalBusy) return;
+    setPersonalBusy(true);
+    try {
+      const pc = await apiCreatePersonalConstellation(accessToken, topic, true);
+      setPersonalList((prev) => ({ ...prev, [topic]: pc }));
+      if (pc.status === 'ready') setPersonalDone(pc);
+      else if (pc.status === 'pending') watchingRef.current.add(topic);
+      else if (pc.status === 'failed') showMessage('나만의 별자리', pc.error_message ?? '나만의 별자리를 만들지 못했어요.');
+    } catch (e) {
+      showMessage('나만의 별자리', e instanceof Error ? e.message : '나만의 별자리를 만들지 못했어요.');
+      refreshPersonal();
+    } finally {
+      setConsentTopic(null);
+      setPersonalBusy(false);
+    }
+  }, [consentTopic, accessToken, personalBusy, refreshPersonal]);
+  // 패널 위치: 폰은 하단바 위(가로 전체), 넓은 화면은 왼쪽 아래에 붙여 별자리가 오른쪽 넓은 영역을 쓰게 한다
+  const { width: windowWidth } = useWindowDimensions();
+  const panelBox = responsive.wide
+    ? { left: responsive.chromeLeft + 12, width: Math.min(400 * rScale, responsive.chromeWidth * 0.42) }
+    : { left: responsive.contentLeft + 12, width: Math.min(responsive.contentWidth, 460 * rScale) - 24 };
+  const constellationInsets = useMemo(() => {
+    const h = Math.max(responsive.height, 1);
+    const w = Math.max(windowWidth, 1);
+    const top = responsive.headerTop + 75 * rScale + 8 + 32 * rScale + 12;
+    const nav = responsive.navBottom + responsive.navHeight + 12;
+    if (responsive.wide) {
+      const left = panelBox.left + panelBox.width + 16;
+      return { top: Math.min(top / h, 0.45), bottom: Math.min(nav / h, 0.4), left: Math.min(left / w, 0.5), right: 0.03 };
+    }
+    const bottom = nav + 10 + panelHeight;
+    return { top: Math.min(top / h, 0.45), bottom: Math.min(bottom / h, 0.6), left: 0.04, right: 0.04 };
+  }, [responsive.height, responsive.headerTop, responsive.navBottom, responsive.navHeight, responsive.wide, rScale,
+    panelHeight, windowWidth, panelBox.left, panelBox.width]);
+  const constellationRequest: ConstellationRequest | null = useMemo(
+    () =>
+      activeTemplate && constellationMembers.length === activeTemplate.requiredPlanets
+        ? {
+            template: activeTemplate,
+            memberIds: constellationMembers.map((e) => e.id),
+            color: TOPIC_CONCEPTS[activeTemplate.topic].color,
+            insets: constellationInsets,
+          }
+        : null,
+    [activeTemplate, constellationMembers, constellationInsets]
+  );
+  const selectConstellationTopic = useCallback(
+    (topic: DiaryTopic) => {
+      setConstellationTopic(topic);
+      // 기본 선택은 해금된 가장 높은 단계(나만의 별자리가 완성돼 있으면 Level 4). 이전 단계는 레벨 카드에서 고를 수 있다.
+      const personal = personalStatuses[topic];
+      setConstellationTemplateId(
+        personal.state === 'ready'
+          ? personalTemplateId(topic)
+          : (topicStatuses.find((s) => s.topic === topic)?.highest?.id ?? null)
+      );
+    },
+    [topicStatuses, personalStatuses]
+  );
+  const viewPersonal = useCallback((pc: ApiPersonalConstellation) => {
+    setPersonalDone(null);
+    setConstellationTopic(pc.topic);
+    setConstellationTemplateId(personalTemplateId(pc.topic));
+    setConstellationOn(true);
+  }, []);
+  const setConstellationMode = useCallback(
+    (on: boolean) => {
+      if (on && !constellationTopic) {
+        // 처음 열 때: 가장 높은 단계가 열린 주제(같으면 일기가 많은 주제)
+        const best = [...topicStatuses].sort(
+          (a, b) => (b.highest?.level ?? 0) - (a.highest?.level ?? 0) || b.count - a.count
+        )[0];
+        if (best) selectConstellationTopic(best.topic);
+      }
+      setConstellationOn(on);
+    },
+    [constellationTopic, topicStatuses, selectConstellationTopic]
+  );
 
   useEffect(() => {
     if (!isLoggedIn) router.replace('/login');
@@ -170,7 +354,12 @@ export default function HomeScreen() {
         // [MODIFIED 2026-11-12] 배경 사진(night-sky.png) 제거 → 단색 배경 + 3D 우주의 배경 별만 사용
         <View style={[styles.fill, styles.spaceBackground]}>
           <BackgroundTint effects={activeEffects} />
-          <UniverseCanvas entries={entries} onStarPress={(id) => router.push(`/planet/${id}`)} />
+          <UniverseCanvas
+            entries={entries}
+            onStarPress={(id) => router.push(`/planet/${id}`)}
+            constellation={constellationRequest}
+            frontViewRequest={frontViewRequest}
+          />
           <CometLayer effects={activeEffects} />
 
           {entries.length === 0 && (
@@ -198,6 +387,47 @@ export default function HomeScreen() {
               onSensitivity: (value) => setSensitivity(setRotateSensitivity(value)),
             }}
           />
+
+          {/* 별자리 보기 전환 (HUD 바로 아래 가운데) */}
+          {entries.length > 0 && (
+            <View
+              pointerEvents="box-none"
+              style={[styles.constellationToggleRow, { top: responsive.headerTop + 75 * rScale + 8 }]}>
+              <ConstellationModeToggle scale={rScale} active={constellationOn} onChange={setConstellationMode} />
+            </View>
+          )}
+
+          {/* 별자리 정보 패널 (하단바 위) */}
+          {constellationOn && (
+            <View
+              pointerEvents="box-none"
+              style={[
+                styles.constellationPanelWrap,
+                {
+                  bottom: responsive.navBottom + responsive.navHeight + 10,
+                  left: panelBox.left,
+                  width: panelBox.width,
+                },
+              ]}>
+              <ConstellationPanel
+                scale={Math.min(rScale, 1.1)}
+                statuses={topicStatuses}
+                topic={constellationTopic}
+                templateId={activeTemplate?.id ?? null}
+                members={constellationMembers.map((e) => ({ id: e.id, createdAt: e.createdAt, color: e.color }))}
+                collapsed={panelCollapsed}
+                onToggleCollapsed={() => setPanelCollapsed((v) => !v)}
+                onSelectTopic={selectConstellationTopic}
+                onSelectTemplate={(t) => setConstellationTemplateId(t.id)}
+                onOpenEntry={(id) => router.push(`/planet/${id}`)}
+                onFrontView={() => setFrontViewRequest((n) => n + 1)}
+                onLayout={(e) => setPanelHeight(Math.round(e.nativeEvent.layout.height))}
+                personal={constellationTopic ? personalStatuses[constellationTopic] : null}
+                personalBusy={personalBusy}
+                onCreatePersonal={() => constellationTopic && setConsentTopic(constellationTopic)}
+              />
+            </View>
+          )}
         </View>
       )}
 
@@ -402,6 +632,75 @@ export default function HomeScreen() {
           />
         )}
       </PopupWindow>
+
+      {/* ===== [2026-11-15] 나만의 별자리: 외부 AI 전송 안내·동의 (동의해야만 서버가 LLM 을 부른다) ===== */}
+      <PopupWindow
+        visible={consentTopic !== null}
+        onClose={() => !personalBusy && setConsentTopic(null)}
+        title="✨ 나만의 별자리 만들기"
+        width={Math.min(frameWidth, 444)}
+        testID="personal-consent-popup">
+        <Text style={styles.inviteModalDesc}>
+          {consentTopic ? TOPIC_CONCEPTS[consentTopic].label : ''} 주제 일기를 AI가 함께 읽고, 기록을 상징하는 별자리
+          모양을 만들어요.
+        </Text>
+        <View style={styles.consentBox}>
+          <Text style={styles.consentText}>
+            • 이 주제 일기의 <Text style={styles.consentStrong}>작성 날짜와 본문</Text>이 외부 AI 서비스(OpenAI)로
+            전송돼요.
+          </Text>
+          <Text style={styles.consentText}>
+            • 이메일·계정 정보는 보내지 않고, 본문 속 이메일·전화번호·링크는 가린 뒤 보내요.
+          </Text>
+          <Text style={styles.consentText}>• 만든 별자리는 저장되어, 다시 볼 때는 AI를 다시 부르지 않아요.</Text>
+          <Text style={styles.consentText}>• 한 번 만든 별자리는 일기가 늘어도 바뀌지 않아요.</Text>
+        </View>
+        <View style={styles.inviteModalButtonRow}>
+          <TouchableOpacity
+            style={styles.inviteCancelBtn}
+            onPress={() => setConsentTopic(null)}
+            disabled={personalBusy}
+            testID="personal-consent-cancel">
+            <Text style={styles.whiteText}>취소</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.inviteConfirmBtn, personalBusy && { opacity: 0.6 }]}
+            onPress={createPersonal}
+            disabled={personalBusy}
+            testID="personal-consent-agree">
+            <Text style={styles.inviteConfirmText}>{personalBusy ? '요청하는 중…' : '동의하고 만들기'}</Text>
+          </TouchableOpacity>
+        </View>
+      </PopupWindow>
+
+      {/* ===== 나만의 별자리 완성 ===== */}
+      <PopupWindow
+        visible={personalDone !== null}
+        onClose={() => setPersonalDone(null)}
+        title="✨ 나만의 별자리"
+        width={Math.min(frameWidth, 444)}
+        testID="personal-done-popup">
+        {personalDone && (
+          <>
+            <Text style={styles.doneText}>나만의 별자리가 완성되었습니다.</Text>
+            <Text style={styles.doneName}>{personalDone.name}</Text>
+            {!!personalDone.description && <Text style={styles.doneText}>{personalDone.description}</Text>}
+            <Text style={styles.doneText}>이 기억들을 모아 {personalDone.name}를 만들었습니다.</Text>
+            {!!personalDone.reason && <Text style={styles.doneReason}>{personalDone.reason}</Text>}
+            {personalDone.keywords.length > 0 && (
+              <Text style={styles.doneKeywords}>{personalDone.keywords.map((k) => `#${k}`).join('  ')}</Text>
+            )}
+            <View style={styles.inviteModalButtonRow}>
+              <TouchableOpacity
+                style={styles.inviteConfirmBtn}
+                onPress={() => viewPersonal(personalDone)}
+                testID="personal-done-view">
+                <Text style={styles.inviteConfirmText}>별자리 보기</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+      </PopupWindow>
     </View>
   );
 }
@@ -425,6 +724,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   emptyText: { color: '#A4B0BE', fontSize: 15, textAlign: 'center', lineHeight: 22 },
+  constellationToggleRow: { position: 'absolute', left: 0, right: 0, alignItems: 'center', zIndex: 9 },
+  constellationPanelWrap: { position: 'absolute', zIndex: 15 },
 
   topBar: {
     position: 'absolute', left: 20, right: 20,
@@ -466,4 +767,11 @@ const styles = StyleSheet.create({
   leaveWarn: { color: '#ffb8b0', fontSize: 13, lineHeight: 18, marginBottom: 10 },
   leaveConfirmBtn: { backgroundColor: '#e74c3c', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
 
+  consentBox: { backgroundColor: '#111115', borderRadius: 12, padding: 12, marginBottom: 16, gap: 6 },
+  consentText: { color: '#dfe6e9', fontSize: 13, lineHeight: 19 },
+  consentStrong: { color: '#fff', fontWeight: 'bold' },
+  doneName: { color: '#fff', fontSize: 20, fontWeight: 'bold', textAlign: 'center', marginVertical: 10 },
+  doneText: { color: '#dfe6e9', fontSize: 14, lineHeight: 21, textAlign: 'center', marginBottom: 8 },
+  doneReason: { color: '#a4b0be', fontSize: 12.5, lineHeight: 18, textAlign: 'center', marginBottom: 8 },
+  doneKeywords: { color: '#9fc3ff', fontSize: 12.5, textAlign: 'center', marginBottom: 16 },
 });

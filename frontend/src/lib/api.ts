@@ -26,6 +26,8 @@ export type ApiDiary = {
   visibility: ApiVisibility;
   created_at: string;
   updated_at: string;
+  /** [2026-11-13] 일기 주제(diaries.topic, 선택). 서버가 예전 버전이거나 고르지 않았으면 null/없음. */
+  topic?: DiaryTopic | null;
 };
 
 function authHeaders(accessToken: string) {
@@ -94,6 +96,8 @@ export type ApiStar = {
   /** [2026-11-12] 사용자가 이 행성에 적용한 특수 효과(상점에서 산 효과). 없으면 null/없음 = 일반 행성. */
   effect?: SpecialType | null;
   effect_item_id?: string | null;
+  /** [2026-11-12] 일기를 쓸 때 고른 주제(선택). 별자리에만 쓴다. 고르지 않았거나 AI 서비스가 없으면 null/없음. */
+  topic?: DiaryTopic | null;
 };
 
 export async function apiListStars(accessToken: string) {
@@ -105,6 +109,73 @@ export async function apiListStars(accessToken: string) {
     throw new Error(data.detail ?? '별 목록을 불러오지 못했습니다.');
   }
   return data as ApiStar[];
+}
+
+// ---------------------------------------------------------------- [ADDED 2026-11-15] 나만의 별자리(Level 4)
+// 서버(백엔드)가 LLM 을 부른다. 앱은 LLM·API 키를 직접 다루지 않고 저장된 결과(좌표·연결선)만 받는다.
+export type ApiPersonalConstellation = {
+  topic: DiaryTopic;
+  status: 'pending' | 'ready' | 'failed';
+  /** 서버의 실제 진행 단계: queued → analyzing → designing → validating → done | failed */
+  stage: string;
+  name: string | null;
+  concept: string | null;
+  shape_label: string | null;
+  description: string | null;
+  reason: string | null;
+  keywords: string[];
+  analysis: Record<string, unknown>;
+  /** 정규화 좌표(긴 쪽 반폭 1, y 위) — 화면 표시용. 행성 실제 좌표와 무관 */
+  points: number[][] | null;
+  connections: number[][] | null;
+  planet_ids: string[];
+  required_planets: number;
+  source_diary_count: number | null;
+  /** llm = AI가 그린 모양, catalog = 기본 도안으로 대체 */
+  shape_source: 'llm' | 'catalog' | null;
+  created_at: string | null;
+  completed_at: string | null;
+  attempts_left: number;
+  error_code: string | null;
+  error_message: string | null;
+};
+
+export class ApiError extends Error {
+  code: string;
+  status: number;
+  constructor(message: string, code: string, status: number) {
+    super(message);
+    this.code = code;
+    this.status = status;
+  }
+}
+
+function errorFrom(res: Response, data: unknown, fallback: string): ApiError {
+  const detail = (data as { detail?: unknown } | null)?.detail;
+  if (detail && typeof detail === 'object') {
+    const d = detail as { message?: string; code?: string };
+    return new ApiError(d.message ?? fallback, d.code ?? 'error', res.status);
+  }
+  return new ApiError(typeof detail === 'string' ? detail : fallback, 'error', res.status);
+}
+
+export async function apiListPersonalConstellations(accessToken: string) {
+  const res = await fetch(`${API_BASE_URL}/constellations/personal`, { headers: authHeaders(accessToken) });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw errorFrom(res, data, '나만의 별자리를 불러오지 못했습니다.');
+  return data as ApiPersonalConstellation[];
+}
+
+/** '나만의 별자리 생성하기'. consent = 일기 내용이 외부 AI로 전송된다는 안내에 동의. 이미 있으면 저장된 결과를 돌려준다. */
+export async function apiCreatePersonalConstellation(accessToken: string, topic: DiaryTopic, consent: boolean) {
+  const res = await fetch(`${API_BASE_URL}/constellations/personal`, {
+    method: 'POST',
+    headers: authHeaders(accessToken),
+    body: JSON.stringify({ topic, consent }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw errorFrom(res, data, '나만의 별자리를 만들지 못했습니다.');
+  return data as ApiPersonalConstellation;
 }
 
 export async function apiListDiaries(accessToken: string) {
@@ -305,7 +376,7 @@ export async function apiAdminDeleteDiary(adminToken: string, diaryId: string) {
 export async function apiUpdateDiary(
   accessToken: string,
   id: string,
-  payload: Partial<{ content: string; photo_paths: string[]; visibility: ApiVisibility }>
+  payload: Partial<{ content: string; photo_paths: string[]; visibility: ApiVisibility; topic: DiaryTopic | null }>
 ) {
   const res = await fetch(`${API_BASE_URL}/diaries/${id}`, {
     method: 'PATCH',

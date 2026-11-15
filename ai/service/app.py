@@ -128,6 +128,15 @@ class DesignBatchRequest(BaseModel):
     items: list[DesignItem] = Field(min_length=1, max_length=64)
 
 
+class TopicSetRequest(LayoutItem):
+    topic: str | None = Field(default=None, max_length=32)
+
+
+class TopicBatchRequest(BaseModel):
+    user_id: str = Field(min_length=8, max_length=64)
+    diary_ids: list[str] = Field(min_length=1, max_length=5000)
+
+
 @app.on_event("startup")
 def _load_models() -> None:
     get_pipeline()  # 첫 요청이 느려지지 않도록 시작할 때 모델을 올린다
@@ -182,6 +191,28 @@ def design_batch(req: DesignBatchRequest):
     results = get_design().analyze_with_design([it.text for it in req.items], topics)
     return {"results": [{"diary_id": it.diary_id, "visual": r["visual"], "star": r["star"], "design": r["design"]}
                         for it, r in zip(req.items, results)]}
+
+
+@app.post("/topics/batch", dependencies=[Depends(check_token)])
+def topics_batch(req: TopicBatchRequest):
+    """[ADDED 2026-11-12] 별자리용: 일기들에 사용자가 고른 주제(/layout/add 때 저장된 값)를 읽기만 한다.
+    주제가 없는 일기는 결과에서 뺀다. 모델·좌표·저장값은 바꾸지 않는다."""
+    try:
+        topics = get_topics().get_many(req.user_id, req.diary_ids)
+    except ValueError as exc:
+        _bad_request(exc)
+    return {"topics": {d: t for d, t in zip(req.diary_ids, topics) if t is not None}}
+
+
+@app.post("/topics/set", dependencies=[Depends(check_token)])
+def topics_set(req: TopicSetRequest):
+    """[ADDED 2026-11-13] 일기 수정으로 주제가 바뀌었을 때 백엔드가 알려 준다(null = 주제 없음). 주제 저장소만 바꾸고
+    좌표·임베딩·모델은 건드리지 않는다. 주제의 원본은 DB(diaries.topic)이고 이 저장소는 예전 데이터 보충용이다."""
+    try:
+        get_topics().set(req.user_id, req.diary_id, _valid_topic(req.topic))
+    except ValueError as exc:
+        _bad_request(exc)
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------- 2단계: 좌표·관련 기억

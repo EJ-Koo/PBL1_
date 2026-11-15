@@ -3,7 +3,8 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 Visibility = Literal["public", "friends", "private"]
-# 일기 주제(선택). 고르지 않아도 된다. AI가 특수 행성을 고를 때 보조 정보로만 쓴다(ai/configs/special_planet.json).
+# 일기 주제(선택). 고르지 않아도 된다. [2026-11-13] diaries.topic 에 저장해 별자리 해금·표시에 쓴다
+# (migrations/2026-11-13_diary_topic.sql 의 check 제약과 같은 값). AI 서비스에도 예전처럼 함께 보낸다.
 Topic = Literal["travel", "relationship", "study_achievement", "rest_daily", "challenge_activity", "other"]
 
 # [MODIFIED 2026-11-05] 일기 한 개에 사진 최대 5장 (fffju 일기 작성 화면 기준).
@@ -27,6 +28,8 @@ class DiaryUpdate(BaseModel):
     # 보내면 사진 목록 전체를 이 목록으로 바꾼다 (빠진 사진은 저장소에서도 지운다).
     photo_paths: list[str] | None = Field(default=None, max_length=MAX_PHOTOS)
     visibility: Visibility | None = None
+    # [2026-11-13] 주제 바꾸기. 보내지 않으면 그대로, null 을 보내면 주제 없음으로 바꾼다.
+    topic: Topic | None = None
 
 
 class Diary(BaseModel):
@@ -42,6 +45,8 @@ class Diary(BaseModel):
     visibility: Visibility
     created_at: str
     updated_at: str
+    # [2026-11-13] 일기 주제(선택). diaries.topic 열이 아직 없거나 고르지 않았으면 None.
+    topic: Topic | None = None
 
 
 class RelatedDiary(BaseModel):
