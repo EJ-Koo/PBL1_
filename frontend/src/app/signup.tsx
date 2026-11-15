@@ -49,7 +49,7 @@ export default function SignupScreen() {
     <Image source={require('../../assets/images/login-space-v1.png')} style={StyleSheet.absoluteFill} resizeMode="cover" />
     <LoginFocusReset />
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}>
-      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}
+      <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}
         contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20, paddingTop: Math.max(36, insets.top + 20), paddingBottom: Math.max(40, insets.bottom + 24) }}>
         <View style={{ width: '100%', maxWidth: 500, alignItems: 'center' }}>
           <View style={{ width: '100%', height: 92, justifyContent: 'center', alignItems: 'center' }}>

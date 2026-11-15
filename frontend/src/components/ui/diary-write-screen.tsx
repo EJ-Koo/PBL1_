@@ -115,16 +115,15 @@ export function DiaryWriteScreen({
               ref={topicList}
               horizontal
               accessibilityLabel="오늘의 주제 목록, 좌우 스크롤"
-              showsHorizontalScrollIndicator
-              persistentScrollbar
+              showsHorizontalScrollIndicator={false}
               nestedScrollEnabled
               keyboardShouldPersistTaps="handled"
               onLayout={event => { const width = event.nativeEvent.layout.width; setTopicScroll(old => ({ ...old, width })); }}
               onContentSizeChange={content => setTopicScroll(old => ({ ...old, content }))}
               onScroll={event => { const offset = event.nativeEvent.contentOffset.x; setTopicScroll(old => ({ ...old, offset })); }}
               scrollEventThrottle={16}
-              style={{ marginHorizontal: 27 * scale, marginTop: 8 * scale, height: Math.max(58, 58 * scale) }}
-              contentContainerStyle={{ alignItems: 'flex-start', gap: 8 * scale, paddingBottom: 12 * scale }}>
+              style={{ marginHorizontal: 27 * scale, marginTop: 8 * scale, flexGrow: 0 }}
+              contentContainerStyle={{ alignItems: 'flex-start', gap: 8 * scale, paddingBottom: 12 }}>
               {topics.map((t) => {
                 const selected = selectedTopic === t.id;
                 return (
