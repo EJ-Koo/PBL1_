@@ -1,4 +1,5 @@
 // [ADDED 2026-11-07] 코인 · 상점 · 관리자(아이템/설정/코인) API.
+import { apiFetch } from './auth-session';
 import { API_BASE_URL } from '@/lib/api';
 
 export type ItemKind = 'consumable' | 'equip';
@@ -36,7 +37,7 @@ export type AdminWallet = { user_id: string; email: string | null; nickname: str
 export type CoinLog = { delta: number; balance: number; reason: string; ref: string | null; created_at: string };
 
 async function request<T>(path: string, token: string, init: RequestInit = {}, fallback = '요청에 실패했습니다.') {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  const res = await apiFetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(init.headers ?? {}) },
   });

@@ -1,3 +1,4 @@
+import { GroupProfileControl } from './group-profile-control';
 import { Text } from '@/components/app-text';
 import { Image } from 'expo-image';
 import { useId } from 'react';
@@ -87,11 +88,11 @@ export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup, onJ
           paddingTop: headerTop, paddingBottom: 24 * scale }}>
         <View style={{ width: innerWidth, marginBottom: 24 * scale }}>
           <View style={{ height: 63 * scale }}>
-            <GroupHeaderFrame scale={scale} width={innerWidth} />
-            <Text accessibilityRole="header" style={[styles.positioned, styles.text, {
-              left: 18 * scale, top: 14 * scale, fontSize: 28 * scale, lineHeight: 36 * scale,
+            <GroupHeaderFrame scale={scale} width={innerWidth} /><GroupProfileControl scale={scale} />
+            <Text numberOfLines={1} adjustsFontSizeToFit accessibilityRole="header" style={[styles.positioned, styles.text, {
+              left: 18 * scale, top: 14 * scale, maxWidth: innerWidth - 92 * scale, fontSize: 28 * scale, lineHeight: 36 * scale,
             }]}>OUR SPACE</Text>
-            {!compactHeader && <Text style={[styles.positioned, styles.text, { right: 4 * scale, top: 40 * scale,
+            {!compactHeader && <Text style={[styles.positioned, styles.text, { right: 70 * scale, top: 40 * scale,
               fontSize: 12 * scale, lineHeight: 20 * scale }]}>별일을 함께 나누는 우리의 우주</Text>}
           </View>
           {compactHeader && <Text style={[styles.text, { fontSize: 13, lineHeight: 20, marginTop: 8 * scale }]}>

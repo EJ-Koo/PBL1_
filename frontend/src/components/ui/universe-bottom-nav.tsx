@@ -1,4 +1,5 @@
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Text } from '@/components/app-text';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { getBottomNavLayout } from '@/lib/responsive-layout';
 
@@ -25,7 +26,10 @@ export function UniverseBottomNav({ scale, activeScreen, onDiary, onHome, onGrou
         <TouchableOpacity key={item.id} accessibilityRole="button" accessibilityLabel={item.label}
           accessibilityState={{ selected: activeScreen === item.id }} onPress={actions[index]} hitSlop={{ left: 2, right: 2 }}
           style={[styles.button, { left: item.x * scale, top: Math.max(0, item.y * scale - Math.max(0, 44 - item.height * scale) / 2),
-            width: item.width * scale, height: Math.max(44, item.height * scale) }]} />
+            width: item.width * scale, height: Math.max(44, item.height * scale) }]}>
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}
+            style={{ color: '#f1f2f6', fontSize: 12 * scale, width: '100%', textAlign: 'center', fontWeight: activeScreen === item.id ? '700' : '400' }}>{item.label}</Text>
+        </TouchableOpacity>
       ))}
     </View>
   );

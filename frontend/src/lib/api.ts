@@ -1,16 +1,16 @@
+import { apiFetch } from './auth-session';
+import { API_BASE_URL } from './api-config';
 import { Platform } from 'react-native';
 
 import type { PlanetVisual } from '@/lib/planet-visual';
 import type { DiaryTopic, SpecialType } from '@/lib/special-planet';
 
-// [MODIFIED 2026-11-05] 기본값은 Cloudtype에 올린 서버 (api.star2day.com → Cloudflare → Cloudtype).
+export { API_BASE_URL } from './api-config';
+
+// 기본값은 배포 API. 로컬 검증에서는 EXPO_PUBLIC_API_URL로 지정한다.
 // 로컬 백엔드로 테스트할 때만 실행 시 EXPO_PUBLIC_API_URL로 바꾼다.
 // 예) $env:EXPO_PUBLIC_API_URL="http://localhost:8000"; npx expo start --web
 // (AI 브랜치에서 쓰던 이름 EXPO_PUBLIC_API_BASE_URL도 그대로 받는다.)
-export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ||
-  process.env.EXPO_PUBLIC_API_BASE_URL ||
-  'https://api.star2day.com';
 
 export type ApiVisibility = 'public' | 'friends' | 'private';
 
@@ -36,7 +36,7 @@ function authHeaders(accessToken: string) {
 }
 
 export async function apiLogin(email: string, password: string) {
-  const res = await fetch(`${API_BASE_URL}/auth/login`, {
+  const res = await apiFetch(`${API_BASE_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -49,7 +49,7 @@ export async function apiLogin(email: string, password: string) {
 }
 
 export async function apiSignup(email: string, password: string) {
-  const res = await fetch(`${API_BASE_URL}/auth/signup`, {
+  const res = await apiFetch(`${API_BASE_URL}/auth/signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -68,7 +68,7 @@ export async function apiSignup(email: string, password: string) {
 
 // 구글에서 받은 ID 토큰을 백엔드에 넘겨 Supabase 세션으로 교환한다. 가입/로그인 공용.
 export async function apiGoogleAuth(idToken: string) {
-  const res = await fetch(`${API_BASE_URL}/auth/google`, {
+  const res = await apiFetch(`${API_BASE_URL}/auth/google`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id_token: idToken }),
@@ -97,7 +97,7 @@ export type ApiStar = {
 };
 
 export async function apiListStars(accessToken: string) {
-  const res = await fetch(`${API_BASE_URL}/stars`, {
+  const res = await apiFetch(`${API_BASE_URL}/stars`, {
     headers: authHeaders(accessToken),
   });
   const data = await res.json();
@@ -108,7 +108,7 @@ export async function apiListStars(accessToken: string) {
 }
 
 export async function apiListDiaries(accessToken: string) {
-  const res = await fetch(`${API_BASE_URL}/diaries`, {
+  const res = await apiFetch(`${API_BASE_URL}/diaries`, {
     headers: authHeaders(accessToken),
   });
   const data = await res.json();
@@ -129,7 +129,7 @@ export async function apiCreateDiary(
     topic?: DiaryTopic;
   }
 ) {
-  const res = await fetch(`${API_BASE_URL}/diaries`, {
+  const res = await apiFetch(`${API_BASE_URL}/diaries`, {
     method: 'POST',
     headers: authHeaders(accessToken),
     body: JSON.stringify(payload),
@@ -157,7 +157,7 @@ export type ApiGroup = {
 };
 
 export async function apiListGroups(accessToken: string) {
-  const res = await fetch(`${API_BASE_URL}/groups`, {
+  const res = await apiFetch(`${API_BASE_URL}/groups`, {
     headers: authHeaders(accessToken),
   });
   const data = await res.json();
@@ -168,7 +168,7 @@ export async function apiListGroups(accessToken: string) {
 }
 
 export async function apiCreateGroup(accessToken: string, name: string) {
-  const res = await fetch(`${API_BASE_URL}/groups`, {
+  const res = await apiFetch(`${API_BASE_URL}/groups`, {
     method: 'POST',
     headers: authHeaders(accessToken),
     body: JSON.stringify({ name }),
@@ -181,7 +181,7 @@ export async function apiCreateGroup(accessToken: string, name: string) {
 }
 
 export async function apiJoinGroup(accessToken: string, inviteCode: string) {
-  const res = await fetch(`${API_BASE_URL}/groups/join`, {
+  const res = await apiFetch(`${API_BASE_URL}/groups/join`, {
     method: 'POST',
     headers: authHeaders(accessToken),
     body: JSON.stringify({ invite_code: inviteCode }),
@@ -194,7 +194,7 @@ export async function apiJoinGroup(accessToken: string, inviteCode: string) {
 }
 
 export async function apiLeaveGroup(accessToken: string, groupId: string) {
-  const res = await fetch(`${API_BASE_URL}/groups/${groupId}/members/me`, {
+  const res = await apiFetch(`${API_BASE_URL}/groups/${groupId}/members/me`, {
     method: 'DELETE',
     headers: authHeaders(accessToken),
   });
@@ -217,7 +217,7 @@ export async function apiUploadPhoto(accessToken: string, localUri: string) {
     formData.append('file', { uri: localUri, name: filename, type: mimeType } as unknown as Blob);
   }
 
-  const res = await fetch(`${API_BASE_URL}/uploads/photo`, {
+  const res = await apiFetch(`${API_BASE_URL}/uploads/photo`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}` },
     body: formData,
@@ -246,7 +246,7 @@ function adminAuthHeaders(adminToken: string) {
 }
 
 export async function apiAdminLogin(username: string, password: string) {
-  const res = await fetch(`${API_BASE_URL}/admin/auth/login`, {
+  const res = await apiFetch(`${API_BASE_URL}/admin/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
@@ -259,7 +259,7 @@ export async function apiAdminLogin(username: string, password: string) {
 }
 
 export async function apiAdminListUsers(adminToken: string) {
-  const res = await fetch(`${API_BASE_URL}/admin/users`, {
+  const res = await apiFetch(`${API_BASE_URL}/admin/users`, {
     headers: adminAuthHeaders(adminToken),
   });
   const data = await res.json();
@@ -270,7 +270,7 @@ export async function apiAdminListUsers(adminToken: string) {
 }
 
 export async function apiAdminDeleteUser(adminToken: string, userId: string) {
-  const res = await fetch(`${API_BASE_URL}/admin/users/${userId}`, {
+  const res = await apiFetch(`${API_BASE_URL}/admin/users/${userId}`, {
     method: 'DELETE',
     headers: adminAuthHeaders(adminToken),
   });
@@ -281,7 +281,7 @@ export async function apiAdminDeleteUser(adminToken: string, userId: string) {
 }
 
 export async function apiAdminListDiaries(adminToken: string) {
-  const res = await fetch(`${API_BASE_URL}/admin/diaries`, {
+  const res = await apiFetch(`${API_BASE_URL}/admin/diaries`, {
     headers: adminAuthHeaders(adminToken),
   });
   const data = await res.json();
@@ -292,7 +292,7 @@ export async function apiAdminListDiaries(adminToken: string) {
 }
 
 export async function apiAdminDeleteDiary(adminToken: string, diaryId: string) {
-  const res = await fetch(`${API_BASE_URL}/admin/diaries/${diaryId}`, {
+  const res = await apiFetch(`${API_BASE_URL}/admin/diaries/${diaryId}`, {
     method: 'DELETE',
     headers: adminAuthHeaders(adminToken),
   });
@@ -307,7 +307,7 @@ export async function apiUpdateDiary(
   id: string,
   payload: Partial<{ content: string; photo_paths: string[]; visibility: ApiVisibility }>
 ) {
-  const res = await fetch(`${API_BASE_URL}/diaries/${id}`, {
+  const res = await apiFetch(`${API_BASE_URL}/diaries/${id}`, {
     method: 'PATCH',
     headers: authHeaders(accessToken),
     body: JSON.stringify(payload),

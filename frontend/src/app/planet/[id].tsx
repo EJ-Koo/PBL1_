@@ -21,7 +21,7 @@ const VISIBILITY_LABELS: Record<Visibility, string> = {
 
 export default function PlanetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getEntry, isEditableToday } = useDiary();
+  const { getEntry, isEditableToday, isRestoring, dataLoading } = useDiary();
   const entry = getEntry(id);
   const [decorating, setDecorating] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
@@ -30,6 +30,7 @@ export default function PlanetDetailScreen() {
     return () => setPreviewVisible(false);
   }, []));
 
+  if (isRestoring || dataLoading) return <View style={styles.container}><Text style={styles.notFoundText}>기록을 불러오는 중…</Text></View>;
   if (!entry) {
     return (
       <View style={styles.container}>

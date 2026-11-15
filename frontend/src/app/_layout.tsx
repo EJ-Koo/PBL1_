@@ -1,3 +1,4 @@
+import { SessionGuard } from '@/components/session-guard';
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { loadSettings } from '@/lib/settings';
@@ -35,7 +36,7 @@ export default function RootLayout() {
             <Stack.Screen name="admin/login" />
             <Stack.Screen name="admin/index" />
           </Stack>
-          <NoticeDialogHost />
+          <NoticeDialogHost /><SessionGuard />
         </ShopProvider>
       </DiaryProvider>
     </AdminProvider>
