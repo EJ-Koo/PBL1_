@@ -1,6 +1,7 @@
+import { Text, TextInput } from '@/components/app-text';
 import { useState } from 'react';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { GoogleAuthButton } from '@/components/google-auth-button';
 import { showNotice } from '@/lib/notice';

@@ -1,6 +1,7 @@
+import { Text } from '@/components/app-text';
 import { useState } from 'react';
 import { router } from 'expo-router';
-import { Platform, Pressable, StyleSheet, Text } from 'react-native';
+import { Platform, Pressable, StyleSheet } from 'react-native';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 

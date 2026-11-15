@@ -1,7 +1,8 @@
+import { Text, TextInput } from '@/components/app-text';
 // [ADDED 2026-11-07] 관리자 화면: 상점 아이템 · 사용자 코인 · 설정값.
 // 저장하면 서버(Supabase)에 바로 반영되고, 앱은 다음에 상점을 열 때 새 값을 받는다.
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 
 import { confirmChoice, showNotice } from '@/lib/notice';
 import {

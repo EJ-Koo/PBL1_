@@ -1,3 +1,4 @@
+import { Text } from '@/components/app-text';
 // [ADDED 2026-11-12] 화면 가운데 뜨는 팝업 창 (검색·그룹 만들기에서 사용, 상점과 같은 모양).
 //  - 닫기: ✕ 버튼, 창 바깥(어두운 부분) 누르기, 안드로이드 뒤로가기
 //  - RN Modal 이 아니라 지금 화면 안에 겹쳐 그린다 → 팝업에서 행성 상세로 갔다가 돌아와도
@@ -5,7 +6,7 @@
 //  - 그래서 이 컴포넌트는 화면의 맨 마지막 자식으로 두어야 다른 요소 위에 보인다.
 import { useEffect, type ReactNode } from 'react';
 import { SearchPopupFrame } from './search-popup-frame';
-import { BackHandler, Pressable, StyleSheet, Text, TouchableOpacity, View, type DimensionValue } from 'react-native';
+import { BackHandler, Pressable, StyleSheet, TouchableOpacity, View, type DimensionValue } from 'react-native';
 
 type Props = {
   visible: boolean;

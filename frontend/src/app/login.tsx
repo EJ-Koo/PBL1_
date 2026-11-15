@@ -1,7 +1,9 @@
+import { Text, TextInput } from '@/components/app-text';
 import { useRef, useState } from 'react';
 import { router } from 'expo-router';
-import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LoginFocusReset } from '@/components/ui/login-focus-reset';
 import { GoogleAuthButton } from '@/components/google-auth-button';
 import { AuthFieldFrame, AuthIcon, AuthLogoFrame, AuthPanelFrame, AuthScreenChrome } from '@/components/ui/auth-decoration';
 import { DesignFonts } from '@/constants/ui-design';
@@ -40,6 +42,7 @@ export default function LoginScreen() {
   return <View style={styles.screen}>
     <Image source={require('../../assets/images/login-space-v1.png')} style={StyleSheet.absoluteFill} resizeMode="cover" />
     <AuthScreenChrome />
+    <LoginFocusReset />
     <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}>
       <ScrollView style={styles.fill} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingTop: Math.max(60, insets.top + 28), paddingBottom: Math.max(80, insets.bottom + 48) }]}>
@@ -54,14 +57,14 @@ export default function LoginScreen() {
             <AuthPanelFrame />
             <View style={styles.field}>
               <AuthFieldFrame /><AuthIcon kind="email" />
-              <TextInput accessibilityLabel="이메일" style={styles.input} placeholder="이메일" placeholderTextColor="#9094a3"
+              <TextInput testID="login-email" accessibilityLabel="이메일" style={styles.input} placeholder="이메일" placeholderTextColor="#9094a3"
                 autoCapitalize="none" autoCorrect={false} keyboardType="email-address" autoComplete="email" textContentType="emailAddress"
                 value={email} onChangeText={setEmail} editable={!isLoggingIn} returnKeyType="next"
                 onSubmitEditing={() => passwordRef.current?.focus()} blurOnSubmit={false} />
             </View>
             <View style={styles.field}>
               <AuthFieldFrame /><AuthIcon kind="lock" />
-              <TextInput ref={passwordRef} accessibilityLabel="비밀번호" style={styles.input} placeholder="비밀번호" placeholderTextColor="#9094a3"
+              <TextInput ref={passwordRef} testID="login-password" accessibilityLabel="비밀번호" style={styles.input} placeholder="비밀번호" placeholderTextColor="#9094a3"
                 secureTextEntry={!showPassword} value={password} onChangeText={setPassword} editable={!isLoggingIn}
                 autoComplete="current-password" textContentType="password" autoCapitalize="none" returnKeyType="done" onSubmitEditing={handleLogin} />
               <Pressable accessibilityRole="button" accessibilityLabel={showPassword ? '비밀번호 숨기기' : '비밀번호 표시'}

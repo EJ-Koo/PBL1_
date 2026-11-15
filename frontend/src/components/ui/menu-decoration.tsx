@@ -3,10 +3,10 @@ import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
 import { DesignPaint } from '@/constants/ui-design';
 
 // Keep the frame fixed around the viewport while the menu content scrolls inside it.
-export function MenuDecoration({ scale, height }: { scale: number; height: number }) {
+export function MenuDecoration({ scale, height, width = 262 * scale }: { scale: number; height: number; width?: number }) {
   const bottom = Math.max(44, height / scale);
   return (
-    <Svg width={262 * scale} height={height} viewBox={`0 0 262 ${bottom}`} pointerEvents="none">
+    <Svg width={width} height={height} viewBox={`0 0 262 ${bottom}`} preserveAspectRatio="none" pointerEvents="none">
       <Rect width={262} height={bottom} fill={DesignPaint.menuPanel} />
       <Path d={`M4 22V${bottom - 22} M258 22V${bottom - 22}`} fill="none" stroke={DesignPaint.menuFrame} strokeWidth={2} />
       <Path d={`M23 4H240 M22 ${bottom - 4}H240`} stroke={DesignPaint.ink} strokeWidth={2} />

@@ -1,4 +1,5 @@
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Text } from '@/components/app-text';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useState } from 'react';
 
 import { HomeHudFrame, HudIcon, QuestFrame } from './design-decoration';

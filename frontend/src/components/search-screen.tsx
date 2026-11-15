@@ -1,6 +1,7 @@
+import { Text, TextInput } from '@/components/app-text';
 // Shared by the diary-search popup and the /search route.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Image, Keyboard, Pressable, StyleSheet, Text, TextInput, View, type ViewToken } from 'react-native';
+import { FlatList, Image, Keyboard, Pressable, StyleSheet, View, type ViewToken } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { SearchResultPlanet } from '@/components/ui/search-result-planet';
 import { recentSearchLabel, type RecentSearch, type SearchQuery } from '@/lib/search-history';

@@ -1,4 +1,6 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { authSession, signOut } from '@/lib/auth-session';
+import { apiGetProfile, apiSaveProfile, apiUploadAvatar, type ApiProfile, type ProfileDraft } from '@/lib/profile-api';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 
 import {
   apiCreateDiary,
@@ -53,6 +55,12 @@ export type SaveResult = { ok: true } | { ok: false; error: string };
 
 type DiaryContextValue = {
   isLoggedIn: boolean;
+  isRestoring: boolean;
+  dataLoading: boolean;
+  loadError: string | null;
+  retryLoad: () => void;
+  profile: ApiProfile | null;
+  saveProfile: (draft: ProfileDraft) => Promise<SaveResult>;
   accessToken: string | null;
   // 로그인한 이메일 (일기 작성 화면의 작성자 표시용)
   userEmail: string | null;
@@ -157,45 +165,95 @@ function emailFromIdToken(idToken: string): string | null {
 
 // 로그인/구글로그인 후 공통: 일기(핵심)·별·그룹을 불러온다. 별/그룹은 보조라 실패해도
 // 일기를 비우지 않도록 각각 격리한다. (그룹 API 미배포 시 /groups 404가 나도 일기·별은 그대로)
-async function loadUserData(
-  token: string,
-  setEntries: (entries: DiaryEntry[]) => void,
-  setGroups: (groups: ApiGroup[]) => void
-) {
-  try {
-    const diaryList = await apiListDiaries(token);
-    const starList = await apiListStars(token).catch(() => []);
-    const groupList = await apiListGroups(token).catch(() => []);
-    const starByDiaryId = new Map(starList.map((s) => [s.diary_id, s]));
-    setEntries(diaryList.map((d, i) => toEntry(d, i, starByDiaryId.get(d.id))));
-    setGroups(groupList);
-  } catch {
-    setEntries([]);
-    setGroups([]);
-  }
+async function loadUserData(token: string) {
+  const [diaries, stars, groups, profile] = await Promise.all([
+    apiListDiaries(token), apiListStars(token).catch(() => []),
+    apiListGroups(token).catch(() => []), apiGetProfile(token).catch(() => null),
+  ]);
+  const byId = new Map(stars.map(star => [star.diary_id, star]));
+  return { entries: diaries.map((diary, i) => toEntry(diary, i, byId.get(diary.id))), groups, profile };
 }
+
+const EMPTY_ENTRIES: DiaryEntry[] = [];
+const EMPTY_GROUPS: ApiGroup[] = [];
 
 const DiaryContext = createContext<DiaryContextValue | null>(null);
 
 export function DiaryProvider({ children }: { children: ReactNode }) {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [entries, setEntries] = useState<DiaryEntry[]>([]);
-  const [groups, setGroups] = useState<ApiGroup[]>([]);
+  const { session, ready } = useSyncExternalStore(authSession.subscribe, authSession.getSnapshot, authSession.getServerSnapshot);
+  const isLoggedIn = !!session;
+  const accessToken = session?.access_token ?? null;
+  const userEmail = session?.email ?? null;
+  const epoch = authSession.getRevision();
+  const mutations = useRef({ entries: 0, groups: 0, profile: 0 });
+  const [reload, setReload] = useState(0);
+  const [data, setData] = useState<{ epoch: number; token: string | null; entries: DiaryEntry[]; groups: ApiGroup[]; profile: ApiProfile | null; error: string | null }>({
+    epoch: -1, token: null, entries: [], groups: [], profile: null, error: null,
+  });
+  const own = data.epoch === epoch;
+  const entries = own ? data.entries : EMPTY_ENTRIES;
+  const groups = own ? data.groups : EMPTY_GROUPS;
+  const profile = own ? data.profile : null;
+  const patch = useCallback((fn: (prev: typeof data) => typeof data) => {
+    if (authSession.getRevision() !== epoch) return;
+    setData(prev => fn(prev.epoch === epoch ? prev : { epoch, token: null, entries: [], groups: [], profile: null, error: null }));
+  }, [epoch]);
+  const setEntries = useCallback((value: DiaryEntry[] | ((prev: DiaryEntry[]) => DiaryEntry[])) => {
+    if (authSession.getRevision() !== epoch) return;
+    mutations.current.entries++;
+    patch(prev => ({ ...prev, entries: typeof value === 'function' ? value(prev.entries) : value }));
+  }, [patch, epoch]);
+  const setGroups = useCallback((value: ApiGroup[] | ((prev: ApiGroup[]) => ApiGroup[])) => {
+    if (authSession.getRevision() !== epoch) return;
+    mutations.current.groups++;
+    patch(prev => ({ ...prev, groups: typeof value === 'function' ? value(prev.groups) : value }));
+  }, [patch, epoch]);
+  useEffect(() => { void authSession.restore(); }, []);
+  useEffect(() => {
+    if (!accessToken || !ready) return;
+    let alive = true;
+    const before = { ...mutations.current };
+    loadUserData(accessToken).then(result => {
+      if (alive && authSession.getRevision() === epoch) setData(prev => ({
+        ...result, epoch, token: accessToken, error: null,
+        // A slow reload must not undo a diary/profile save that completed after it began.
+        entries: prev.epoch === epoch && before.entries !== mutations.current.entries ? prev.entries : result.entries,
+        groups: prev.epoch === epoch && before.groups !== mutations.current.groups ? prev.groups : result.groups,
+        profile: prev.epoch === epoch && before.profile !== mutations.current.profile ? prev.profile : result.profile,
+      }));
+    }).catch(() => {
+      if (alive && authSession.getRevision() === epoch) patch(prev => ({ ...prev, token: accessToken, error: '기록을 불러오지 못했어요. 서버 연결을 확인하고 다시 시도해주세요.' }));
+    });
+    return () => { alive = false; };
+  }, [accessToken, ready, epoch, reload, patch]);
+  const retryLoad = useCallback(() => setReload(value => value + 1), []);
 
   const value = useMemo<DiaryContextValue>(
     () => ({
       isLoggedIn,
+      isRestoring: !ready,
+      dataLoading: !!accessToken && (!own || data.token !== accessToken),
+      loadError: own ? data.error : null,
+      retryLoad,
+      profile,
+      saveProfile: async (draft) => {
+        if (!accessToken || !session) return { ok: false, error: '로그인이 필요합니다.' };
+        try {
+          const avatar_path = draft.avatarUri ? await apiUploadAvatar(accessToken, draft.avatarUri) : draft.avatar_path;
+          const saved = await apiSaveProfile(accessToken, { nickname: draft.nickname, bio: draft.bio, avatar_path });
+          if (authSession.getRevision() !== epoch) return { ok: false, error: '로그인 계정이 변경됐어요. 다시 확인해주세요.' };
+          mutations.current.profile++;
+          mutations.current.groups++;
+          patch(prev => ({ ...prev, profile: saved, groups: prev.groups.map(group => ({ ...group, members: group.members.map(member => member.user_id === session.user_id ? { ...member, nickname: saved.nickname } : member) })) }));
+          return { ok: true };
+        } catch (error) { return { ok: false, error: error instanceof Error ? error.message : '프로필 저장에 실패했어요.' }; }
+      },
       accessToken,
       userEmail,
       login: async (email: string, password: string): Promise<LoginResult> => {
         try {
           const result = await apiLogin(email, password);
-          setAccessToken(result.access_token);
-          setUserEmail(email);
-          setIsLoggedIn(true);
-          await loadUserData(result.access_token, setEntries, setGroups);
+          await authSession.establish({ ...result, email });
           return { ok: true };
         } catch (err) {
           return {
@@ -207,11 +265,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
       loginWithGoogle: async (idToken: string): Promise<LoginResult> => {
         try {
           const result = await apiGoogleAuth(idToken);
-          setAccessToken(result.access_token);
-          // 구글 계정 이메일은 ID 토큰(JWT) payload의 email 클레임에서 꺼낸다.
-          setUserEmail(emailFromIdToken(idToken));
-          setIsLoggedIn(true);
-          await loadUserData(result.access_token, setEntries, setGroups);
+          await authSession.establish({ ...result, email: emailFromIdToken(idToken) });
           return { ok: true };
         } catch (err) {
           return {
@@ -223,12 +277,8 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
       signup: async (email: string, password: string): Promise<SignupResult> => {
         try {
           const result = await apiSignup(email, password);
-          if (result.access_token) {
-            setAccessToken(result.access_token);
-            setUserEmail(email);
-            setIsLoggedIn(true);
-            setEntries([]);
-            setGroups([]);
+          if (result.access_token && result.refresh_token) {
+            await authSession.establish({ ...result, access_token: result.access_token, refresh_token: result.refresh_token, email });
           }
           return { ok: true, emailConfirmationRequired: result.email_confirmation_required };
         } catch (err) {
@@ -238,13 +288,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           };
         }
       },
-      logout: () => {
-        setAccessToken(null);
-        setUserEmail(null);
-        setIsLoggedIn(false);
-        setEntries([]);
-        setGroups([]);
-      },
+      logout: signOut,
       entries,
       addEntry: async (
         text: string,
@@ -388,7 +432,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
         }
       },
     }),
-    [isLoggedIn, accessToken, userEmail, entries, groups]
+    [isLoggedIn, accessToken, userEmail, entries, groups, profile, session, ready, own, data.token, data.error, retryLoad, patch, setEntries, setGroups, epoch]
   );
 
   return <DiaryContext.Provider value={value}>{children}</DiaryContext.Provider>;

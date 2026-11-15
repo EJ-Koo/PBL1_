@@ -1,3 +1,4 @@
+import { Text, TextInput } from '@/components/app-text';
 // [MODIFIED 2026-11-05] fffju 브랜치 index.jsx의 화면 구성·디자인으로 교체하고, 데이터는 서버(로그인)로 연결.
 //  - 화면: 가운데=나의 우주 / 왼쪽=일기 작성 / 오른쪽=그룹 우주 / 상점 (fffju 하단 네비·HUD·퀘스트 그대로)
 //  - 별·일기·그룹: 서버(useDiary). fffju의 기기 저장(useJournal)은 사용하지 않는다.
@@ -7,14 +8,7 @@
 //  - 폰은 fffju 배율 그대로, 웹·PC는 폭 최대 520px 가운데 정렬(useDesignFrame).
 import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
-import {
-  Modal,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Modal, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 import { CreateGroupDialog } from '@/components/ui/create-group-dialog';
 import { SpaceButton } from '@/components/ui/space-ui';
@@ -42,7 +36,7 @@ import { useShop } from '@/store/shop-context';
 type Screen = 'home' | 'diary' | 'group';
 
 export default function HomeScreen() {
-  const { isLoggedIn, entries, groups, createGroup, joinGroup, leaveGroup, logout } = useDiary();
+  const { isLoggedIn, isRestoring, dataLoading, loadError, retryLoad, entries, groups, createGroup, joinGroup, leaveGroup, logout } = useDiary();
   const { coins, activeEffects, refresh: refreshShop } = useShop();
   const { frameWidth } = useDesignFrame();
   // fffju 반응형 레이아웃: 전체 뷰포트로 그리는 화면(홈 HUD·하단바·그룹)은 이 scale을 쓴다.
@@ -70,8 +64,8 @@ export default function HomeScreen() {
   const [today, setToday] = useState(() => localDateKey(new Date()));
 
   useEffect(() => {
-    if (!isLoggedIn) router.replace('/login');
-  }, [isLoggedIn]);
+    if (!isRestoring && !isLoggedIn) router.replace('/login');
+  }, [isLoggedIn, isRestoring]);
 
   // 기기에 저장된 회전 민감도를 불러와 메뉴 슬라이더에 반영한다.
   useEffect(() => {
@@ -90,7 +84,7 @@ export default function HomeScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  if (!isLoggedIn) return <View style={styles.container} />;
+  if (isRestoring || !isLoggedIn) return <View style={styles.container} />;
 
   const checkCount = new Set(entries.map((e) => localDateKey(new Date(e.createdAt)))).size;
   const todayComplete = entries.some((e) => localDateKey(new Date(e.createdAt)) === today);
@@ -170,9 +164,11 @@ export default function HomeScreen() {
 
           {entries.length === 0 && (
             <View style={styles.emptyState} pointerEvents="none">
-              <Text style={styles.emptyText}>아직 기록이 없어요.{'\n'}아래 왼쪽 버튼으로 첫 별을 띄워보세요.</Text>
+              <Text style={styles.emptyText}>{dataLoading ? '기록을 불러오는 중…' : loadError ?? '아직 기록이 없어요. 아래 왼쪽 버튼으로 첫 별을 띄워보세요.'}</Text>
             </View>
           )}
+
+          {loadError && <TouchableOpacity onPress={retryLoad} style={{ position: 'absolute', top: headerTop + 100, alignSelf: 'center', padding: 12 }}><Text style={styles.whiteText}>다시 불러오기</Text></TouchableOpacity>}
 
           {/* HUD는 fffju 반응형(전체 뷰포트). 520 프레임으로 감싸지 않는다. */}
           <HomeHud

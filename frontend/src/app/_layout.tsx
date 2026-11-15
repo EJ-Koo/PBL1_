@@ -1,4 +1,7 @@
+import { SessionGuard } from '@/components/session-guard';
 import { Stack } from 'expo-router';
+import { useEffect } from 'react';
+import { loadSettings } from '@/lib/settings';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
@@ -11,6 +14,7 @@ import { ShopMusic } from '@/components/shop-music';
 import { NoticeDialogHost } from '@/components/notice-dialog-host';
 
 export default function RootLayout() {
+  useEffect(() => { void loadSettings(); }, []);
   // fffju 디자인 글꼴(Inter). 불러오기에 실패해도 기본 글꼴로 화면은 띄운다.
   const [fontsLoaded, fontError] = useFonts({ Inter_400Regular, Inter_700Bold });
   if (!fontsLoaded && !fontError) return null;
@@ -32,7 +36,7 @@ export default function RootLayout() {
             <Stack.Screen name="admin/login" />
             <Stack.Screen name="admin/index" />
           </Stack>
-          <NoticeDialogHost />
+          <NoticeDialogHost /><SessionGuard />
         </ShopProvider>
       </DiaryProvider>
     </AdminProvider>
