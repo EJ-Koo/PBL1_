@@ -27,7 +27,7 @@ function dateLabelOf(timestamp: number) {
 }
 
 export function DiaryComposer({ scale, editId, onBack, onSaved }: Props) {
-  const { addEntry, updateEntry, getEntry, groups, userEmail } = useDiary();
+  const { addEntry, updateEntry, getEntry, groups } = useDiary();
   const editing = editId ? getEntry(editId) : undefined;
 
   const [text, setText] = useState(editing?.text ?? '');
@@ -102,7 +102,7 @@ export function DiaryComposer({ scale, editId, onBack, onSaved }: Props) {
       diaryText={text}
       onChangeText={setText}
       dateLabel={dateLabelOf(editing?.createdAt ?? openedAt)}
-      authorLabel={userEmail ? userEmail.split('@')[0] : '나'}
+      authorLabel="star2day"
       photoCountLabel={`${photos.length}/${MAX_PHOTOS}`}
       photos={photos}
       photoBusy={photoBusy}
