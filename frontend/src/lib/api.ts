@@ -226,6 +226,9 @@ export async function apiCreateDiary(
 export type ApiGroupMember = {
   user_id: string;
   nickname: string | null;
+  shared_day?: string | null;
+  shared_today?: boolean | null;
+  shared_color?: string | null;
 };
 
 export type ApiGroup = {

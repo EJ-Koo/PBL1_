@@ -8,9 +8,9 @@
 //  - 휠 줌: 앱 전체에서 리스너 1번만 등록, deltaMode 보정, 우주 화면 위에서만, 거리 비례(배율) 줌
 //  - 회전 민감도: 메뉴 설정값(lib/settings.ts)을 드래그 회전에 곱함
 //  - 화면 복귀: 상세·검색에 갔다 오면 보던 각도·거리 그대로(처음 맞춘 화면 위치는 화면별로 기억)
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber/native';
-import { Platform, View, useWindowDimensions } from 'react-native';
+import { AccessibilityInfo, Platform, View, useWindowDimensions } from 'react-native';
 import {
   AddEquation,
   BackSide,
@@ -29,6 +29,8 @@ import {
   type Mesh,
   type Points,
   type ShaderMaterial,
+  type Sprite,
+  type SpriteMaterial,
 } from 'three';
 
 import {
@@ -55,6 +57,8 @@ import {
 } from '@/lib/constellation';
 import { controlsFor, frontView, rotateView, setView, zoomView, type UniverseControls } from '@/lib/universe-controls';
 import { getRotateSensitivity, loadSettings } from '@/lib/settings';
+import { newStarFocus, newStarGlow, type NewStarHighlight } from '@/lib/new-star-highlight';
+import type { StarPopupAnchor } from '@/lib/star-popup-layout';
 import type { DiaryEntry } from '@/store/diary-context';
 
 import {
@@ -96,6 +100,52 @@ function createDotTexture() {
 }
 
 const DOT_TEXTURE = createDotTexture();
+
+// A soft radial glow and a narrow luminous ring, shared by the single new-star marker.
+function createNewStarHaloTexture() {
+  const size = 128;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const distance = Math.hypot((x + 0.5) / size * 2 - 1, (y + 0.5) / size * 2 - 1);
+      const glow = Math.exp(-Math.pow((distance - 0.48) / 0.22, 2)) * 0.5;
+      const ring = Math.exp(-Math.pow((distance - 0.51) / 0.035, 2)) * 0.7;
+      const index = (y * size + x) * 4;
+      data[index] = data[index + 1] = data[index + 2] = 255;
+      data[index + 3] = Math.round(Math.min(1, glow + ring) * Math.max(0, 1 - distance ** 4) * 255);
+    }
+  }
+  const texture = new DataTexture(data, size, size, RGBAFormat);
+  texture.magFilter = texture.minFilter = LinearFilter;
+  texture.generateMipmaps = false;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+const NEW_STAR_HALO_TEXTURE = createNewStarHaloTexture();
+
+function NewStarHalo({ radius, startedAt }: { radius: number; startedAt: number }) {
+  const sprite = useRef<Sprite>(null);
+  const material = useRef<SpriteMaterial>(null);
+  const [reducedMotion, setReducedMotion] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((value) => { if (alive) setReducedMotion(value); }).catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReducedMotion);
+    return () => { alive = false; subscription.remove(); };
+  }, []);
+  useFrame(() => {
+    const glow = newStarGlow(Date.now() - startedAt, reducedMotion);
+    sprite.current?.scale.setScalar(radius * 5.4 * glow.scale);
+    if (material.current) material.current.opacity = glow.opacity;
+  });
+  return (
+    <sprite ref={sprite} raycast={() => null} scale={radius * 5.4}>
+      <spriteMaterial ref={material} map={NEW_STAR_HALO_TEXTURE} color="#FFE8A3"
+        transparent opacity={0} depthWrite={false} toneMapped={false} />
+    </sprite>
+  );
+}
 
 // pointsMaterial의 size는 점 전체에 하나의 값만 적용돼서 크기를 점마다 다르게 못 준다.
 // 그래서 점마다 다른 aSize 속성을 읽어 gl_PointSize를 정하는 셰이더로 대체한다.
@@ -441,6 +491,7 @@ function Planet({
   brightness = 1,
   quality,
   selected = false,
+  newStar,
   special = null,
   effectIntensity = SPECIAL_EFFECT_SETTINGS.intensity,
   effectSpeed = 1,
@@ -461,6 +512,7 @@ function Planet({
   quality: PlanetQuality;
   /** 마우스를 올렸거나 누르고 있는 행성 */
   selected?: boolean;
+  newStar?: NewStarHighlight;
   /** 사용자가 적용한 특수 효과(상점에서 산 효과). null이면 일반 행성. 본체(색·무늬·크기)는 같고 바깥 효과만 더한다. */
   special?: SpecialType | null;
   effectIntensity?: number;
@@ -600,6 +652,7 @@ function Planet({
 
   const handleClick = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
+    if (e.delta > 8) return;
     onPress?.();
   };
   // 겹쳐 있으면 카메라에 가장 가까운 행성만 선택한다(뒤 행성까지 함께 켜지지 않게)
@@ -611,6 +664,7 @@ function Planet({
     // 자전축 기울기는 일기마다 고정된 값(감정과 무관). 북극 쪽을 카메라로 13~20도만 기울여
     // 층은 거의 가로로 흐르고, 고리는 정면에서 얇은 타원으로 보인다.
     <group ref={bodyRef} position={position} rotation={[0.22 + r5 * 0.13, 0, (r4 - 0.5) * 0.5]}>
+      {newStar && <NewStarHalo radius={radius} startedAt={newStar.startedAt} />}
       <group ref={spinRef}>
         <mesh
           ref={registerMesh}
@@ -701,7 +755,7 @@ function pointerDistance(points: Map<number, { x: number; y: number }>) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
-function DragPlane({ controls }: { controls: UniverseControls }) {
+function DragPlane({ controls, onBackgroundPress }: { controls: RefObject<UniverseControls>; onBackgroundPress?: () => void }) {
   const dragging = useRef(false);
   const lastPoint = useRef({ x: 0, y: 0 });
   // 동시에 눌려 있는 포인터(손가락/마우스)를 id별로 추적 — 2개가 되면 핀치 줌으로 전환
@@ -711,6 +765,7 @@ function DragPlane({ controls }: { controls: UniverseControls }) {
   return (
     <mesh
       position={[0, 0, -20]}
+      onClick={event => { if (event.delta <= 4) onBackgroundPress?.(); }}
       onPointerDown={(e: ThreeEvent<PointerEvent>) => {
         activePointers.current.set(e.pointerId, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY });
         if (activePointers.current.size >= 2) {
@@ -728,7 +783,7 @@ function DragPlane({ controls }: { controls: UniverseControls }) {
         if (activePointers.current.size >= 2) {
           const currentDist = pointerDistance(activePointers.current);
           if (lastPinchDist.current !== null) {
-            zoomView(controls, lastPinchDist.current / Math.max(currentDist, 1));
+            zoomView(controls.current, lastPinchDist.current / Math.max(currentDist, 1));
           }
           lastPinchDist.current = currentDist;
           return;
@@ -737,7 +792,7 @@ function DragPlane({ controls }: { controls: UniverseControls }) {
         if (!dragging.current) return;
         const deltaX = e.nativeEvent.pageX - lastPoint.current.x;
         const deltaY = e.nativeEvent.pageY - lastPoint.current.y;
-        rotateView(controls, deltaX, deltaY, getRotateSensitivity());
+        rotateView(controls.current, deltaX, deltaY, getRotateSensitivity());
         lastPoint.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
       }}
       onPointerUp={(e: ThreeEvent<PointerEvent>) => {
@@ -837,6 +892,7 @@ export function UniverseScene({
   constellation = null,
   frontViewRequest = 0,
   backgroundStarScale = 1,
+  selectedEntryId, onStarPositionChange, onBackgroundPress, newStar,
 }: {
   entries: DiaryEntry[];
   onStarPress: (id: string) => void;
@@ -847,8 +903,12 @@ export function UniverseScene({
   /** [2026-11-13] 값이 바뀔 때마다 별자리를 정면·처음 거리로 다시 본다('정면으로 보기' 버튼) */
   frontViewRequest?: number;
   backgroundStarScale?: number;
+  selectedEntryId?: string;
+  onStarPositionChange?: (anchor: StarPopupAnchor) => void;
+  onBackgroundPress?: () => void;
+  newStar?: NewStarHighlight;
 }) {
-  const controls = useMemo(() => controlsFor(sceneKey), [sceneKey]);
+  const controls = useRef(controlsFor(sceneKey));
   const groupRef = useRef<Group>(null);
   // 화면이 다시 만들어졌을 때 첫 프레임은 저장된 각도·거리로 바로 맞춘다(서서히 돌아가며 초기화되는 것처럼 보이지 않게).
   const synced = useRef(false);
@@ -921,14 +981,14 @@ export function UniverseScene({
       let i = 0;
       for (const [id, pos] of rt.positions) sendHome(id, pos, i++);
       if (constellationSavedView) {
-        setView(controls, constellationSavedView);
+        setView(controls.current, constellationSavedView);
         constellationSavedView = null;
       }
       return;
     }
 
     // 들어가기 전 화면을 한 번만 기억하고, 우주 회전을 가장 가까운 '정면'(360도의 배수)으로 돌린다 → 별자리가 화면과 나란하다
-    if (!constellationSavedView) constellationSavedView = { ...controls };
+    if (!constellationSavedView) constellationSavedView = { ...controls.current };
 
     const center = framing?.center ?? [0, 0, 0];
     const centerVec = new Vector3(...center);
@@ -979,7 +1039,7 @@ export function UniverseScene({
     // 카메라: 별자리 전체(가장자리 행성 포함)가 남은 영역에 들어오는 거리
     // (카메라 거리 = 무리 기본 거리 × zoom 이므로 zoom 으로 바꿔 넣는다)
     fittedCameraZ.current = planeZ + layout.cameraDistance;
-    frontView(controls, fittedCameraZ.current / Math.max(framing?.distance ?? 5, 0.1));
+    frontView(controls.current, fittedCameraZ.current / Math.max(framing?.distance ?? 5, 0.1));
     // layoutKey(별자리·구성 행성·화면 크기)가 바뀔 때만 다시 배치한다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layoutKey]);
@@ -987,8 +1047,20 @@ export function UniverseScene({
   // '정면으로 보기': 드래그로 돌리거나 확대·축소했어도 별자리 정면·처음 거리로 부드럽게 돌아온다(별자리 보기 중에만)
   useEffect(() => {
     if (fittedCameraZ.current == null) return;
-    frontView(controls, fittedCameraZ.current / Math.max(framing?.distance ?? 5, 0.1));
+    frontView(controls.current, fittedCameraZ.current / Math.max(framing?.distance ?? 5, 0.1));
   }, [frontViewRequest]);
+
+  const focusedNewStar = useRef<string | null>(null);
+  const newEntry = newStar ? entries.find(entry => entry.id === newStar.id) : undefined;
+  useEffect(() => {
+    if (!newEntry || !framing || focusedNewStar.current === newEntry.id) return;
+    focusedNewStar.current = newEntry.id;
+    const focus = newStarFocus(newEntry.position, framing.center);
+    controls.current.yaw = focus.rotationY;
+    controls.current.pitch = focus.rotationX;
+    controls.current.zoom = Math.max(0.25, Math.min(5, focus.distance / framing.distance));
+    synced.current = false;
+  }, [newEntry, framing, controls]);
 
   // 선택: 웹은 마우스를 올린 행성, 터치는 누른 행성. 누른 강조는 잠깐 보였다가(일기 화면으로 넘어가는 동안) 서서히 꺼진다.
   const [hoverId, setHoverId] = useState<string | null>(null);
@@ -997,7 +1069,7 @@ export function UniverseScene({
   useEffect(() => () => {
     if (pressTimer.current) clearTimeout(pressTimer.current);
   }, []);
-  const selectedId = pressId ?? hoverId;
+  const selectedId = selectedEntryId ?? pressId ?? hoverId;
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
     document.body.style.cursor = hoverId ? 'pointer' : '';
@@ -1009,6 +1081,9 @@ export function UniverseScene({
   // 웹 마우스 올림: r3f native 이벤트는 웹에서 누르고 있을 때만 포인터 이동을 전달해서,
   // 마우스 이동을 직접 받아 카메라에서 광선을 쏴 가장 가까운 행성을 고른다(한 프레임에 한 번).
   const planetMeshes = useRef(new Map<string, Mesh>());
+  const selectedEntry = entries.find(entry => entry.id === selectedEntryId);
+  const projection = useRef({ center: new Vector3(), edge: new Vector3() });
+  const lastAnchor = useRef<StarPopupAnchor | null>(null);
   const camera = useThree((s) => s.camera);
   const raycaster = useThree((s) => s.raycaster);
   const glElement = useThree((s) => s.gl.domElement);
@@ -1082,9 +1157,9 @@ export function UniverseScene({
 
   useFrame((state, delta) => {
     if (!synced.current && groupRef.current) {
-      groupRef.current.rotation.y = controls.yaw;
-      groupRef.current.rotation.x = controls.pitch;
-      state.camera.position.z = Math.max(1.2, (framing?.distance ?? 5) * controls.zoom);
+      groupRef.current.rotation.y = controls.current.yaw;
+      groupRef.current.rotation.x = controls.current.pitch;
+      state.camera.position.z = Math.max(1.2, (framing?.distance ?? 5) * controls.current.zoom);
       synced.current = true;
     }
     lodClock.current += delta;
@@ -1114,21 +1189,51 @@ export function UniverseScene({
     }
     const smoothing = 1 - Math.exp(-delta * 9);
     if (groupRef.current) {
-      groupRef.current.rotation.y += (controls.yaw - groupRef.current.rotation.y) * smoothing;
-      groupRef.current.rotation.x += (controls.pitch - groupRef.current.rotation.x) * smoothing;
+      groupRef.current.rotation.y += (controls.current.yaw - groupRef.current.rotation.y) * smoothing;
+      groupRef.current.rotation.x += (controls.current.pitch - groupRef.current.rotation.x) * smoothing;
     }
     const focus = SCENE_UNIFORMS.uFocus;
     focus.value += ((selectedId ? 1 : 0) - focus.value) * Math.min(1, delta * 8);
-    state.camera.position.z += (Math.max(1.2, (framing?.distance ?? 5) * controls.zoom) - state.camera.position.z) * smoothing;
+    state.camera.position.z += (Math.max(1.2, (framing?.distance ?? 5) * controls.current.zoom) - state.camera.position.z) * smoothing;
     // 무리 중심보다 먼 행성일수록 조금 어둡게(셰이더 uDepthFade)
     const camZ = state.camera.position.z;
     SCENE_UNIFORMS.uDepthFade.value.set(camZ, camZ + (framing?.spread ?? 3) * 1.2);
+
+    // Convert the actual mesh position to canvas pixels after rotation/zoom has moved it.
+    // Publish only visible movement, so a stationary popup doesn't rerender every frame.
+    const mesh = selectedEntry && planetMeshes.current.get(selectedEntry.id);
+    if (mesh && onStarPositionChange) {
+      const { center: projectedCenter, edge: projectedEdge } = projection.current;
+      state.camera.updateMatrixWorld();
+      mesh.getWorldPosition(projectedCenter);
+      projectedEdge.copy(projectedCenter);
+      projectedEdge.y += PLANET_BASE_RADIUS * planetScaleForText(selectedEntry.text) * 1.06;
+      projectedCenter.project(state.camera);
+      projectedEdge.project(state.camera);
+      const anchor: StarPopupAnchor = {
+        id: selectedEntry.id,
+        x: (projectedCenter.x + 1) * size.width / 2,
+        y: (1 - projectedCenter.y) * size.height / 2,
+        radius: Math.abs(projectedEdge.y - projectedCenter.y) * size.height / 2,
+        visible: Math.abs(projectedCenter.x) <= 1 && Math.abs(projectedCenter.y) <= 1
+          && projectedCenter.z >= -1 && projectedCenter.z <= 1,
+      };
+      const previous = lastAnchor.current;
+      if (!previous || previous.id !== anchor.id || previous.visible !== anchor.visible
+        || Math.abs(previous.x - anchor.x) > 0.5 || Math.abs(previous.y - anchor.y) > 0.5
+        || Math.abs(previous.radius - anchor.radius) > 0.5) {
+        lastAnchor.current = anchor;
+        onStarPositionChange(anchor);
+      }
+    } else {
+      lastAnchor.current = null;
+    }
   });
 
   const center = framing?.center ?? [0, 0, 0];
   return (
     <>
-      <DragPlane controls={controls} />
+      <DragPlane controls={controls} onBackgroundPress={onBackgroundPress} />
       <group ref={groupRef}>
         <Starfield count={QUALITY_SETTINGS[quality].stars} sizeScale={backgroundStarScale} />
 
@@ -1145,6 +1250,7 @@ export function UniverseScene({
               brightness={entry.brightness}
               quality={quality}
               selected={entry.id === selectedId}
+              newStar={entry.id === newStar?.id ? newStar : undefined}
               special={effectToDraw(entry.effect)}
               runtime={runtimeRef}
               dim={constellation && !memberSet.has(entry.id) ? DIM_OTHERS_LINEAR : 0}
@@ -1178,6 +1284,7 @@ export function UniverseCanvas({
   constellation,
   frontViewRequest,
   backgroundStarScale = 1,
+  selectedEntryId, onStarPositionChange, onBackgroundPress, newStar,
 }: {
   entries: DiaryEntry[];
   onStarPress: (id: string) => void;
@@ -1187,6 +1294,10 @@ export function UniverseCanvas({
   /** [2026-11-13] 바뀔 때마다 별자리를 정면으로 다시 본다 */
   frontViewRequest?: number;
   backgroundStarScale?: number;
+  selectedEntryId?: string;
+  onStarPositionChange?: (anchor: StarPopupAnchor) => void;
+  onBackgroundPress?: () => void;
+  newStar?: NewStarHighlight;
 }) {
   useEffect(() => installWheelZoom(), []);
   return (
@@ -1194,11 +1305,9 @@ export function UniverseCanvas({
     <View style={{ flex: 1 }} {...({ dataSet: { universeZoom: 'true', universeScene: sceneKey ?? 'home' } } as object)}>
       {/* 시야각 50도(기본 75도): 화면 가장자리 행성이 타원처럼 늘어나는 왜곡과 가까운 행성만 크게 보이는 차이를 줄인다 */}
       <Canvas style={{ flex: 1 }} camera={{ fov: CAMERA_FOV, position: [0, 0, 5] }}>
-        <UniverseScene key={sceneKey} entries={entries} onStarPress={onStarPress} sceneKey={sceneKey}
-          backgroundStarScale={backgroundStarScale}
-          constellation={constellation}
-          frontViewRequest={frontViewRequest}
-        />
+        <UniverseScene key={sceneKey} entries={entries} onStarPress={onStarPress} sceneKey={sceneKey} backgroundStarScale={backgroundStarScale}
+          selectedEntryId={selectedEntryId} onStarPositionChange={onStarPositionChange} onBackgroundPress={onBackgroundPress} newStar={newStar}
+          constellation={constellation} frontViewRequest={frontViewRequest} />
       </Canvas>
     </View>
   );

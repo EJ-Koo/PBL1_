@@ -1,8 +1,10 @@
 export type UniverseControls = { yaw: number; pitch: number; zoom: number };
 const views = new Map<string, UniverseControls>();
 export function controlsFor(scene: string): UniverseControls {
-  let view = views.get(scene);
-  if (!view) { view = { yaw: 0, pitch: 0, zoom: 1 }; views.set(scene, view); }
+  // Home and every group share angle/zoom for one login; account changes start clean.
+  const scope = scene.includes(':') ? scene.split(':')[0] : 'default';
+  let view = views.get(scope);
+  if (!view) { view = { yaw: 0, pitch: 0, zoom: 1 }; views.set(scope, view); }
   return view;
 }
 export function rotateView(view: UniverseControls, dx: number, dy: number, sensitivity: number) {
