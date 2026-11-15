@@ -44,8 +44,10 @@ export function HomeHud({ scale, starCount, coinCount, checkCount, onStats, onQu
           onPress={() => setMenuVisible((visible) => !visible)}
           style={[styles.button, { left: 15 * scale, top: 10 * scale, width: 51 * scale, height: 38 * scale }]}
         />
-        {showLabels && <Text pointerEvents="none" style={[styles.brand, { left: 88 * scale, top: 16 * scale,
-          fontSize: 20 * scale, lineHeight: 30 * scale, letterSpacing: 2 * scale }]}>STAREX</Text>}
+        {showLabels && <Text pointerEvents="none" numberOfLines={1} adjustsFontSizeToFit
+          style={[styles.brand, { left: 88 * scale, top: 16 * scale,
+            width: Math.max(0, (chromeWidth - statsWidth) / 2 - 104 * scale),
+            fontSize: 20 * scale, lineHeight: 30 * scale, letterSpacing: 2 * scale }]}>STAR2DAY</Text>}
         <TouchableOpacity
           accessibilityLabel="상점"
           hitSlop={{ top: 10, bottom: 10 }}
