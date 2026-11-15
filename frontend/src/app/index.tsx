@@ -6,8 +6,8 @@ import { Text, TextInput } from '@/components/app-text';
 //  - 서버 기능이 아직 없는 테마·소리·알림은 화면만 보여주고 반응하지 않는다(나중에 하나씩 연결).
 //  - [MODIFIED 2026-11-07] 코인·상점은 서버 연결(useShop). HUD 코인을 누르면 상점, 장착한 배경·혜성이 나의 우주에 보인다.
 //  - 폰은 fffju 배율 그대로, 웹·PC는 폭 최대 520px 가운데 정렬(useDesignFrame).
-import { useEffect, useState } from 'react';
-import { router } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
 import { Modal, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 import { CreateGroupDialog } from '@/components/ui/create-group-dialog';
@@ -56,6 +56,8 @@ export default function HomeScreen() {
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   // 그룹 공유 우주: 그룹을 열면 멤버 전체의 별을 서버에서 받아온다(본인 것만이 아님).
   const [groupStars, setGroupStars] = useState<DiaryEntry[]>([]);
+  // 그룹 우주에서 별을 눌러 행성 상세로 갈 때, 돌아오면 목록이 아니라 그 그룹 우주로 복귀하려고 기억해둔다.
+  const [returnGroupId, setReturnGroupId] = useState<string | null>(null);
   const [inviteVisible, setInviteVisible] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -100,6 +102,16 @@ export default function HomeScreen() {
       alive = false;
     };
   }, [activeGroupId, loadGroupStars]);
+
+  // 행성 상세에서 '우주로'로 돌아와 이 화면이 다시 포커스되면, 보던 그룹 우주를 목록 대신 다시 연다.
+  useFocusEffect(
+    useCallback(() => {
+      if (returnGroupId) {
+        setActiveGroupId(returnGroupId);
+        setReturnGroupId(null);
+      }
+    }, [returnGroupId])
+  );
 
   if (isRestoring || !isLoggedIn) return <View style={styles.container} />;
 
@@ -249,6 +261,8 @@ export default function HomeScreen() {
               sceneKey={`group-${activeGroup.id}`}
               entries={groupStars}
               onStarPress={(id) => {
+                // 행성 상세를 보이게 모달은 닫되, 돌아올 그룹을 기억해 복귀한다.
+                setReturnGroupId(activeGroup.id);
                 setActiveGroupId(null);
                 router.push(`/planet/${id}`);
               }}
