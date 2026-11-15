@@ -30,13 +30,13 @@ import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { showMessage } from '@/lib/feedback';
 import { localDateKey } from '@/lib/journal';
 import { getRotateSensitivity, loadSettings, setRotateSensitivity } from '@/lib/settings';
-import { useDiary } from '@/store/diary-context';
+import { useDiary, type DiaryEntry } from '@/store/diary-context';
 import { useShop } from '@/store/shop-context';
 
 type Screen = 'home' | 'diary' | 'group';
 
 export default function HomeScreen() {
-  const { isLoggedIn, isRestoring, dataLoading, loadError, retryLoad, entries, groups, createGroup, joinGroup, leaveGroup, logout } = useDiary();
+  const { isLoggedIn, isRestoring, dataLoading, loadError, retryLoad, entries, groups, createGroup, joinGroup, leaveGroup, loadGroupStars, logout } = useDiary();
   const { coins, activeEffects, refresh: refreshShop } = useShop();
   const { frameWidth } = useDesignFrame();
   // fffju 반응형 레이아웃: 전체 뷰포트로 그리는 화면(홈 HUD·하단바·그룹)은 이 scale을 쓴다.
@@ -54,6 +54,8 @@ export default function HomeScreen() {
   const [newGroupName, setNewGroupName] = useState('');
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  // 그룹 공유 우주: 그룹을 열면 멤버 전체의 별을 서버에서 받아온다(본인 것만이 아님).
+  const [groupStars, setGroupStars] = useState<DiaryEntry[]>([]);
   const [inviteVisible, setInviteVisible] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -83,6 +85,21 @@ export default function HomeScreen() {
     const timer = setInterval(() => setToday(localDateKey(new Date())), 30000);
     return () => clearInterval(timer);
   }, []);
+
+  // 그룹을 열면 멤버 전체의 별을 받아온다. 닫으면 비운다.
+  useEffect(() => {
+    if (!activeGroupId) {
+      setGroupStars([]);
+      return;
+    }
+    let alive = true;
+    loadGroupStars(activeGroupId).then((s) => {
+      if (alive) setGroupStars(s);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [activeGroupId, loadGroupStars]);
 
   if (isRestoring || !isLoggedIn) return <View style={styles.container} />;
 
@@ -230,13 +247,13 @@ export default function HomeScreen() {
           <View style={[styles.fill, styles.spaceBackground]}>
             <UniverseCanvas
               sceneKey={`group-${activeGroup.id}`}
-              entries={groupEntries(activeGroup.diary_ids)}
+              entries={groupStars}
               onStarPress={(id) => {
                 setActiveGroupId(null);
                 router.push(`/planet/${id}`);
               }}
             />
-            {activeGroup.diary_ids.length === 0 && (
+            {groupStars.length === 0 && (
               <View style={styles.emptyState} pointerEvents="none">
                 <Text style={styles.emptyText}>아직 이 그룹에 공유된 별이 없어요.</Text>
               </View>
@@ -246,7 +263,7 @@ export default function HomeScreen() {
               <SpaceButton scale={rScale} label="‹ 목록" onPress={() => setActiveGroupId(null)} />
               <View style={{ flex: 1, minWidth: 70 }}>
                 <Text numberOfLines={1} style={{ color: '#fff', fontSize: 16 * rScale }}>{activeGroup.name}</Text>
-                <Text style={{ color: '#aeb7c4', fontSize: 11 * rScale }}>별 {groupEntries(activeGroup.diary_ids).length}개</Text>
+                <Text style={{ color: '#aeb7c4', fontSize: 11 * rScale }}>별 {groupStars.length}개</Text>
               </View>
               <SpaceButton scale={rScale} label="친구 초대" onPress={() => { setConfirmLeave(false); setInviteVisible(true); }} />
               <GroupMemberStars scale={rScale} dark members={getMemberStars(activeGroup, entries, today)} />

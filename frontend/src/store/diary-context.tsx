@@ -6,6 +6,7 @@ import {
   apiCreateDiary,
   apiCreateGroup,
   apiGoogleAuth,
+  apiGroupStars,
   apiJoinGroup,
   apiLeaveGroup,
   apiListDiaries,
@@ -17,6 +18,7 @@ import {
   apiUploadPhoto,
   type ApiDiary,
   type ApiGroup,
+  type ApiGroupStar,
   type ApiStar,
 } from '@/lib/api';
 import { fallbackVisual, type PlanetVisual } from '@/lib/planet-visual';
@@ -83,6 +85,8 @@ type DiaryContextValue = {
     visibility: Visibility
   ) => Promise<SaveResult>;
   getEntry: (id: string) => DiaryEntry | undefined;
+  /** 이 일기가 '본인' 것인지(그룹 공유 우주의 남의 별과 구분 — 수정/꾸미기 숨김용). */
+  isOwnEntry: (id: string) => boolean;
   /** [2026-11-12] 서버에 효과 적용·해제가 저장된 뒤 화면의 행성 효과를 바로 바꾼다(상점 store가 부른다). */
   setEntryEffect: (id: string, effect: SpecialType | null) => void;
   isEditableToday: (id: string) => boolean;
@@ -90,6 +94,8 @@ type DiaryContextValue = {
   createGroup: (name: string) => Promise<SaveResult>;
   joinGroup: (inviteCode: string) => Promise<SaveResult>;
   leaveGroup: (groupId: string) => Promise<SaveResult>;
+  /** 그룹 공유 우주: 멤버 전체가 이 그룹에 태그한 별을 불러온다(본인 것만이 아님). */
+  loadGroupStars: (groupId: string) => Promise<DiaryEntry[]>;
 };
 
 function isSameDay(timestamp: number) {
@@ -152,6 +158,25 @@ function toEntry(diary: ApiDiary, colorIndex: number, star?: ApiStar): DiaryEntr
   };
 }
 
+// 그룹 공유 우주의 별 하나(다른 멤버 포함)를 화면용 DiaryEntry로 바꾼다.
+function groupStarToEntry(g: ApiGroupStar): DiaryEntry {
+  const planet = g.planet ?? fallbackVisual(g.color);
+  return {
+    id: g.diary_id,
+    authorId: '',
+    text: g.content,
+    photoUri: null,
+    photos: [],
+    visibility: 'friends',
+    createdAt: new Date(g.created_at).getTime(),
+    color: planet.base_color,
+    brightness: g.brightness,
+    position: [g.x, g.y, g.z],
+    planet,
+    effect: asSpecialType(g.effect),
+  };
+}
+
 // JWT(ID 토큰) payload에서 email 클레임만 꺼낸다. 표시용이라 실패하면 null로 둔다.
 function emailFromIdToken(idToken: string): string | null {
   try {
@@ -190,6 +215,8 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<{ epoch: number; token: string | null; entries: DiaryEntry[]; groups: ApiGroup[]; profile: ApiProfile | null; error: string | null }>({
     epoch: -1, token: null, entries: [], groups: [], profile: null, error: null,
   });
+  // 그룹 공유 우주에서 받아온 멤버 전체의 별(본인 것 포함). getEntry가 상세 화면에서 남의 별도 찾게 한다.
+  const [groupStarCache, setGroupStarCache] = useState<DiaryEntry[]>([]);
   const own = data.epoch === epoch;
   const entries = own ? data.entries : EMPTY_ENTRIES;
   const groups = own ? data.groups : EMPTY_GROUPS;
@@ -377,7 +404,9 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           };
         }
       },
-      getEntry: (id: string) => entries.find((e) => e.id === id),
+      // 본인 일기 우선, 없으면 그룹 공유 우주에서 받아온 남의 별에서 찾는다(상세 보기용).
+      getEntry: (id: string) => entries.find((e) => e.id === id) ?? groupStarCache.find((e) => e.id === id),
+      isOwnEntry: (id: string) => entries.some((e) => e.id === id),
       setEntryEffect: (id: string, effect: SpecialType | null) =>
         setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, effect } : e))),
       isEditableToday: (id: string) => {
@@ -431,8 +460,19 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           };
         }
       },
+      loadGroupStars: async (groupId: string): Promise<DiaryEntry[]> => {
+        if (!accessToken) return [];
+        try {
+          const rows = await apiGroupStars(accessToken, groupId);
+          const mapped = rows.map(groupStarToEntry);
+          setGroupStarCache(mapped); // 상세 화면(getEntry)이 남의 별도 찾도록 캐시
+          return mapped;
+        } catch {
+          return [];
+        }
+      },
     }),
-    [isLoggedIn, accessToken, userEmail, entries, groups, profile, session, ready, own, data.token, data.error, retryLoad, patch, setEntries, setGroups, epoch]
+    [isLoggedIn, accessToken, userEmail, entries, groups, groupStarCache, profile, session, ready, own, data.token, data.error, retryLoad, patch, setEntries, setGroups, epoch]
   );
 
   return <DiaryContext.Provider value={value}>{children}</DiaryContext.Provider>;

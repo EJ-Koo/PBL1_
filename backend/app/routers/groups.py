@@ -3,9 +3,11 @@ import string
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 
+from app import ai_client
 from app.db import supabase
 from app.dependencies import get_current_user_id
-from app.schemas.group import Group, GroupCreate, GroupJoin, GroupMember
+from app.routers.shop import applied_effects
+from app.schemas.group import Group, GroupCreate, GroupJoin, GroupMember, GroupStarEntry
 
 router = APIRouter(prefix="/groups", tags=["groups"])
 
@@ -148,6 +150,61 @@ def list_members(group_id: str, user_id: str = Depends(get_current_user_id)):
     return _members_by_group([group_id]).get(group_id, [])
 
 
+@router.get("/{group_id}/stars", response_model=list[GroupStarEntry])
+def group_stars(group_id: str, user_id: str = Depends(get_current_user_id)):
+    """그룹 공유 우주: 멤버 전체가 이 그룹에 태그한 일기의 별을 돌려준다(작성자 닉네임 포함).
+    멤버만 볼 수 있다. 일기 '태그=그룹에 공유'로 보고 작성자 구분 없이 모두 반환한다."""
+    _assert_member(group_id, user_id)
+    tag_rows = (
+        supabase.table("diary_groups").select("diary_id").eq("group_id", group_id).execute().data
+    )
+    diary_ids = [t["diary_id"] for t in tag_rows]
+    if not diary_ids:
+        return []
+    star_rows = (
+        supabase.table("stars")
+        .select("*, diaries!inner(id, content, created_at, user_id)")
+        .in_("diary_id", diary_ids)
+        .execute()
+        .data
+    )
+    author_ids = list({(r.get("diaries") or {}).get("user_id") for r in star_rows} - {None})
+    nick = _nicknames(author_ids)
+    # 효과(상점에서 산 특수 행성)는 작성자별 조회라 작성자마다 불러 합친다.
+    effects: dict[str, dict] = {}
+    for a in author_ids:
+        effects.update(applied_effects(a))
+    # 행성 외형(AI 감정 분석)은 list_stars와 동일하게 서비스가 있을 때만 붙인다.
+    contents = [(r.get("diaries") or {}).get("content") for r in star_rows]
+    known = [i for i, c in enumerate(contents) if c]
+    planet_by_index: dict[int, dict] = {}
+    if known:
+        visuals = ai_client.planet_visuals([contents[i] for i in known])
+        if visuals:
+            planet_by_index = {i: v for i, v in zip(known, visuals)}
+    out = []
+    for i, r in enumerate(star_rows):
+        d = r.get("diaries") or {}
+        eff = effects.get(str(r["diary_id"]))
+        out.append(
+            GroupStarEntry(
+                diary_id=str(r["diary_id"]),
+                content=d.get("content") or "",
+                created_at=d.get("created_at"),
+                nickname=nick.get(d.get("user_id")),
+                x=r["x"],
+                y=r["y"],
+                z=r["z"],
+                color=r["color"],
+                size=r["size"],
+                brightness=r["brightness"],
+                planet=planet_by_index.get(i),
+                effect=eff["effect"] if eff else None,
+            )
+        )
+    return out
+
+
 @router.delete("/{group_id}/members/me", status_code=204)
 def leave_group(group_id: str, user_id: str = Depends(get_current_user_id)):
     """그룹 나가기: 내 멤버십만 제거. 아무도 안 남으면 그룹 자체를 삭제한다
@@ -163,6 +220,20 @@ def leave_group(group_id: str, user_id: str = Depends(get_current_user_id)):
     if not mine:
         # 멤버가 아니면 아무것도 정리하지 않는다(비멤버가 빈 그룹을 삭제하는 것 방지). 멱등.
         return Response(status_code=204)
+    # 나가는 사람이 이 그룹에 공유(태그)한 일기도 함께 뺀다 — 탈퇴 후에도 남의 일기가 계속 보이지 않도록.
+    my_tags = (
+        supabase.table("diary_groups")
+        .select("diary_id, diaries!inner(user_id)")
+        .eq("group_id", group_id)
+        .eq("diaries.user_id", user_id)
+        .execute()
+        .data
+    )
+    my_tag_ids = [t["diary_id"] for t in my_tags]
+    if my_tag_ids:
+        supabase.table("diary_groups").delete().eq("group_id", group_id).in_(
+            "diary_id", my_tag_ids
+        ).execute()
     supabase.table("group_members").delete().eq("group_id", group_id).eq(
         "user_id", user_id
     ).execute()
@@ -171,8 +242,7 @@ def leave_group(group_id: str, user_id: str = Depends(get_current_user_id)):
     )
     if not remaining:
         supabase.table("groups").delete().eq("id", group_id).execute()
-    # shortcut: 멤버십 삭제~빈 그룹 삭제가 원자적이지 않다. 마지막 멤버 탈퇴와 '동시에' 다른 사용자가
-    #   가입하면 그 가입이 CASCADE로 지워질 수 있고, 중간 실패 시 빈 그룹이 남을 수 있다(개인용 앱이라
-    #   사실상 발생 불가). 멀티유저 동시성이 커지면 이 두 단계를 Postgres RPC(단일 트랜잭션)로 합칠 것.
-    #   나간 멤버의 diary_groups 잔여 태그도 그때 함께 정리.
+    # shortcut: 태그 제거·멤버십 삭제·빈 그룹 삭제가 한 트랜잭션이 아니다. 마지막 멤버 탈퇴와 '동시에'
+    #   다른 사용자가 가입하면 그 가입이 CASCADE로 지워질 수 있고, 중간 실패 시 일부만 반영될 수 있다
+    #   (개인용 앱이라 사실상 발생 불가). 멀티유저 동시성이 커지면 이 단계들을 Postgres RPC(단일 트랜잭션)로 합칠 것.
     return Response(status_code=204)

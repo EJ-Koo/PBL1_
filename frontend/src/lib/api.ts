@@ -204,6 +204,33 @@ export async function apiLeaveGroup(accessToken: string, groupId: string) {
   }
 }
 
+// 그룹 공유 우주: 멤버 전체가 이 그룹에 태그한 일기의 별(작성자 닉네임 포함).
+export type ApiGroupStar = {
+  diary_id: string;
+  content: string;
+  created_at: string;
+  nickname: string | null;
+  x: number;
+  y: number;
+  z: number;
+  color: string;
+  size: number;
+  brightness: number;
+  planet: PlanetVisual | null;
+  effect: SpecialType | null;
+};
+
+export async function apiGroupStars(accessToken: string, groupId: string) {
+  const res = await apiFetch(`${API_BASE_URL}/groups/${groupId}/stars`, {
+    headers: authHeaders(accessToken),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail ?? '그룹 우주를 불러오지 못했습니다.');
+  }
+  return data as ApiGroupStar[];
+}
+
 export async function apiUploadPhoto(accessToken: string, localUri: string) {
   const filename = localUri.split('/').pop()?.split('?')[0] || `photo-${Date.now()}.jpg`;
   const ext = /\.(\w+)$/.exec(filename)?.[1]?.toLowerCase();

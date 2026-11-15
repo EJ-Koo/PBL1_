@@ -22,3 +22,19 @@ class Group(BaseModel):
     invite_code: str
     diary_ids: list[str] = []
     members: list[GroupMember] = []
+
+
+# 그룹 공유 우주: 멤버 전체가 이 그룹에 태그한 일기의 별 1개. 작성자 닉네임 포함.
+class GroupStarEntry(BaseModel):
+    diary_id: str
+    content: str
+    created_at: str
+    nickname: str | None = None
+    x: float
+    y: float
+    z: float
+    color: str
+    size: float
+    brightness: float
+    planet: dict | None = None
+    effect: str | None = None

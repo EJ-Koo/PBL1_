@@ -21,8 +21,9 @@ const VISIBILITY_LABELS: Record<Visibility, string> = {
 
 export default function PlanetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getEntry, isEditableToday, isRestoring, dataLoading } = useDiary();
+  const { getEntry, isOwnEntry, isEditableToday, isRestoring, dataLoading } = useDiary();
   const entry = getEntry(id);
+  const owned = isOwnEntry(id); // 그룹 공유 우주의 남의 별이면 false → 수정·꾸미기 숨김
   const [decorating, setDecorating] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
   useFocusEffect(useCallback(() => {
@@ -96,26 +97,31 @@ export default function PlanetDetailScreen() {
         </Text>
       </View>
 
-      <Pressable
-        style={styles.decorateButton}
-        onPress={() => setDecorating(true)}
-        testID="planet-decorate"
-        accessibilityLabel="행성 꾸미기">
-        <Text style={styles.decorateButtonText}>🪐 행성 꾸미기</Text>
-      </Pressable>
-      <PlanetDecorator visible={decorating} diaryId={entry.id} onClose={() => setDecorating(false)} />
+      {/* 꾸미기·수정은 내 일기에서만. 그룹 공유 우주의 남의 별은 보기만. */}
+      {owned && (
+        <>
+          <Pressable
+            style={styles.decorateButton}
+            onPress={() => setDecorating(true)}
+            testID="planet-decorate"
+            accessibilityLabel="행성 꾸미기">
+            <Text style={styles.decorateButtonText}>🪐 행성 꾸미기</Text>
+          </Pressable>
+          <PlanetDecorator visible={decorating} diaryId={entry.id} onClose={() => setDecorating(false)} />
 
-      <Pressable
-        style={[styles.editButton, !editable && styles.editButtonDisabled]}
-        onPress={() => editable && router.push(`/write?id=${entry.id}`)}
-        disabled={!editable}
-      >
-        <Text style={[styles.editButtonText, !editable && styles.editButtonTextDisabled]}>
-          수정
-        </Text>
-      </Pressable>
-      {!editable && (
-        <Text style={styles.editHint}>작성한 날에만 수정할 수 있어요.</Text>
+          <Pressable
+            style={[styles.editButton, !editable && styles.editButtonDisabled]}
+            onPress={() => editable && router.push(`/write?id=${entry.id}`)}
+            disabled={!editable}
+          >
+            <Text style={[styles.editButtonText, !editable && styles.editButtonTextDisabled]}>
+              수정
+            </Text>
+          </Pressable>
+          {!editable && (
+            <Text style={styles.editHint}>작성한 날에만 수정할 수 있어요.</Text>
+          )}
+        </>
       )}
       </View>
     </ScrollView>
