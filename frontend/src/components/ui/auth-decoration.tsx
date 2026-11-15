@@ -38,8 +38,6 @@ export function AuthScreenChrome() {
   return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
     <Svg width="100%" height="100%" viewBox="0 0 1440 960" preserveAspectRatio="none">
       <Path d="M48 90V48H90 M1350 48H1392V90" fill="none" stroke="#b9bbc5" strokeWidth={1.4} />
-      <Path d="M48 888H567L588 870H852L873 888H1392 M48 909H1392 M592 881H637V902H575Z M646 881H794V902H646Z M803 881H848L866 902H803Z" fill="none" stroke="#a5a8b5" strokeWidth={1} />
-      <Path d="M51 904L66 891M66 904L81 891M81 904L96 891M96 904L111 891M111 904L126 891M126 904L141 891 M1299 891L1314 904M1314 891L1329 904M1329 891L1344 904M1344 891L1359 904M1359 891L1374 904M1374 891L1389 904" stroke="#c7c9d2" strokeWidth={4} />
     </Svg>
   </View>;
 }
