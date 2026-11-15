@@ -46,7 +46,8 @@ export default function SignupScreen() {
     finally { lock.current = false; setIsSubmitting(false); }
   };
   return <View style={styles.screen}>
-    <Image source={require('../../assets/images/login-space-v1.png')} style={StyleSheet.absoluteFill} resizeMode="cover" />
+    <Image testID="auth-background" source={require('../../assets/images/login-space-v1.png')}
+      style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} resizeMode="cover" />
     <LoginFocusReset />
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}>
       <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}

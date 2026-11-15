@@ -40,7 +40,8 @@ export default function LoginScreen() {
   };
 
   return <View style={styles.screen}>
-    <Image source={require('../../assets/images/login-space-v1.png')} style={StyleSheet.absoluteFill} resizeMode="cover" />
+    <Image testID="auth-background" source={require('../../assets/images/login-space-v1.png')}
+      style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} resizeMode="cover" />
     <AuthScreenChrome />
     <LoginFocusReset />
     <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}>
