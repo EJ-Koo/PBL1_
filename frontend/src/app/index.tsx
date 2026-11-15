@@ -1,3 +1,4 @@
+import { useGroupUniverse } from '@/hooks/use-group-universe';
 import { useQuest } from '@/store/quest-context';
 import { QuestRewardAnimation } from '@/components/quest-reward-animation';
 import { Text, TextInput } from '@/components/app-text';
@@ -8,8 +9,8 @@ import { Text, TextInput } from '@/components/app-text';
 //  - 서버 기능이 아직 없는 테마·소리·알림은 화면만 보여주고 반응하지 않는다(나중에 하나씩 연결).
 //  - [MODIFIED 2026-11-07] 코인·상점은 서버 연결(useShop). HUD 코인을 누르면 상점, 장착한 배경·혜성이 나의 우주에 보인다.
 //  - 폰은 fffju 배율 그대로, 웹·PC는 폭 최대 520px 가운데 정렬(useDesignFrame).
-import { useCallback, useEffect, useState } from 'react';
-import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Modal, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 import { CreateGroupDialog } from '@/components/ui/create-group-dialog';
@@ -32,13 +33,13 @@ import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { showMessage } from '@/lib/feedback';
 import { localDateKey } from '@/lib/journal';
 import { getRotateSensitivity, loadSettings, setRotateSensitivity } from '@/lib/settings';
-import { useDiary, type DiaryEntry } from '@/store/diary-context';
+import { useDiary } from '@/store/diary-context';
 import { useShop } from '@/store/shop-context';
 
 type Screen = 'home' | 'diary' | 'group';
 
 export default function HomeScreen() {
-  const { isLoggedIn, isRestoring, dataLoading, loadError, retryLoad, entries, groups, createGroup, joinGroup, leaveGroup, loadGroupStars, logout } = useDiary();
+  const { isLoggedIn, isRestoring, dataLoading, loadError, retryLoad, entries, groups, createGroup, joinGroup, leaveGroup, logout } = useDiary();
   const { coins, activeEffects, refresh: refreshShop } = useShop();
   const { frameWidth } = useDesignFrame();
   const { refresh: refreshQuest, rewardEvent, clearReward } = useQuest();
@@ -56,11 +57,13 @@ export default function HomeScreen() {
   const [createGroupVisible, setCreateGroupVisible] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [creatingGroup, setCreatingGroup] = useState(false);
-  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  const { groupId: routeGroupId } = useLocalSearchParams<{ groupId?: string }>();
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(routeGroupId ?? null);
   // 그룹 공유 우주: 그룹을 열면 멤버 전체의 별을 서버에서 받아온다(본인 것만이 아님).
-  const [groupStars, setGroupStars] = useState<DiaryEntry[]>([]);
+  const { entries: groupStars, loading: groupLoading, error: groupError, reload: reloadGroup } = useGroupUniverse(activeGroupId);
   // 그룹 우주에서 별을 눌러 행성 상세로 갈 때, 돌아오면 목록이 아니라 그 그룹 우주로 복귀하려고 기억해둔다.
-  const [returnGroupId, setReturnGroupId] = useState<string | null>(null);
+  const returnGroupId = useRef<string | null>(null);
+  const openingStar = useRef(false);
   const [inviteVisible, setInviteVisible] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -91,30 +94,13 @@ export default function HomeScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  // 그룹을 열면 멤버 전체의 별을 받아온다. 닫으면 비운다.
-  useEffect(() => {
-    if (!activeGroupId) {
-      setGroupStars([]);
-      return;
-    }
-    let alive = true;
-    loadGroupStars(activeGroupId).then((s) => {
-      if (alive) setGroupStars(s);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [activeGroupId, loadGroupStars]);
-
-  // 행성 상세에서 '우주로'로 돌아와 이 화면이 다시 포커스되면, 보던 그룹 우주를 목록 대신 다시 연다.
-  useFocusEffect(
-    useCallback(() => {
-      if (returnGroupId) {
-        setActiveGroupId(returnGroupId);
-        setReturnGroupId(null);
-      }
-    }, [returnGroupId])
-  );
+  // Keep this callback stable: setting the return target must not reopen the modal before navigation.
+  useFocusEffect(useCallback(() => {
+    openingStar.current = false;
+    const groupId = returnGroupId.current ?? routeGroupId;
+    if (groupId) { setScreen('group'); setActiveGroupId(groupId); }
+    returnGroupId.current = null;
+  }, [routeGroupId]));
 
   if (isRestoring || !isLoggedIn) return <View style={styles.container} />;
 
@@ -260,18 +246,23 @@ export default function HomeScreen() {
         {activeGroup && (
           <View style={[styles.fill, styles.spaceBackground]}>
             <UniverseCanvas
+              key={activeGroup.id}
               sceneKey={`group-${activeGroup.id}`}
               entries={groupStars}
+              backgroundStarScale={1.4}
               onStarPress={(id) => {
                 // 행성 상세를 보이게 모달은 닫되, 돌아올 그룹을 기억해 복귀한다.
-                setReturnGroupId(activeGroup.id);
+                if (openingStar.current || !groupStars.some(entry => entry.id === id)) return;
+                openingStar.current = true;
+                returnGroupId.current = activeGroup.id;
                 setActiveGroupId(null);
-                router.push(`/planet/${id}`);
+                router.push({ pathname: '/planet/[id]', params: { id, groupId: activeGroup.id } });
               }}
             />
-            {groupStars.length === 0 && (
-              <View style={styles.emptyState} pointerEvents="none">
-                <Text style={styles.emptyText}>아직 이 그룹에 공유된 별이 없어요.</Text>
+            {(groupLoading || groupError || groupStars.length === 0) && (
+              <View style={styles.emptyState} pointerEvents={groupError ? 'auto' : 'none'}>
+                <Text style={styles.emptyText}>{groupError ?? (groupLoading ? '그룹의 별을 불러오는 중…' : '아직 이 그룹에 공유된 별이 없어요.')}</Text>
+                {groupError && <SpaceButton scale={rScale} label="다시 불러오기" onPress={reloadGroup} />}
               </View>
             )}
             <View style={{ position: 'absolute', top: headerTop, left: chromeLeft + 20 * rScale,

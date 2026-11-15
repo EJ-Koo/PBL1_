@@ -1,3 +1,4 @@
+import { CoinIcon } from '@/components/coin-icon';
 import { Text } from '@/components/app-text';
 // [MODIFIED 2026-11-10] 상점 팝업 (fffju 상점 카드 디자인 + 서버 코인·구매·장착).
 //  - 화면 가운데 뜨는 창 (2026-11-10 아래 → 가운데로 변경). ✕ 버튼, 창 바깥 누르기, 안드로이드 뒤로가기로 닫힘
@@ -144,7 +145,7 @@ function Card({
         {description}
       </Text>
       {/* 가격 줄은 항상 같은 높이 → 구매 후에도 버튼 위치가 그대로 */}
-      <Text style={styles.price}>{priceText}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><CoinIcon size={18} /><Text style={styles.price}>{priceText}</Text></View>
       <View style={styles.buttonRow}>
         <TouchableOpacity
           testID={`${testID}-action`}
@@ -273,7 +274,7 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
             <Text style={styles.title}>SPACE SHOP</Text>
             <View style={[styles.headerSide, styles.headerRight]}>
               <View style={styles.coinPill} testID="shop-coins">
-                <Text style={styles.coinText}>🪙 {coins ?? '…'}</Text>
+                <CoinIcon size={25} /><Text style={styles.coinText}>{coins?.toLocaleString() ?? '…'}</Text>
               </View>
               <TouchableOpacity onPress={onClose} accessibilityLabel="닫기" testID="shop-close" hitSlop={10} style={styles.close}>
                 <Text style={styles.closeText}>✕</Text>
@@ -429,8 +430,8 @@ const styles = StyleSheet.create({
   headerSide: { width: 120 },
   headerRight: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 10 },
   title: { color: '#fff', fontFamily: DesignFonts.bold, fontSize: 18, fontWeight: 'bold', flexShrink: 1 },
-  coinPill: { backgroundColor: '#7f8c8d', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
-  coinText: { color: '#000', fontWeight: 'bold', fontSize: 14 },
+  coinPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#171c28', borderColor: '#c6aa704f', borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 18 },
+  coinText: { color: '#ffedb4', fontWeight: 'bold', fontSize: 14 },
   close: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
   closeText: { color: '#fff', fontSize: 20, fontWeight: '600' },
   tabs: { flexDirection: 'row', gap: 8, marginBottom: 12 },

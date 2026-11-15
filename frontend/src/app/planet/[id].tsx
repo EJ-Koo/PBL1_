@@ -11,7 +11,9 @@ import { PLANET_BASE_RADIUS, planetScaleForText } from '@/lib/planet-visual';
 import { PlanetDecorator } from '@/components/planet-decorator';
 import { goBackSafe } from '@/lib/navigation';
 import { EFFECT_LABELS, SPECIAL_NAMES, effectToDraw } from '@/lib/special-planet';
-import { useDiary, type Visibility } from '@/store/diary-context';
+import { apiReadDiary } from '@/lib/api';
+import { authSession } from '@/lib/auth-session';
+import { useDiary, toEntry, type DiaryEntry, type Visibility } from '@/store/diary-context';
 
 const VISIBILITY_LABELS: Record<Visibility, string> = {
   public: '전체공개',
@@ -20,9 +22,32 @@ const VISIBILITY_LABELS: Record<Visibility, string> = {
 };
 
 export default function PlanetDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { getEntry, isOwnEntry, isEditableToday, isRestoring, dataLoading } = useDiary();
-  const entry = getEntry(id);
+  const { id, groupId } = useLocalSearchParams<{ id: string; groupId?: string }>();
+  const { getEntry, isOwnEntry, isEditableToday, isRestoring, dataLoading, accessToken } = useDiary();
+  const cached = getEntry(id, groupId);
+  const revision = authSession.getRevision();
+  const [remote, setRemote] = useState<{ id: string; revision: number; attempt: number; entry: DiaryEntry | null; error: string | null } | null>(null);
+  const [retry, setRetry] = useState(0);
+  // Validate the exact diary with the server, including after a group share is revoked.
+  useFocusEffect(useCallback(() => {
+    if (!accessToken || !groupId) return;
+    let alive = true;
+    apiReadDiary(accessToken, id).then(diary => {
+      if (!alive || authSession.getRevision() !== revision) return;
+      const entry = toEntry(diary, 0);
+      setRemote({ id, revision, attempt: retry, entry, error: null });
+    }).catch(error => {
+      if (alive && authSession.getRevision() === revision) setRemote({ id, revision, attempt: retry, entry: null, error: error instanceof Error ? error.message : '기록을 불러오지 못했어요.' });
+    });
+    return () => { alive = false; };
+  }, [accessToken, groupId, id, revision, retry]));
+  const verified = remote?.id === id && remote.revision === revision && remote.attempt === retry ? remote : null;
+  const entry = groupId ? (verified?.entry ? { ...verified.entry, planet: cached?.planet ?? verified.entry.planet, effect: cached?.effect ?? verified.entry.effect } : null) : cached;
+  const goToUniverse = () => {
+    if (router.canGoBack()) router.back();
+    else if (groupId) router.replace({ pathname: '/', params: { groupId } });
+    else goBackSafe();
+  };
   const owned = isOwnEntry(id); // 그룹 공유 우주의 남의 별이면 false → 수정·꾸미기 숨김
   const [decorating, setDecorating] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
@@ -31,12 +56,13 @@ export default function PlanetDetailScreen() {
     return () => setPreviewVisible(false);
   }, []));
 
-  if (isRestoring || dataLoading) return <View style={styles.container}><Text style={styles.notFoundText}>기록을 불러오는 중…</Text></View>;
+  if (isRestoring || dataLoading || (groupId && !verified)) return <View style={styles.container}><Text style={styles.notFoundText}>기록을 불러오는 중…</Text></View>;
   if (!entry) {
     return (
       <View style={styles.container}>
-        <Text style={styles.notFoundText}>기록을 찾을 수 없습니다.</Text>
-        <Pressable onPress={goBackSafe}>
+        <Text style={styles.notFoundText}>{verified?.error ?? '기록을 찾을 수 없습니다.'}</Text>
+        {groupId && <Pressable onPress={() => setRetry(value => value + 1)}><Text style={styles.backLink}>다시 불러오기</Text></Pressable>}
+        <Pressable onPress={goToUniverse}>
           <Text style={styles.backLink}>← 돌아가기</Text>
         </Pressable>
       </View>
@@ -51,8 +77,8 @@ export default function PlanetDetailScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.outer}>
       <View style={styles.content}>
-      <Pressable onPress={goBackSafe}>
-        <Text style={styles.backLink}>← 우주로</Text>
+      <Pressable onPress={goToUniverse}>
+        <Text style={styles.backLink}>{groupId ? '← 그룹 우주로' : '← 우주로'}</Text>
       </Pressable>
 
       <View style={styles.planetHeader}>

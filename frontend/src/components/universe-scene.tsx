@@ -114,7 +114,7 @@ const STARFIELD_UNIFORMS = { map: { value: DOT_TEXTURE } };
  * 대부분은 작고 어두운 별, 소수만 조금 크고 밝은 별이라 깊이감만 더한다(개수는 품질 설정 stars).
  * 위치는 고정 난수라 화면을 다시 열어도 같은 하늘이다.
  */
-function Starfield({ count }: { count: number }) {
+function Starfield({ count, sizeScale = 1 }: { count: number; sizeScale?: number }) {
   const pointsRef = useRef<Points>(null);
 
   const { positions, sizes, brights, tints } = useMemo(() => {
@@ -135,12 +135,12 @@ function Starfield({ count }: { count: number }) {
       // 세제곱 분포: 대부분 작고 어둡고, 드물게 크고 밝다
       // Slightly enlarge the warm/yellow background glints without changing
       // their positions, density or the colder distant stars.
-      siz[i] = (0.45 + 1.2 * d ** 3) * (f > 0.65 ? 1.18 : 1);
+      siz[i] = (0.45 + 1.2 * d ** 3) * (f > 0.65 ? 1.18 : 1) * sizeScale;
       bri[i] = 0.3 + 0.7 * e ** 2;
       tin[i] = f;
     }
     return { positions: pos, sizes: siz, brights: bri, tints: tin };
-  }, [count]);
+  }, [count, sizeScale]);
 
   useFrame((_, delta) => {
     if (pointsRef.current) {
@@ -779,11 +779,13 @@ export function UniverseScene({
   entries,
   onStarPress,
   sceneKey = 'home',
+  backgroundStarScale = 1,
 }: {
   entries: DiaryEntry[];
   onStarPress: (id: string) => void;
   /** 화면 위치를 기억할 이름 (홈 'home', 그룹 우주는 그룹 id) */
   sceneKey?: string;
+  backgroundStarScale?: number;
 }) {
   const groupRef = useRef<Group>(null);
   // 화면이 다시 만들어졌을 때 첫 프레임은 저장된 각도·거리로 바로 맞춘다(서서히 돌아가며 초기화되는 것처럼 보이지 않게).
@@ -929,7 +931,7 @@ export function UniverseScene({
     <>
       <DragPlane />
       <group ref={groupRef}>
-        <Starfield count={QUALITY_SETTINGS[quality].stars} />
+        <Starfield count={QUALITY_SETTINGS[quality].stars} sizeScale={backgroundStarScale} />
 
         <group position={[-center[0], -center[1], -center[2]]}>
           {entries.map((entry) => (
@@ -970,17 +972,19 @@ export function UniverseCanvas({
   entries,
   onStarPress,
   sceneKey,
+  backgroundStarScale = 1,
 }: {
   entries: DiaryEntry[];
   onStarPress: (id: string) => void;
   sceneKey?: string;
+  backgroundStarScale?: number;
 }) {
   return (
     // dataSet은 웹에서 data-universe-zoom 속성이 된다 (휠 줌 대상 판단용, installWheelZoom 참고).
     <View style={{ flex: 1 }} {...({ dataSet: { universeZoom: 'true' } } as object)}>
       {/* 시야각 50도(기본 75도): 화면 가장자리 행성이 타원처럼 늘어나는 왜곡과 가까운 행성만 크게 보이는 차이를 줄인다 */}
       <Canvas style={{ flex: 1 }} camera={{ fov: CAMERA_FOV, position: [0, 0, 5] }}>
-        <UniverseScene entries={entries} onStarPress={onStarPress} sceneKey={sceneKey} />
+        <UniverseScene entries={entries} onStarPress={onStarPress} sceneKey={sceneKey} backgroundStarScale={backgroundStarScale} />
       </Canvas>
     </View>
   );

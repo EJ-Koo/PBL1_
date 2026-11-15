@@ -37,6 +37,14 @@ function authHeaders(accessToken: string) {
   };
 }
 
+export async function apiReadDiary(accessToken: string, id: string): Promise<ApiDiary> {
+  const response = await apiFetch(`${API_BASE_URL}/diaries/${encodeURIComponent(id)}`, { headers: authHeaders(accessToken) });
+  const data = await response.json();
+  if (!response.ok) throw new Error(response.status === 404 ? '이 기록은 삭제되었거나 더 이상 공유되지 않아요.' : '기록을 불러오지 못했어요. 다시 시도해주세요.');
+  if (data.id !== id) throw new Error('선택한 별과 기록이 일치하지 않아요.');
+  return data;
+}
+
 export async function apiLogin(email: string, password: string) {
   const res = await apiFetch(`${API_BASE_URL}/auth/login`, {
     method: 'POST',

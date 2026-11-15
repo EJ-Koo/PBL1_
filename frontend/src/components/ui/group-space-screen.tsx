@@ -78,7 +78,6 @@ export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup, onJ
   const { headerTop, bottomSpace, pageLeft, pageWidth, pagePadding, pageGap, innerWidth, groupCardWidth } = useResponsiveLayout();
   const cardWidth = groupCardWidth;
   const cardScale = cardWidth / 362;
-  const compactHeader = innerWidth < 600;
 
   return (
     <View style={styles.screen}>
@@ -92,12 +91,10 @@ export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup, onJ
             <Text numberOfLines={1} adjustsFontSizeToFit accessibilityRole="header" style={[styles.positioned, styles.text, {
               left: 18 * scale, top: 14 * scale, maxWidth: innerWidth - 92 * scale, fontSize: 28 * scale, lineHeight: 36 * scale,
             }]}>OUR SPACE</Text>
-            {!compactHeader && <Text style={[styles.positioned, styles.text, { right: 70 * scale, top: 40 * scale,
-              fontSize: 12 * scale, lineHeight: 20 * scale }]}>별일을 함께 나누는 우리의 우주</Text>}
           </View>
-          {compactHeader && <Text style={[styles.text, { fontSize: 13, lineHeight: 20, marginTop: 8 * scale }]}>
+          <Text style={[styles.text, { fontSize: Math.max(12, 13 * scale), lineHeight: Math.max(20, 20 * scale), marginTop: 10 * scale, paddingHorizontal: 18 * scale, flexShrink: 1 }]}>
             별일을 함께 나누는 우리의 우주
-          </Text>}
+          </Text>
         </View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start',
           justifyContent: innerWidth < 640 ? 'center' : 'flex-start', gap: pageGap }}>

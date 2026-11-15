@@ -1,3 +1,4 @@
+import { CoinIcon } from '@/components/coin-icon';
 import { useId } from 'react';
 import Svg, { ClipPath, Defs, G, Path, Rect } from 'react-native-svg';
 
@@ -50,17 +51,11 @@ export function QuestFrame({ scale }: { scale: number }) {
 }
 
 export function HudIcon({ kind, scale }: { kind: 'star' | 'coin' | 'check'; scale: number }) {
+  if (kind === 'coin') return <CoinIcon size={24 * scale} />;
   return (
     <Svg width={22 * scale} height={24 * scale} viewBox="0 0 22 24" pointerEvents="none">
       {kind === 'star' && (
         <Path d="M11 1L14.2 8.1L21.8 8.8L16 14L17.8 21.5L11 17.4L4.2 21.5L6 14L.2 8.8L7.8 8.1Z" fill={DesignPaint.ink} />
-      )}
-      {kind === 'coin' && (
-        <Path
-          d="M21 12A10 10 0 1 1 1 12A10 10 0 1 1 21 12ZM11 5L7 12L11 19L15 12Z"
-          fill={DesignPaint.ink}
-          fillRule="evenodd"
-        />
       )}
       {kind === 'check' && (
         <Path d="M3 13L8 18L18 6" fill="none" stroke={DesignPaint.ink} strokeWidth={1.7} />

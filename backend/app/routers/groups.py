@@ -163,11 +163,13 @@ def group_stars(group_id: str, user_id: str = Depends(get_current_user_id)):
         return []
     star_rows = (
         supabase.table("stars")
-        .select("*, diaries!inner(id, content, created_at, user_id)")
+        .select("*, diaries!inner(id, content, created_at, user_id, visibility)")
         .in_("diary_id", diary_ids)
         .execute()
         .data
     )
+    # Never return a private diary, even if an old tag still exists.
+    star_rows = [r for r in star_rows if (r.get("diaries") or {}).get("visibility", "private") != "private"]
     author_ids = list({(r.get("diaries") or {}).get("user_id") for r in star_rows} - {None})
     nick = _nicknames(author_ids)
     # 효과(상점에서 산 특수 행성)는 작성자별 조회라 작성자마다 불러 합친다.

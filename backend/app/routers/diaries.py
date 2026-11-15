@@ -224,7 +224,7 @@ def _get_viewable_diary(diary_id: UUID, user_id: str) -> dict:
     if not result.data:
         raise HTTPException(status_code=404, detail="Diary not found")
     diary = result.data[0]
-    if diary["user_id"] != user_id and not _shares_group(diary_id, user_id):
+    if diary["user_id"] != user_id and (diary.get("visibility", "private") == "private" or not _shares_group(diary_id, user_id)):
         raise HTTPException(status_code=404, detail="Diary not found")
     return diary
 
@@ -282,7 +282,8 @@ def get_related_diaries(diary_id: UUID, user_id: str = Depends(get_current_user_
 
 @router.post("", response_model=Diary)
 def create_diary(diary: DiaryCreate, user_id: str = Depends(get_current_user_id)):
-    _assert_member_of_groups(diary.group_ids, user_id)
+    group_ids = diary.group_ids if diary.visibility != "private" else []
+    _assert_member_of_groups(group_ids, user_id)
     paths = diary.photo_paths or ([diary.photo_url] if diary.photo_url else [])
     row = {
         "user_id": user_id,
@@ -294,7 +295,7 @@ def create_diary(diary: DiaryCreate, user_id: str = Depends(get_current_user_id)
     result = _write_diary(lambda r: supabase.table("diaries").insert(r), row)
     created = result.data[0]
     _create_star_for_diary(created["id"], diary.content, user_id, diary.topic)
-    _tag_diary_groups(created["id"], diary.group_ids)
+    _tag_diary_groups(created["id"], group_ids)
     response = _with_signed_photo_url(created)
     # 일기 저장 성공은 유지하고, 보상 장애 시 앱의 퀘스트 동기화로 다시 시도합니다.
     try:
@@ -336,6 +337,10 @@ def update_diary(
         .eq("user_id", user_id),
         update_data,
     )
+
+    if update_data.get("visibility") == "private":
+        # Revoking sharing also removes old group tags; later visibility changes do not reshare silently.
+        supabase.table("diary_groups").delete().eq("diary_id", str(diary_id)).execute()
 
     if "content" in update_data:
         supabase.table("stars").update(

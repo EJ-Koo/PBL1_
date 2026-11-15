@@ -1,3 +1,4 @@
+import { CoinIcon } from '@/components/coin-icon';
 import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, Platform, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Text } from './app-text';
@@ -30,12 +31,12 @@ export function QuestRewardAnimation({ event, onDone }: { event: QuestRewardEven
       opacity: progress.interpolate({ inputRange: [0, 0.75, 1], outputRange: [1, 1, 0] }),
       transform: reduced ? [] : [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [0, toY - fromY] }) },
         { scale: progress.interpolate({ inputRange: [0, 0.7, 1], outputRange: [1, 1.1, 0.6] }) }] }]}>
-      <Text style={styles.text}>◈ +{event.amount}</Text>
+      <CoinIcon size={32} /><Text style={styles.text}>+{event.amount}</Text>
     </Animated.View>
   </View>;
 }
 const styles = StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFill, zIndex: 40 },
-  coin: { position: 'absolute', minWidth: 84, padding: 12, borderRadius: 24, backgroundColor: '#e6e8f0', alignItems: 'center' },
-  text: { color: '#171c28', fontSize: 20, fontWeight: '700' },
+  coin: { position: 'absolute', minWidth: 84, padding: 12, borderRadius: 24, backgroundColor: '#141b2a', borderColor: '#dfc99080', borderWidth: 1, flexDirection: 'row', gap: 7, alignItems: 'center' },
+  text: { color: '#ffedb4', fontSize: 20, fontWeight: '700' },
 });

@@ -1,3 +1,4 @@
+import { CoinIcon } from '@/components/coin-icon';
 import { useQuest } from '@/store/quest-context';
 import { confirmChoice } from '@/lib/notice';
 import { Text } from '@/components/app-text';
@@ -44,7 +45,7 @@ export function QuestPanel({ scale, onClose, onWriteDiary }: Props) {
             <View style={{ height: 3 * scale, backgroundColor: '#ffffff35', marginTop: 12 * scale, marginBottom: 16 * scale }}>
               {todayComplete && <View style={{ flex: 1, backgroundColor: DesignPaint.questProgress }} />}
             </View>
-            <Text style={[styles.text, { fontSize: 12 * scale, marginBottom: 12 * scale }]}>보상 ◈ {quest.reward}코인</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 * scale, marginBottom: 12 * scale }}><CoinIcon size={23 * scale} /><Text style={[styles.text, { fontSize: 12 * scale }]}>보상 {quest.reward}코인</Text></View>
             {todayComplete ? (
               <View accessibilityRole="text" accessibilityLabel="오늘의 퀘스트 완료"
                 style={{ borderColor: DesignPaint.questProgress, borderWidth: 1, borderRadius: 20 * scale,

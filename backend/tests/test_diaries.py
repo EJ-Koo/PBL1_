@@ -103,7 +103,7 @@ def test_create_diary_tags_member_groups(monkeypatch):
     monkeypatch.setattr(diaries, "supabase", fake)
 
     diaries.create_diary(
-        DiaryCreate(content="hello", group_ids=["group-1", "group-2"]), user_id="user-1"
+        DiaryCreate(content="hello", visibility="friends", group_ids=["group-1", "group-2"]), user_id="user-1"
     )
 
     tagged_group_ids = {row["group_id"] for row in fake.diary_group_inserts}
@@ -117,7 +117,7 @@ def test_create_diary_rejects_group_not_member(monkeypatch):
 
     with pytest.raises(HTTPException) as exc_info:
         diaries.create_diary(
-            DiaryCreate(content="hello", group_ids=["group-1", "not-mine"]), user_id="user-1"
+            DiaryCreate(content="hello", visibility="friends", group_ids=["group-1", "not-mine"]), user_id="user-1"
         )
 
     assert exc_info.value.status_code == 404
@@ -316,7 +316,7 @@ _DID = "22222222-2222-2222-2222-222222222222"
 
 
 def _view_db(**extra):
-    return {"diaries": [{"id": _DID, "user_id": "owner", "content": "x"}], **extra}
+    return {"diaries": [{"id": _DID, "user_id": "owner", "content": "x", "visibility": "friends"}], **extra}
 
 
 def test_get_viewable_diary_owner(monkeypatch):

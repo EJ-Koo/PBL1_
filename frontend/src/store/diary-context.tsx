@@ -1,3 +1,4 @@
+import { GroupCache } from '@/lib/group-cache';
 import { publishQuest } from '@/lib/quest-events';
 import { authSession, signOut } from '@/lib/auth-session';
 import { apiGetProfile, apiSaveProfile, apiUploadAvatar, type ApiProfile, type ProfileDraft } from '@/lib/profile-api';
@@ -85,7 +86,7 @@ type DiaryContextValue = {
     photos: DiaryPhoto[],
     visibility: Visibility
   ) => Promise<SaveResult>;
-  getEntry: (id: string) => DiaryEntry | undefined;
+  getEntry: (id: string, groupId?: string) => DiaryEntry | undefined;
   /** 이 일기가 '본인' 것인지(그룹 공유 우주의 남의 별과 구분 — 수정/꾸미기 숨김용). */
   isOwnEntry: (id: string) => boolean;
   /** [2026-11-12] 서버에 효과 적용·해제가 저장된 뒤 화면의 행성 효과를 바로 바꾼다(상점 store가 부른다). */
@@ -141,7 +142,7 @@ function starVisual(star: ApiStar | undefined): PlanetVisual {
   return star?.planet ?? fallbackVisual(star?.color ?? null);
 }
 
-function toEntry(diary: ApiDiary, colorIndex: number, star?: ApiStar): DiaryEntry {
+export function toEntry(diary: ApiDiary, colorIndex: number, star?: ApiStar): DiaryEntry {
   const photos = toPhotos(diary);
   return {
     id: diary.id,
@@ -217,7 +218,13 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
     epoch: -1, token: null, entries: [], groups: [], profile: null, error: null,
   });
   // 그룹 공유 우주에서 받아온 멤버 전체의 별(본인 것 포함). getEntry가 상세 화면에서 남의 별도 찾게 한다.
-  const [groupStarCache, setGroupStarCache] = useState<DiaryEntry[]>([]);
+  const groupCache = useMemo(() => new GroupCache<DiaryEntry>(epoch), [epoch]);
+  const loadGroupStars = useCallback(async (groupId: string): Promise<DiaryEntry[]> => {
+    if (!accessToken || authSession.getRevision() !== epoch) throw new Error('로그인이 필요합니다.');
+    const rows = await groupCache.load(groupId, async () => (await apiGroupStars(accessToken, groupId)).map(groupStarToEntry));
+    if (authSession.getRevision() !== epoch) throw new Error('로그인 계정이 변경됐어요.');
+    return rows;
+  }, [accessToken, epoch, groupCache]);
   const own = data.epoch === epoch;
   const entries = own ? data.entries : EMPTY_ENTRIES;
   const groups = own ? data.groups : EMPTY_GROUPS;
@@ -409,7 +416,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
         }
       },
       // 본인 일기 우선, 없으면 그룹 공유 우주에서 받아온 남의 별에서 찾는다(상세 보기용).
-      getEntry: (id: string) => entries.find((e) => e.id === id) ?? groupStarCache.find((e) => e.id === id),
+      getEntry: (id: string, groupId?: string) => entries.find((e) => e.id === id) ?? (groupId ? groupCache.rows.get(groupId)?.find((e) => e.id === id) : undefined),
       isOwnEntry: (id: string) => entries.some((e) => e.id === id),
       setEntryEffect: (id: string, effect: SpecialType | null) =>
         setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, effect } : e))),
@@ -464,19 +471,9 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           };
         }
       },
-      loadGroupStars: async (groupId: string): Promise<DiaryEntry[]> => {
-        if (!accessToken) return [];
-        try {
-          const rows = await apiGroupStars(accessToken, groupId);
-          const mapped = rows.map(groupStarToEntry);
-          setGroupStarCache(mapped); // 상세 화면(getEntry)이 남의 별도 찾도록 캐시
-          return mapped;
-        } catch {
-          return [];
-        }
-      },
+      loadGroupStars,
     }),
-    [isLoggedIn, accessToken, userEmail, entries, groups, groupStarCache, profile, session, ready, own, data.token, data.error, retryLoad, patch, setEntries, setGroups, epoch]
+    [isLoggedIn, accessToken, userEmail, entries, groups, groupCache, loadGroupStars, profile, session, ready, own, data.token, data.error, retryLoad, patch, setEntries, setGroups, epoch]
   );
 
   return <DiaryContext.Provider value={value}>{children}</DiaryContext.Provider>;
