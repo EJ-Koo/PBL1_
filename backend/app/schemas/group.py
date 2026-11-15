@@ -14,6 +14,9 @@ class GroupJoin(BaseModel):
 class GroupMember(BaseModel):
     user_id: str
     nickname: str | None = None
+    shared_day: str | None = None
+    shared_today: bool | None = None
+    shared_color: str | None = None
 
 
 class Group(BaseModel):

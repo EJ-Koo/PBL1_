@@ -58,6 +58,7 @@ export type SignupResult =
   | { ok: true; emailConfirmationRequired: boolean }
   | { ok: false; error: string };
 export type SaveResult = { ok: true } | { ok: false; error: string };
+export type CreateEntryResult = { ok: true; entryId: string } | { ok: false; error: string };
 
 type DiaryContextValue = {
   isLoggedIn: boolean;
@@ -81,7 +82,7 @@ type DiaryContextValue = {
     visibility: Visibility,
     groupIds?: string[],
     topic?: DiaryTopic | null
-  ) => Promise<SaveResult>;
+  ) => Promise<CreateEntryResult>;
   updateEntry: (
     id: string,
     text: string,
@@ -100,6 +101,7 @@ type DiaryContextValue = {
   leaveGroup: (groupId: string) => Promise<SaveResult>;
   /** 그룹 공유 우주: 멤버 전체가 이 그룹에 태그한 별을 불러온다(본인 것만이 아님). */
   loadGroupStars: (groupId: string) => Promise<DiaryEntry[]>;
+  refreshGroups: () => Promise<void>;
 };
 
 function isSameDay(timestamp: number) {
@@ -266,6 +268,15 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
   }, [accessToken, ready, epoch, reload, patch]);
   const retryLoad = useCallback(() => setReload(value => value + 1), []);
 
+  const refreshGroups = useCallback(async () => {
+    if (!accessToken) return;
+    const version = mutations.current.groups;
+    try {
+      const fresh = await apiListGroups(accessToken);
+      if (authSession.getRevision() === epoch && mutations.current.groups === version) setGroups(fresh);
+    } catch { /* Preserve previous data on transient outages; never invent an unwritten status. */ }
+  }, [accessToken, epoch, setGroups]);
+
   const value = useMemo<DiaryContextValue>(
     () => ({
       isLoggedIn,
@@ -334,7 +345,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
         visibility: Visibility,
         groupIds: string[] = [],
         topic: DiaryTopic | null = null
-      ): Promise<SaveResult> => {
+      ): Promise<CreateEntryResult> => {
         if (!accessToken) {
           return { ok: false, error: '로그인이 필요합니다.' };
         }
@@ -358,7 +369,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           }
           const entry = toEntry(created, entries.length, star);
           setEntries((prev) => [entry, ...prev]);
-          return { ok: true };
+          return { ok: true, entryId: entry.id };
         } catch (err) {
           return {
             ok: false,
@@ -475,9 +486,9 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           };
         }
       },
-      loadGroupStars,
+      loadGroupStars, refreshGroups,
     }),
-    [isLoggedIn, accessToken, userEmail, entries, groups, groupCreation, groupCache, loadGroupStars, profile, session, ready, own, data.token, data.error, retryLoad, patch, setEntries, setGroups, epoch]
+    [isLoggedIn, accessToken, userEmail, entries, groups, groupCreation, groupCache, loadGroupStars, refreshGroups, profile, session, ready, own, data.token, data.error, retryLoad, patch, setEntries, setGroups, epoch]
   );
 
   return <DiaryContext.Provider value={value}>{children}</DiaryContext.Provider>;

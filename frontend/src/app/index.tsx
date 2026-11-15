@@ -1,9 +1,11 @@
-import { GroupDiaryCard } from '@/components/ui/group-diary-card';
+import { DiaryUniverse } from '@/components/diary-universe';
+import { JoinGroupDialog } from '@/components/ui/join-group-dialog';
+import { NEW_STAR_HIGHLIGHT_MS, type NewStarHighlight } from '@/lib/new-star-highlight';
 import { authSession } from '@/lib/auth-session';
 import { useGroupUniverse } from '@/hooks/use-group-universe';
 import { useQuest } from '@/store/quest-context';
 import { QuestRewardAnimation } from '@/components/quest-reward-animation';
-import { Text, TextInput } from '@/components/app-text';
+import { Text } from '@/components/app-text';
 // [MODIFIED 2026-11-05] fffju 브랜치 index.jsx의 화면 구성·디자인으로 교체하고, 데이터는 서버(로그인)로 연결.
 //  - 화면: 가운데=나의 우주 / 왼쪽=일기 작성 / 오른쪽=그룹 우주 / 상점 (fffju 하단 네비·HUD·퀘스트 그대로)
 //  - 별·일기·그룹: 서버(useDiary). fffju의 기기 저장(useJournal)은 사용하지 않는다.
@@ -13,12 +15,12 @@ import { Text, TextInput } from '@/components/app-text';
 //  - 폰은 fffju 배율 그대로, 웹·PC는 폭 최대 520px 가운데 정렬(useDesignFrame).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { Modal, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { AppState, Modal, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 import { CreateGroupDialog } from '@/components/ui/create-group-dialog';
 import { SpaceButton } from '@/components/ui/space-ui';
 import { GroupMemberStars } from '@/components/ui/group-member-stars';
-import { getMemberStars } from '@/lib/group-attendance';
+import { getMemberStars, groupDayKey } from '@/lib/group-attendance';
 import { DiaryComposer } from '@/components/diary-composer';
 import { SearchScreen } from '@/components/search-screen';
 import { PopupWindow } from '@/components/ui/popup-window';
@@ -28,7 +30,6 @@ import { GroupSpaceScreen } from '@/components/ui/group-space-screen';
 import { HomeHud } from '@/components/ui/home-hud';
 import { QuestPanel } from '@/components/ui/quest-panel';
 import { UniverseBottomNav } from '@/components/ui/universe-bottom-nav';
-import { UniverseCanvas } from '@/components/universe-scene';
 import { DesignPaint } from '@/constants/ui-design';
 import { useDesignFrame } from '@/hooks/use-design-frame';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
@@ -41,7 +42,7 @@ import { useShop } from '@/store/shop-context';
 type Screen = 'home' | 'diary' | 'group';
 
 export default function HomeScreen() {
-  const { isLoggedIn, isRestoring, dataLoading, loadError, retryLoad, entries, groups, createGroup, joinGroup, leaveGroup, logout } = useDiary();
+  const { isLoggedIn, isRestoring, dataLoading, loadError, retryLoad, entries, groups, createGroup, joinGroup, leaveGroup, logout, refreshGroups } = useDiary();
   const { coins, activeEffects, refresh: refreshShop } = useShop();
   const { frameWidth } = useDesignFrame();
   const { refresh: refreshQuest, rewardEvent, clearReward } = useQuest();
@@ -50,6 +51,7 @@ export default function HomeScreen() {
   const { scale: rScale, chromeLeft, chromeWidth, headerTop } = useResponsiveLayout();
 
   const [screen, setScreen] = useState<Screen>('home');
+  const [newStar, setNewStar] = useState<NewStarHighlight | null>(null);
   const [questVisible, setQuestVisible] = useState(false);
   // [MODIFIED 2026-11-10] 상점은 별도 화면이 아니라 아래에서 올라오는 팝업
   const [shopVisible, setShopVisible] = useState(false);
@@ -72,8 +74,9 @@ export default function HomeScreen() {
   const [joinVisible, setJoinVisible] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
+  const joinLock = useRef(false);
   const [sensitivity, setSensitivity] = useState(getRotateSensitivity());
-  const [today, setToday] = useState(() => localDateKey(new Date()));
+  const [today, setToday] = useState(groupDayKey);
 
   useEffect(() => {
     if (!isRestoring && !isLoggedIn) router.replace('/login');
@@ -92,15 +95,29 @@ export default function HomeScreen() {
 
   // 자정이 지나면 퀘스트의 "오늘"을 갱신한다 (fffju 동작 유지).
   useEffect(() => {
-    const timer = setInterval(() => setToday(localDateKey(new Date())), 30000);
+    const timer = setInterval(() => setToday(groupDayKey()), 30000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (screen !== 'group' || !isLoggedIn) return;
+    void refreshGroups();
+    const timer = setInterval(() => { if (AppState.currentState !== 'background') void refreshGroups(); }, 30000);
+    const subscription = AppState.addEventListener('change', state => { if (state === 'active') void refreshGroups(); });
+    return () => { clearInterval(timer); subscription.remove(); };
+  }, [screen, isLoggedIn, refreshGroups]);
 
   // Keep this callback stable: setting the return target must not reopen the modal before navigation.
   useFocusEffect(useCallback(() => {
     const groupId = routeGroupId;
     if (groupId) { setScreen('group'); setActiveGroupId(groupId); }
   }, [routeGroupId]));
+
+  useEffect(() => {
+    if (!newStar) return;
+    const timer = setTimeout(() => setNewStar(null), Math.max(0, newStar.startedAt + NEW_STAR_HIGHLIGHT_MS - Date.now()));
+    return () => clearTimeout(timer);
+  }, [newStar]);
 
   if (isRestoring || !isLoggedIn) return <View style={styles.container} />;
 
@@ -109,6 +126,7 @@ export default function HomeScreen() {
   const activeGroup = groups.find((g) => g.id === activeGroupId) ?? null;
 
   const handleLogout = () => {
+    setNewStar(null);
     logout();
     router.replace('/login');
   };
@@ -133,11 +151,13 @@ export default function HomeScreen() {
   };
 
   const handleJoinGroup = async () => {
-    if (joining) return;
+    if (joinLock.current) return;
     const code = joinCode.trim();
     if (!code) return;
+    joinLock.current = true;
     setJoining(true);
     const result = await joinGroup(code);
+    joinLock.current = false;
     setJoining(false);
     if (!result.ok) {
       showMessage('참여 실패', result.error);
@@ -179,7 +199,7 @@ export default function HomeScreen() {
           <BackgroundTint effects={activeEffects} />
           {/* Comets sit behind the transparent 3D canvas so planets occlude them. */}
           <CometLayer effects={activeEffects} />
-          <UniverseCanvas sceneKey={`${authSession.getRevision()}:home`} entries={entries} onStarPress={(id) => router.push(`/planet/${id}`)} />
+          <DiaryUniverse sceneKey={`${authSession.getRevision()}:home`} entries={entries} newStar={newStar ?? undefined} onNewStarFound={() => setNewStar(null)} />
 
           {entries.length === 0 && (
             <View style={styles.emptyState} pointerEvents="none">
@@ -213,7 +233,7 @@ export default function HomeScreen() {
 
       {/* ===== 왼쪽: 일기 작성 — 다른 탭에 갔다 와도 쓰던 내용이 남도록 화면을 숨기기만 한다 ===== */}
       <View style={[styles.fill, screen !== 'diary' && styles.hidden]}>
-        <DiaryComposer scale={rScale} onBack={() => setScreen('home')} onSaved={() => setScreen('home')} />
+        <DiaryComposer scale={rScale} onBack={() => setScreen('home')} onSaved={id => { if (id) setNewStar({ id, startedAt: Date.now() }); setScreen('home'); }} />
       </View>
 
       {/* ===== 오른쪽: 그룹 우주 (반응형 그리드 — 전체 뷰포트, useResponsiveLayout 사용) ===== */}
@@ -247,15 +267,9 @@ export default function HomeScreen() {
       <Modal transparent={false} visible={activeGroup !== null} animationType="slide" onRequestClose={() => sharedDiaryId ? setSharedDiaryId(null) : setActiveGroupId(null)}>
         {activeGroup && (
           <View style={[styles.fill, styles.spaceBackground]}>
-            <UniverseCanvas
-              key={activeGroup.id}
-              sceneKey={`${authSession.getRevision()}:group-${activeGroup.id}`}
-              entries={groupStars}
-              backgroundStarScale={1.4}
-              onStarPress={(id) => {
-                if (groupStars.some(entry => entry.id === id)) setSharedDiaryId(id);
-              }}
-            />
+            <DiaryUniverse key={activeGroup.id} groupId={activeGroup.id}
+              sceneKey={`${authSession.getRevision()}:group-${activeGroup.id}`} entries={groupStars} backgroundStarScale={1.4}
+              selection={{ id: sharedDiaryId, onChange: setSharedDiaryId }} />
             {(groupLoading || groupError || groupStars.length === 0) && (
               <View style={styles.emptyState} pointerEvents={groupError ? 'auto' : 'none'}>
                 <Text style={styles.emptyText}>{groupError ?? (groupLoading ? '그룹의 별을 불러오는 중…' : '아직 이 그룹에 공유된 별이 없어요.')}</Text>
@@ -272,7 +286,6 @@ export default function HomeScreen() {
               <SpaceButton scale={rScale} label="친구 초대" onPress={() => { setConfirmLeave(false); setInviteVisible(true); }} />
               <GroupMemberStars scale={rScale} dark members={getMemberStars(activeGroup, entries, today)} />
             </View>
-            {sharedDiaryId && <GroupDiaryCard key={sharedDiaryId} id={sharedDiaryId} onClose={() => setSharedDiaryId(null)} />}
           </View>
         )}
       </Modal>
@@ -319,32 +332,8 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* ===== 코드로 그룹 참여 ===== */}
-      <Modal transparent visible={joinVisible} animationType="fade" onRequestClose={() => setJoinVisible(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setJoinVisible(false)}>
-          <TouchableOpacity activeOpacity={1} style={[styles.inviteModalCard, { width: Math.min(frameWidth * 0.82, 420) }]}>
-            <Text style={styles.inviteModalTitle}>🚀 코드로 그룹 참여</Text>
-            <Text style={styles.inviteModalDesc}>친구에게 받은 방 ID를 입력하면 그 그룹에 바로 참여해요.</Text>
-            <TextInput
-              style={styles.inviteInput}
-              placeholder="방 ID (예: ABCD2345)"
-              placeholderTextColor="#7f8c8d"
-              autoCapitalize="characters"
-              autoCorrect={false}
-              value={joinCode}
-              onChangeText={setJoinCode}
-            />
-            <View style={styles.inviteModalButtonRow}>
-              <TouchableOpacity style={styles.inviteCancelBtn} onPress={() => setJoinVisible(false)}>
-                <Text style={styles.whiteText}>취소</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.inviteConfirmBtn} onPress={handleJoinGroup} disabled={joining}>
-                <Text style={styles.inviteConfirmText}>{joining ? '참여 중…' : '참여하기'}</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+      <JoinGroupDialog visible={joinVisible} code={joinCode} joining={joining} onChangeCode={setJoinCode}
+        onClose={() => setJoinVisible(false)} onJoin={handleJoinGroup} />
 
       {/* ===== 퀘스트 (서버 진행률·보상 기록) ===== */}
       <Modal transparent visible={questVisible} animationType="fade" onRequestClose={() => setQuestVisible(false)}>

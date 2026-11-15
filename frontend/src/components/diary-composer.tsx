@@ -17,7 +17,7 @@ type Props = {
   // 있으면 그 일기를 수정, 없으면 새 일기
   editId?: string;
   onBack: () => void;
-  onSaved: () => void;
+  onSaved: (createdEntryId?: string) => void;
 };
 
 function dateLabelOf(timestamp: number) {
@@ -93,7 +93,7 @@ export function DiaryComposer({ scale, editId, onBack, onSaved }: Props) {
       setGroupIds([]);
       setTopic(null);
     }
-    onSaved();
+    onSaved('entryId' in result && typeof result.entryId === 'string' ? result.entryId : undefined);
   };
 
   return (

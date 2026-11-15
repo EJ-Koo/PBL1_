@@ -1,6 +1,7 @@
 import secrets
 import string
 from uuid import uuid5, NAMESPACE_URL
+from datetime import datetime, timedelta, timezone
 from postgrest.exceptions import APIError
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -31,6 +32,37 @@ def _nicknames(user_ids: list[str]) -> dict[str, str]:
     return {r["user_id"]: r["nickname"] for r in rows}
 
 
+def _shared_activity(group_ids: list[str]):
+    """Small batch summary only: no diary content, no AI calls, no private diaries."""
+    now = datetime.now(timezone(timedelta(hours=9)))
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    day = start.date().isoformat()
+    try:
+        rows = (supabase.table('diary_groups')
+                .select('group_id,diaries!inner(user_id,created_at,visibility,stars(color))')
+                .in_('group_id', group_ids)
+                .gte('diaries.created_at', start.astimezone(timezone.utc).isoformat())
+                .lt('diaries.created_at', (start + timedelta(days=1)).astimezone(timezone.utc).isoformat())
+                .in_('diaries.visibility', ['friends', 'public']).execute().data)
+        result = {}
+        for row in rows:
+            diary = row.get('diaries') or {}
+            if diary.get('visibility') not in ('friends', 'public'):
+                continue
+            created = datetime.fromisoformat(diary['created_at'].replace('Z', '+00:00'))
+            if not start <= created < start + timedelta(days=1):
+                continue
+            key = (row['group_id'], diary['user_id'])
+            stars = diary.get('stars') or []
+            star = stars[0] if isinstance(stars, list) and stars else stars if isinstance(stars, dict) else {}
+            if key not in result or created > result[key][0]:
+                result[key] = (created, star.get('color') or '#ffffff')
+        return day, result
+    except Exception:
+        # A missing summary must not look like "the member has not written".
+        return None, {}
+
+
 def _members_by_group(group_ids: list[str]) -> dict[str, list[dict]]:
     if not group_ids:
         return {}
@@ -43,10 +75,13 @@ def _members_by_group(group_ids: list[str]) -> dict[str, list[dict]]:
         .data
     )
     nick = _nicknames([r["user_id"] for r in rows])
+    day, activity = _shared_activity(group_ids)
     out: dict[str, list[dict]] = {}
     for r in rows:
         out.setdefault(r["group_id"], []).append(
-            {"user_id": r["user_id"], "nickname": nick.get(r["user_id"])}
+            {"user_id": r["user_id"], "nickname": nick.get(r["user_id"]),
+             "shared_day": day, "shared_today": (r['group_id'], r['user_id']) in activity if day else None,
+             "shared_color": activity.get((r['group_id'], r['user_id']), (None, None))[1]}
         )
     return out
 

@@ -26,14 +26,14 @@ const PLATFORM_CLIENT_ID = Platform.select({
   android: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
 });
 
-type Props = { variant?: 'default' | 'space' };
+type Props = { variant?: 'default' | 'space' | 'rounded' };
 
 export function GoogleAuthButton({ variant = 'default' }: Props) {
   if (!PLATFORM_CLIENT_ID) {
     return (
-      <Pressable style={[styles.button, variant === 'space' && styles.spaceButton, styles.disabled]} disabled accessibilityState={{ disabled: true }}>
+      <Pressable style={[styles.button, variant !== 'default' && styles.spaceButton, variant === 'rounded' && styles.roundedButton, styles.disabled]} disabled accessibilityState={{ disabled: true }}>
         {variant === 'space' && <AuthFieldFrame />}
-        <Text style={[styles.text, variant === 'space' && styles.spaceText]}>Google로 계속하기 (설정 필요)</Text>
+        <Text style={[styles.text, variant !== 'default' && styles.spaceText]}>Google로 계속하기 (설정 필요)</Text>
       </Pressable>
     );
   }
@@ -69,13 +69,13 @@ function GoogleAuthButtonInner({ variant }: Props) {
 
   return (
     <Pressable
-      style={[styles.button, variant === 'space' && styles.spaceButton, (!request || busy) && styles.disabled]}
+      style={[styles.button, variant !== 'default' && styles.spaceButton, variant === 'rounded' && styles.roundedButton, (!request || busy) && styles.disabled]}
       onPress={onPress}
       disabled={!request || busy}
     >
       {variant === 'space' && <AuthFieldFrame />}
-      {variant === 'space' && <Text style={styles.googleMark}>G</Text>}
-      <Text style={[styles.text, variant === 'space' && styles.spaceText]}>{busy ? '처리 중...' : 'Google로 계속하기'}</Text>
+      {variant !== 'default' && <Text style={styles.googleMark}>G</Text>}
+      <Text style={[styles.text, variant !== 'default' && styles.spaceText]}>{busy ? '처리 중...' : 'Google로 계속하기'}</Text>
     </Pressable>
   );
 }
@@ -91,6 +91,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   spaceButton: { maxWidth: undefined, height: 44, paddingVertical: 0, marginTop: 0, backgroundColor: 'transparent', borderRadius: 0, justifyContent: 'center', flexDirection: 'row', gap: 10 },
+  roundedButton: { maxWidth: '100%', height: 50, borderWidth: 1, borderColor: '#c8cbd5', borderRadius: 12, backgroundColor: '#12141b' },
   spaceText: { color: '#e4e5ed', fontSize: 12, zIndex: 1 },
   googleMark: { color: '#e4e5ed', fontSize: 20, fontWeight: '700', zIndex: 1 },
   disabled: {

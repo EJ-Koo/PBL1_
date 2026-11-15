@@ -8,6 +8,17 @@ const group = { diary_ids: ['a', 'b', 'c', 'yesterday'], members: [
 const entry = (id, authorId, hour, color = '#a39bff', day = 12) => ({
   id, authorId, color, createdAt: new Date(2026, 10, day, hour).getTime(),
 });
+test('another member lights from the server summary without downloading their diary text', () => {
+  const members = [{ user_id: 'friend', nickname: '친구', shared_day: '2026-11-15', shared_today: true, shared_color: '#ffaa33' }];
+  const stars = getMemberStars({ diary_ids: [], members }, [], '2026-11-15');
+  assert.deepEqual(stars[0], { id: 'friend', name: '친구', known: true, completed: true, color: '#ffaa33' });
+  assert.equal(getMemberStars({ diary_ids: [], members }, [], '2026-11-16')[0].completed, false);
+});
+test('server summary overrides stale locally cached completion after sharing is revoked', () => {
+  const members = [{ user_id: 'me', nickname: '나', shared_day: '2026-11-12', shared_today: false, shared_color: null }];
+  const stars = getMemberStars({ diary_ids: ['a'], members }, [entry('a', 'me', 10)], '2026-11-12');
+  assert.equal(stars[0].completed, false);assert.equal(stars[0].known, true);
+});
 test('uses the latest shared diary emotion, excludes private and previous-day diaries', () => {
   const entries = [entry('b', 'me', 14, '#ff5252'), entry('a', 'me', 10),
     entry('private', 'me', 17, '#000000'), entry('yesterday', 'other', 18, '#123456', 11)];
