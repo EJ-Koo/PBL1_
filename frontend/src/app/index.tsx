@@ -2,7 +2,7 @@ import { Text, TextInput } from '@/components/app-text';
 // [MODIFIED 2026-11-05] fffju 브랜치 index.jsx의 화면 구성·디자인으로 교체하고, 데이터는 서버(로그인)로 연결.
 //  - 화면: 가운데=나의 우주 / 왼쪽=일기 작성 / 오른쪽=그룹 우주 / 상점 (fffju 하단 네비·HUD·퀘스트 그대로)
 //  - 별·일기·그룹: 서버(useDiary). fffju의 기기 저장(useJournal)은 사용하지 않는다.
-//  - 별을 누르면 행성 상세(/planet/[id]), 메뉴의 검색·달력은 검색 화면(/search)으로 간다.
+//  - 별을 누르면 별 위 말풍선으로 일기를 표시한다. 검색 결과에서는 상세 화면을 열 수 있다.
 //  - 서버 기능이 아직 없는 테마·소리·알림은 화면만 보여주고 반응하지 않는다(나중에 하나씩 연결).
 //  - [MODIFIED 2026-11-07] 코인·상점은 서버 연결(useShop). HUD 코인을 누르면 상점, 장착한 배경·혜성이 나의 우주에 보인다.
 //  - 폰은 fffju 배율 그대로, 웹·PC는 폭 최대 520px 가운데 정렬(useDesignFrame).
@@ -23,12 +23,13 @@ import { GroupSpaceScreen } from '@/components/ui/group-space-screen';
 import { HomeHud } from '@/components/ui/home-hud';
 import { QuestPanel } from '@/components/ui/quest-panel';
 import { UniverseBottomNav } from '@/components/ui/universe-bottom-nav';
-import { UniverseCanvas } from '@/components/universe-scene';
+import { DiaryUniverse } from '@/components/diary-universe';
 import { DesignPaint } from '@/constants/ui-design';
 import { useDesignFrame } from '@/hooks/use-design-frame';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { showMessage } from '@/lib/feedback';
 import { localDateKey } from '@/lib/journal';
+import { NEW_STAR_HIGHLIGHT_MS, type NewStarHighlight } from '@/lib/new-star-highlight';
 import { getRotateSensitivity, loadSettings, setRotateSensitivity } from '@/lib/settings';
 import { useDiary } from '@/store/diary-context';
 import { useShop } from '@/store/shop-context';
@@ -44,6 +45,7 @@ export default function HomeScreen() {
   const { scale: rScale, chromeLeft, chromeWidth, headerTop } = useResponsiveLayout();
 
   const [screen, setScreen] = useState<Screen>('home');
+  const [newStar, setNewStar] = useState<NewStarHighlight | null>(null);
   const [questVisible, setQuestVisible] = useState(false);
   // [MODIFIED 2026-11-10] 상점은 별도 화면이 아니라 아래에서 올라오는 팝업
   const [shopVisible, setShopVisible] = useState(false);
@@ -84,6 +86,13 @@ export default function HomeScreen() {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (!newStar) return;
+    const timer = setTimeout(() => setNewStar(null),
+      Math.max(0, newStar.startedAt + NEW_STAR_HIGHLIGHT_MS - Date.now()));
+    return () => clearTimeout(timer);
+  }, [newStar]);
+
   if (isRestoring || !isLoggedIn) return <View style={styles.container} />;
 
   const checkCount = new Set(entries.map((e) => localDateKey(new Date(e.createdAt)))).size;
@@ -92,6 +101,7 @@ export default function HomeScreen() {
   const activeGroup = groups.find((g) => g.id === activeGroupId) ?? null;
 
   const handleLogout = () => {
+    setNewStar(null);
     logout();
     router.replace('/login');
   };
@@ -160,7 +170,7 @@ export default function HomeScreen() {
           <BackgroundTint effects={activeEffects} />
           {/* Comets sit behind the transparent 3D canvas so planets occlude them. */}
           <CometLayer effects={activeEffects} />
-          <UniverseCanvas entries={entries} onStarPress={(id) => router.push(`/planet/${id}`)} />
+          <DiaryUniverse entries={entries} newStar={newStar ?? undefined} onNewStarFound={() => setNewStar(null)} />
 
           {entries.length === 0 && (
             <View style={styles.emptyState} pointerEvents="none">
@@ -194,7 +204,10 @@ export default function HomeScreen() {
 
       {/* ===== 왼쪽: 일기 작성 — 다른 탭에 갔다 와도 쓰던 내용이 남도록 화면을 숨기기만 한다 ===== */}
       <View style={[styles.fill, screen !== 'diary' && styles.hidden]}>
-        <DiaryComposer scale={rScale} onBack={() => setScreen('home')} onSaved={() => setScreen('home')} />
+        <DiaryComposer scale={rScale} onBack={() => setScreen('home')} onSaved={(id) => {
+          if (id) setNewStar({ id, startedAt: Date.now() });
+          setScreen('home');
+        }} />
       </View>
 
       {/* ===== 오른쪽: 그룹 우주 (반응형 그리드 — 전체 뷰포트, useResponsiveLayout 사용) ===== */}
@@ -228,13 +241,10 @@ export default function HomeScreen() {
       <Modal transparent={false} visible={activeGroup !== null} animationType="slide" onRequestClose={() => setActiveGroupId(null)}>
         {activeGroup && (
           <View style={[styles.fill, styles.spaceBackground]}>
-            <UniverseCanvas
+            <DiaryUniverse
               sceneKey={`group-${activeGroup.id}`}
               entries={groupEntries(activeGroup.diary_ids)}
-              onStarPress={(id) => {
-                setActiveGroupId(null);
-                router.push(`/planet/${id}`);
-              }}
+              members={activeGroup.members}
             />
             {activeGroup.diary_ids.length === 0 && (
               <View style={styles.emptyState} pointerEvents="none">

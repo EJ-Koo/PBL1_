@@ -52,6 +52,7 @@ export type SignupResult =
   | { ok: true; emailConfirmationRequired: boolean }
   | { ok: false; error: string };
 export type SaveResult = { ok: true } | { ok: false; error: string };
+export type CreateEntryResult = { ok: true; entryId: string } | { ok: false; error: string };
 
 type DiaryContextValue = {
   isLoggedIn: boolean;
@@ -75,7 +76,7 @@ type DiaryContextValue = {
     visibility: Visibility,
     groupIds?: string[],
     topic?: DiaryTopic | null
-  ) => Promise<SaveResult>;
+  ) => Promise<CreateEntryResult>;
   updateEntry: (
     id: string,
     text: string,
@@ -296,7 +297,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
         visibility: Visibility,
         groupIds: string[] = [],
         topic: DiaryTopic | null = null
-      ): Promise<SaveResult> => {
+      ): Promise<CreateEntryResult> => {
         if (!accessToken) {
           return { ok: false, error: '로그인이 필요합니다.' };
         }
@@ -317,7 +318,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           if (groupList) setGroups(groupList);
           const entry = toEntry(created, entries.length, star);
           setEntries((prev) => [entry, ...prev]);
-          return { ok: true };
+          return { ok: true, entryId: entry.id };
         } catch (err) {
           return {
             ok: false,

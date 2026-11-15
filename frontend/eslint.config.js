@@ -14,7 +14,7 @@ module.exports = defineConfig([
       'react/no-unknown-property': ['warn', {
         ignore: ['position', 'args', 'uniforms', 'vertexShader', 'fragmentShader',
           'transparent', 'depthWrite', 'toneMapped', 'emissive',
-          'emissiveIntensity', 'roughness', 'intensity', 'attach', 'opacity', 'raycast'],
+          'emissiveIntensity', 'roughness', 'intensity', 'attach', 'opacity', 'raycast', 'map'],
       }],
     },
   },

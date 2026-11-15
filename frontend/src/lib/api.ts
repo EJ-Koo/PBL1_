@@ -144,6 +144,8 @@ export async function apiCreateDiary(
 export type ApiGroupMember = {
   user_id: string;
   nickname: string | null;
+  /** Optional until the server supports profile photos. Missing photos use the default avatar. */
+  avatar_url?: string | null;
 };
 
 export type ApiGroup = {
