@@ -11,7 +11,6 @@ export function DiaryBackFrame({ scale }: { scale: number }) {
         stroke={DesignPaint.ink}
         strokeWidth={1.5}
       />
-      <Path d="M26 15L21 20.5L26 26" fill="none" stroke={DesignPaint.ink} strokeWidth={1.4} />
     </Svg>
   );
 }
