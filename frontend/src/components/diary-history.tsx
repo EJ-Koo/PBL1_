@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { UniverseCanvas } from '@/components/universe-scene';
+import { DiaryUniverse } from '@/components/diary-universe';
 import { authSession } from '@/lib/auth-session';
 import { ArchiveCardArt } from '@/components/ui/archive-card-art';
+import { ArchiveHeading } from '@/components/ui/archive-heading';
 import { Text } from '@/components/app-text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFontScale } from '@/hooks/use-font-scale';
@@ -51,10 +52,7 @@ export function DiaryHistory() {
         <Pressable accessibilityRole="button" accessibilityLabel="이전 화면으로" onPress={back} style={styles.button}><Text style={styles.text}>‹ 뒤로</Text></Pressable>
         <Text style={styles.telemetry}>STAR2DAY / PERSONAL LOG</Text>
       </View>
-      <View style={styles.heading}>
-        <View style={styles.headingRow}><Text accessibilityRole="header" style={styles.title}>OUR ARCHIVE</Text><Text style={styles.stripes}>▰▰▰</Text></View>
-        <Text style={styles.eyebrow}>D I A R Y   A R C H I V E</Text>
-      </View>
+      <ArchiveHeading />
       {!period && <View style={styles.yearPicker}>
         <Pressable accessibilityRole="button" accessibilityLabel="이전 연도" disabled={selectedYear <= 100} accessibilityState={{ disabled: selectedYear <= 100 }} onPress={() => changeYear(-1)} style={[styles.yearArrow, selectedYear <= 100 && styles.disabled]}><Text style={styles.arrowText}>◀</Text></Pressable>
         <Text accessibilityLiveRegion="polite" accessibilityLabel={`${selectedYear}년`} style={styles.selectedYear}>{selectedYear}</Text>
@@ -70,10 +68,10 @@ export function DiaryHistory() {
         </ScrollView>
       ) : group ? (
         <View key={group.id} style={styles.universe}>
-          <UniverseCanvas
+          <DiaryUniverse
             entries={group.entries}
             sceneKey={`${authSession.getRevision()}:archive-${group.id}`}
-            onStarPress={id => router.push({ pathname: '/archive', params: { period: group.id, entry: id, year: String(selectedYear) } })}
+            popupInsets={{ top: 16, bottom: 56 }}
           />
           <View pointerEvents="none" style={styles.universeHint}>
             <Text style={styles.hintText}>{group.entries.length ? '드래그해서 둘러보고, 행성을 눌러 기록을 확인하세요.' : '이 기간에 저장된 기록이 없어요.'}</Text>

@@ -12,12 +12,14 @@ import type { StarPopupAnchor } from '@/lib/star-popup-layout';
 import { useDiary, toEntry, type DiaryEntry } from '@/store/diary-context';
 
 /** fffju's anchored UI, test's exact-ID permission checks, and a shared camera per login. */
-export function DiaryUniverse({ entries, sceneKey, groupId, selection, newStar, onNewStarFound, backgroundStarScale = 1, constellation, frontViewRequest }: {
+export function DiaryUniverse({ entries, sceneKey, groupId, selection, newStar, onNewStarFound, backgroundStarScale = 1, constellation, frontViewRequest, popupInsets }: {
   entries: DiaryEntry[]; sceneKey: string; groupId?: string;
   selection?: { id: string | null; onChange: (id: string | null) => void };
   newStar?: NewStarHighlight; onNewStarFound?: () => void; backgroundStarScale?: number;
   /** [2026-11-15] 별자리 보기(홈 우주에서만). 없으면 예전과 같다. */
   constellation?: ConstellationRequest | null; frontViewRequest?: number;
+  /** Insets inside this canvas when it sits below a separate page header. */
+  popupInsets?: { top: number; bottom: number };
 }) {
   const { isOwnEntry, isEditableToday, accessToken, profile } = useDiary();
   const revision = authSession.getRevision();
@@ -63,7 +65,7 @@ export function DiaryUniverse({ entries, sceneKey, groupId, selection, newStar, 
       selectedEntryId={entry?.id} onStarPositionChange={setAnchor} onBackgroundPress={close} backgroundStarScale={backgroundStarScale}
       constellation={constellation} frontViewRequest={frontViewRequest} />
     {resolved && anchor?.id === resolved.id && <StarDiaryPopup key={resolved.id} entry={resolved} anchor={anchor}
-      author={author} viewport={{ ...size, topInset: headerTop + 84 * scale, bottomInset: groupId ? 20 : bottomSpace }}
+      author={author} viewport={{ ...size, topInset: popupInsets?.top ?? headerTop + 84 * scale, bottomInset: popupInsets?.bottom ?? (groupId ? 20 : bottomSpace) }}
       owned={owned} editable={owned && isEditableToday(resolved.id)} loading={!!groupId && !verified} error={verified?.error}
       onRetry={() => setAttempt(value => value + 1)} onClose={close}
       onEdit={() => { close(); router.push(`/write?id=${resolved.id}`); }}
