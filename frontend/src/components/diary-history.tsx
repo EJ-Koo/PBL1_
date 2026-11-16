@@ -5,7 +5,7 @@ import Svg, { Circle, Defs, Ellipse, Path, RadialGradient, Rect, Stop } from 're
 import { Text } from '@/components/app-text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DesignFonts } from '@/constants/ui-design';
-import { groupArchive } from '@/lib/diary-archive';
+import { ARCHIVE_QUARTERS, groupArchive } from '@/lib/diary-archive';
 import { goBackSafe } from '@/lib/navigation';
 import { useDiary } from '@/store/diary-context';
 
@@ -47,7 +47,7 @@ export function DiaryHistory() {
         <View style={styles.headingRow}><Text accessibilityRole="header" style={styles.title}>OUR ARCHIVE</Text><Text style={styles.stripes}>▰▰▰</Text></View>
         <Text style={styles.eyebrow}>D I A R Y   A R C H I V E</Text>
       </View>
-      <Text style={styles.subtitle}>{group ? `${group.year} · ${group.half === 1 ? 'JAN – JUN' : 'JUL – DEC'} / ${group.entries.length}개의 기록` : '지난 기록들을 6개월 단위로 모아볼 수 있어요.'}</Text>
+      <Text style={styles.subtitle}>{group ? `${group.year} · ${ARCHIVE_QUARTERS[group.quarter - 1].label} / ${group.entries.length}개의 기록` : '지난 기록들을 3개월 단위로 모아볼 수 있어요.'}</Text>
       {dataLoading ? <ActivityIndicator color="#fff" accessibilityLabel="기록 불러오는 중" /> : loadError ? <View style={styles.message}>
         <Text style={styles.text}>{loadError}</Text><Pressable accessibilityRole="button" onPress={retryLoad} style={styles.button}><Text style={styles.text}>다시 시도</Text></Pressable>
       </View> : (period && !group) || (entryId && !selected) ? <Text style={styles.message}>기록을 찾을 수 없어요. 뒤로 가서 다시 선택해주세요.</Text> : selected ? (
@@ -64,10 +64,10 @@ export function DiaryHistory() {
       ) : (
         <FlatList key="periods" data={groups} keyExtractor={item => item.id} contentContainerStyle={styles.content}
           ListEmptyComponent={<Text style={styles.message}>아직 저장된 기록이 없어요.{'\n'}오늘의 이야기를 별로 남겨보세요.</Text>}
-          renderItem={({ item, index }) => <Pressable accessibilityRole="button" accessibilityLabel={`${item.year}년 ${item.half === 1 ? '상반기' : '하반기'}, 기록 ${item.entries.length}개`} onPress={() => router.push({ pathname: '/archive', params: { period: item.id } })} style={styles.card}>
+          renderItem={({ item, index }) => <Pressable accessibilityRole="button" accessibilityLabel={`${item.year}년 ${item.quarter}분기, 기록 ${item.entries.length}개`} onPress={() => router.push({ pathname: '/archive', params: { period: item.id } })} style={styles.card}>
             <View style={StyleSheet.absoluteFill}><CardArt index={index} /></View>
-            <Text style={styles.year}>{item.year}</Text><Text style={styles.period}>{item.half === 1 ? 'JAN – JUN' : 'JUL – DEC'}</Text>
-            <View style={styles.cardFoot}><Text style={styles.range}>{item.half === 1 ? '01.01 – 06.30' : '07.01 – 12.31'}</Text><Text style={styles.count}>{item.entries.length} ENTRIES　 ›</Text></View>
+            <Text style={styles.year}>{item.year}</Text><Text style={styles.period}>{ARCHIVE_QUARTERS[item.quarter - 1].label}</Text>
+            <View style={styles.cardFoot}><Text style={styles.range}>{ARCHIVE_QUARTERS[item.quarter - 1].range}</Text><Text style={styles.count}>{item.entries.length} ENTRIES　 ›</Text></View>
           </Pressable>} />
       )}
       <View style={styles.footer}><Text style={styles.stripes}>▰▰</Text><Text style={styles.footerLabel}>기록 아카이브</Text><Text style={styles.stripes}>▰▰</Text></View>
