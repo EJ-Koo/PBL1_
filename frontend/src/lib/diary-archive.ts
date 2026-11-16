@@ -1,8 +1,8 @@
 export const ARCHIVE_QUARTERS = [
-  { label: 'JAN – MAR', range: '01.01 – 03.31' },
-  { label: 'APR – JUN', range: '04.01 – 06.30' },
-  { label: 'JUL – SEP', range: '07.01 – 09.30' },
-  { label: 'OCT – DEC', range: '10.01 – 12.31' },
+  { label: 'SPRING', range: '01.01 – 03.31' },
+  { label: 'SUMMER', range: '04.01 – 06.30' },
+  { label: 'AUTUMN', range: '07.01 – 09.30' },
+  { label: 'WINTER', range: '10.01 – 12.31' },
 ] as const;
 
 export function groupArchive<T extends { id: string; createdAt: number }>(entries: readonly T[], now: number = Date.now(), selectedYear?: number) {
@@ -23,7 +23,7 @@ export function groupArchive<T extends { id: string; createdAt: number }>(entrie
     if (!groups.has(id)) groups.set(id, { id, year, quarter, entries: [] });
     groups.get(id)!.entries.push(entry);
   }
-  return [...groups.values()].sort((a, b) => b.year - a.year || b.quarter - a.quarter)
+  return [...groups.values()].sort((a, b) => b.year - a.year || a.quarter - b.quarter)
     .map(group => {
       const unlockAt = new Date(group.year, (group.quarter - 1) * 3, 1).getTime();
       const locked = now < unlockAt;

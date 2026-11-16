@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, FlatList, Image, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { UniverseCanvas } from '@/components/universe-scene';
+import { authSession } from '@/lib/auth-session';
 import { ArchiveCardArt } from '@/components/ui/archive-card-art';
 import { Text } from '@/components/app-text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -67,12 +69,16 @@ export function DiaryHistory() {
           {selected.photos.map((photo, index) => <Image key={photo.id} source={{ uri: photo.uri }} accessibilityLabel={`일기 사진 ${index + 1}`} resizeMode="contain" style={styles.photo} />)}
         </ScrollView>
       ) : group ? (
-        <FlatList key={group.id} data={group.entries} keyExtractor={item => item.id} contentContainerStyle={styles.content}
-          ListEmptyComponent={<Text style={styles.message}>이 기간에 저장된 기록이 없어요.</Text>}
-          renderItem={({ item }) => <Pressable accessibilityRole="button" accessibilityLabel={`${dateLabel(item.createdAt)} 기록 보기`} onPress={() => router.push({ pathname: '/archive', params: { period, entry: item.id, year: String(selectedYear) } })} style={styles.entry}>
-            <Text style={styles.date}>{dateLabel(item.createdAt)}  ›</Text><Text style={styles.body} numberOfLines={3}>{item.text}</Text>
-            {item.photos.length > 0 && <Text style={styles.subtitle}>사진 {item.photos.length}장</Text>}
-          </Pressable>} />
+        <View key={group.id} style={styles.universe}>
+          <UniverseCanvas
+            entries={group.entries}
+            sceneKey={`${authSession.getRevision()}:archive-${group.id}`}
+            onStarPress={id => router.push({ pathname: '/archive', params: { period: group.id, entry: id, year: String(selectedYear) } })}
+          />
+          <View pointerEvents="none" style={styles.universeHint}>
+            <Text style={styles.hintText}>{group.entries.length ? '드래그해서 둘러보고, 행성을 눌러 기록을 확인하세요.' : '이 기간에 저장된 기록이 없어요.'}</Text>
+          </View>
+        </View>
       ) : (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.cards, { minHeight: 4 * minCardHeight + 38 }]} onLayout={e => setCardsHeight(e.nativeEvent.layout.height)}>
           {groups.map((item, index) => <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`${item.year}년 ${item.quarter}분기, ${item.locked ? '잠김' : `기록 ${item.entries.length}개`}`} disabled={item.locked} accessibilityState={{ disabled: item.locked }} onPress={() => router.push({ pathname: '/archive', params: { period: item.id, year: String(selectedYear) } })} style={[styles.card, { minHeight: minCardHeight, maxHeight: Math.max(145, minCardHeight) }]}>
@@ -108,6 +114,9 @@ const styles = StyleSheet.create({
   stripes: { color: '#d3d4da', fontSize: 20 },
   eyebrow: { color: '#9b9ca8', fontSize: 9, marginTop: 8 },
   subtitle: { color: '#b5b5bf', fontSize: 12, lineHeight: 20, marginVertical: 8 },
+  universe: { flex: 1, minHeight: 0, position: 'relative' },
+  universeHint: { position: 'absolute', bottom: 12, left: 12, right: 12, alignItems: 'center' },
+  hintText: { color: '#b5b5bf', fontSize: 12, lineHeight: 20, textAlign: 'center', backgroundColor: '#050507cc', padding: 8 },
   content: { paddingBottom: 24 },
   cards: { flexGrow: 1, gap: 10, paddingBottom: 8 },
   card: { flex: 1, minHeight: 0, maxHeight: 145, overflow: 'hidden' },
