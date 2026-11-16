@@ -33,6 +33,7 @@ export default function RootLayout() {
             <Stack.Screen name="signup" />
             <Stack.Screen name="index" />
             <Stack.Screen name="search" />
+            <Stack.Screen name="archive" />
             <Stack.Screen name="write" />
             <Stack.Screen name="planet/[id]" />
             <Stack.Screen name="admin/login" />

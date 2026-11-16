@@ -15,7 +15,7 @@ import {
 import { DesignFonts, DesignPaint } from '@/constants/ui-design';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { MAX_PHOTOS, type Photo } from '@/lib/journal';
-import { DiaryHistory } from '@/components/diary-history';
+import { router } from 'expo-router';
 
 type Props = {
   scale: number;
@@ -48,7 +48,6 @@ export function DiaryWriteScreen({
 }: Props) {
   const insets = useSafeAreaInsets();
   const [preview, setPreview] = useState<Photo | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
   const topicList = useRef<ScrollView>(null);
   const [topicScroll, setTopicScroll] = useState({ width: 0, content: 0, offset: 0 });
   const { contentLeft, contentWidth, headerTop, bottomSpace } = useResponsiveLayout();
@@ -71,9 +70,9 @@ export function DiaryWriteScreen({
         <View style={{ marginLeft: 17 * scale, width: 360 * scale, height: 40 * scale, marginBottom: 30 * scale }}>
           <DiaryBackFrame scale={scale} />
           <TouchableOpacity accessibilityRole="button" accessibilityLabel="지난 기록 열기"
-            onPress={() => { Keyboard.dismiss(); setHistoryOpen(true); }}
+            onPress={() => { Keyboard.dismiss(); router.push('/archive'); }}
             style={[styles.positioned, box(12, 0, 150, 40), { justifyContent: 'center' }]}>
-            <Text style={[styles.text, styles.backText, type(20, 26)]}>지난 기록</Text>
+            <Text style={[styles.text, styles.backText, type(20, 26)]}>‹ 지난 기록</Text>
           </TouchableOpacity>
           <TouchableOpacity accessibilityRole="button" accessibilityLabel="나의 우주로 이동" onPress={onBack}
             style={[styles.positioned, box(198, 0, 150, 40), { justifyContent: 'center', alignItems: 'flex-end' }]}>
@@ -219,7 +218,6 @@ export function DiaryWriteScreen({
           <Text style={[styles.positioned, styles.text, styles.submitText, box(0, 19, 344, 24), type(14, 22)]}>{saving ? '저장 중…' : '오늘의 별 띄우기'}</Text>
         </TouchableOpacity>
       </ScrollView>
-      {historyOpen && <DiaryHistory onClose={() => setHistoryOpen(false)} />}
       <Modal visible={preview !== null} transparent animationType="fade" onRequestClose={() => setPreview(null)}>
         <View style={{ flex: 1, backgroundColor: '#000e', paddingTop: insets.top, paddingBottom: insets.bottom }}>
           <TouchableOpacity accessibilityLabel="사진 미리보기 닫기" onPress={() => setPreview(null)} style={{ padding: 20, alignSelf: 'flex-end' }}>
