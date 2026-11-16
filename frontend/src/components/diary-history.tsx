@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, FlatList, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Defs, Ellipse, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { Text } from '@/components/app-text';
@@ -25,15 +25,27 @@ function CardArt({ index }: { index: number }) {
 
 export function DiaryHistory() {
   const { entries, dataLoading, loadError, retryLoad, isLoggedIn } = useDiary();
-  const { period, entry: entryId } = useLocalSearchParams<{ period?: string; entry?: string }>();
+  const { period, entry: entryId, year } = useLocalSearchParams<{ period?: string; entry?: string; year?: string }>();
   const insets = useSafeAreaInsets();
-  const groups = useMemo(() => groupArchive(entries), [entries]);
+  const [now, setNow] = useState(() => Date.now());
+  useFocusEffect(useCallback(() => { setNow(Date.now()); }, []));
+  useEffect(() => {
+    const date = new Date(now);
+    const nextQuarter = new Date(date.getFullYear(), (Math.floor(date.getMonth() / 3) + 1) * 3, 1).getTime();
+    const timer = setTimeout(() => setNow(Date.now()), Math.max(1, Math.min(86400000, nextQuarter - Date.now())));
+    return () => clearTimeout(timer);
+  }, [now]);
+  const currentYear = new Date(now).getFullYear();
+  const requestedYear = Number(period?.split('-Q')[0] ?? year);
+  const selectedYear = Number.isInteger(requestedYear) && requestedYear >= 100 && requestedYear <= 9999 ? requestedYear : currentYear;
+  const groups = useMemo(() => groupArchive(entries, now, selectedYear), [entries, now, selectedYear]);
+  const changeYear = (direction: number) => router.setParams({ year: String(selectedYear + direction), period: undefined, entry: undefined });
   const group = groups.find(item => item.id === period);
   const selected = group?.entries.find(item => item.id === entryId);
   const back = () => {
     if (router.canGoBack()) router.back();
-    else if (entryId) router.replace({ pathname: '/archive', params: { period } });
-    else if (period) router.replace('/archive');
+    else if (entryId) router.replace({ pathname: '/archive', params: { period, year: String(selectedYear) } });
+    else if (period) router.replace({ pathname: '/archive', params: { year: String(selectedYear) } });
     else goBackSafe();
   };
   if (!isLoggedIn) return <View style={styles.screen} />;
@@ -47,27 +59,33 @@ export function DiaryHistory() {
         <View style={styles.headingRow}><Text accessibilityRole="header" style={styles.title}>OUR ARCHIVE</Text><Text style={styles.stripes}>▰▰▰</Text></View>
         <Text style={styles.eyebrow}>D I A R Y   A R C H I V E</Text>
       </View>
+      {!period && <View style={styles.yearPicker}>
+        <Pressable accessibilityRole="button" accessibilityLabel="이전 연도" disabled={selectedYear <= 100} accessibilityState={{ disabled: selectedYear <= 100 }} onPress={() => changeYear(-1)} style={[styles.yearArrow, selectedYear <= 100 && styles.disabled]}><Text style={styles.arrowText}>◀</Text></Pressable>
+        <Text accessibilityLiveRegion="polite" accessibilityLabel={`${selectedYear}년`} style={styles.selectedYear}>{selectedYear}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="다음 연도" disabled={selectedYear >= currentYear} accessibilityState={{ disabled: selectedYear >= currentYear }} onPress={() => changeYear(1)} style={[styles.yearArrow, selectedYear >= currentYear && styles.disabled]}><Text style={styles.arrowText}>▶</Text></Pressable>
+      </View>}
       <Text style={styles.subtitle}>{group ? `${group.year} · ${ARCHIVE_QUARTERS[group.quarter - 1].label} / ${group.entries.length}개의 기록` : '지난 기록들을 3개월 단위로 모아볼 수 있어요.'}</Text>
       {dataLoading ? <ActivityIndicator color="#fff" accessibilityLabel="기록 불러오는 중" /> : loadError ? <View style={styles.message}>
         <Text style={styles.text}>{loadError}</Text><Pressable accessibilityRole="button" onPress={retryLoad} style={styles.button}><Text style={styles.text}>다시 시도</Text></Pressable>
-      </View> : (period && !group) || (entryId && !selected) ? <Text style={styles.message}>기록을 찾을 수 없어요. 뒤로 가서 다시 선택해주세요.</Text> : selected ? (
+      </View> : group?.locked ? <Text style={styles.message}>🔒 {dateLabel(group.unlockAt)}부터 열려요.</Text> : (period && !group) || (entryId && !selected) ? <Text style={styles.message}>기록을 찾을 수 없어요. 뒤로 가서 다시 선택해주세요.</Text> : selected ? (
         <ScrollView key={selected.id} contentContainerStyle={styles.content}>
           <Text style={styles.date}>{dateLabel(selected.createdAt)}</Text><Text selectable style={styles.body}>{selected.text}</Text>
           {selected.photos.map((photo, index) => <Image key={photo.id} source={{ uri: photo.uri }} accessibilityLabel={`일기 사진 ${index + 1}`} resizeMode="contain" style={styles.photo} />)}
         </ScrollView>
       ) : group ? (
         <FlatList key={group.id} data={group.entries} keyExtractor={item => item.id} contentContainerStyle={styles.content}
-          renderItem={({ item }) => <Pressable accessibilityRole="button" accessibilityLabel={`${dateLabel(item.createdAt)} 기록 보기`} onPress={() => router.push({ pathname: '/archive', params: { period, entry: item.id } })} style={styles.entry}>
+          ListEmptyComponent={<Text style={styles.message}>이 기간에 저장된 기록이 없어요.</Text>}
+          renderItem={({ item }) => <Pressable accessibilityRole="button" accessibilityLabel={`${dateLabel(item.createdAt)} 기록 보기`} onPress={() => router.push({ pathname: '/archive', params: { period, entry: item.id, year: String(selectedYear) } })} style={styles.entry}>
             <Text style={styles.date}>{dateLabel(item.createdAt)}  ›</Text><Text style={styles.body} numberOfLines={3}>{item.text}</Text>
             {item.photos.length > 0 && <Text style={styles.subtitle}>사진 {item.photos.length}장</Text>}
           </Pressable>} />
       ) : (
-        <FlatList key="periods" data={groups} keyExtractor={item => item.id} contentContainerStyle={styles.content}
+        <FlatList key={`periods-${selectedYear}`} data={groups} keyExtractor={item => item.id} contentContainerStyle={styles.content}
           ListEmptyComponent={<Text style={styles.message}>아직 저장된 기록이 없어요.{'\n'}오늘의 이야기를 별로 남겨보세요.</Text>}
-          renderItem={({ item, index }) => <Pressable accessibilityRole="button" accessibilityLabel={`${item.year}년 ${item.quarter}분기, 기록 ${item.entries.length}개`} onPress={() => router.push({ pathname: '/archive', params: { period: item.id } })} style={styles.card}>
-            <View style={StyleSheet.absoluteFill}><CardArt index={index} /></View>
+          renderItem={({ item, index }) => <Pressable accessibilityRole="button" accessibilityLabel={`${item.year}년 ${item.quarter}분기, ${item.locked ? '잠김' : `기록 ${item.entries.length}개`}`} disabled={item.locked} accessibilityState={{ disabled: item.locked }} onPress={() => router.push({ pathname: '/archive', params: { period: item.id, year: String(selectedYear) } })} style={[styles.card, item.locked && styles.lockedCard]}>
+            {!item.locked && <View style={StyleSheet.absoluteFill}><CardArt index={index} /></View>}
             <Text style={styles.year}>{item.year}</Text><Text style={styles.period}>{ARCHIVE_QUARTERS[item.quarter - 1].label}</Text>
-            <View style={styles.cardFoot}><Text style={styles.range}>{ARCHIVE_QUARTERS[item.quarter - 1].range}</Text><Text style={styles.count}>{item.entries.length} ENTRIES　 ›</Text></View>
+            <View style={styles.cardFoot}><Text style={styles.range}>{ARCHIVE_QUARTERS[item.quarter - 1].range}</Text><Text style={styles.count}>{item.locked ? `🔒 ${(item.quarter - 1) * 3 + 1}월 1일 열림` : `${item.entries.length} ENTRIES　 ›`}</Text></View>
           </Pressable>} />
       )}
       <View style={styles.footer}><Text style={styles.stripes}>▰▰</Text><Text style={styles.footerLabel}>기록 아카이브</Text><Text style={styles.stripes}>▰▰</Text></View>
@@ -75,6 +93,11 @@ export function DiaryHistory() {
   </View>;
 }
 const styles = StyleSheet.create({
+  yearPicker: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 24, marginTop: 20 },
+  yearArrow: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  arrowText: { color: '#ddd', fontSize: 25 },
+  selectedYear: { color: '#eee', fontFamily: DesignFonts.regular, fontSize: 25, minWidth: 76, textAlign: 'center' },
+  disabled: { opacity: 0.25 },
   screen: { flex: 1, backgroundColor: '#050507' },
   shell: { flex: 1, width: '100%', maxWidth: 600, alignSelf: 'center', paddingHorizontal: 24 },
   text: { color: '#eee', fontFamily: DesignFonts.regular, fontSize: 16 },
@@ -88,6 +111,7 @@ const styles = StyleSheet.create({
   eyebrow: { color: '#9b9ca8', fontSize: 9, marginTop: 8 },
   subtitle: { color: '#b5b5bf', fontSize: 12, lineHeight: 20, marginVertical: 18 },
   content: { paddingBottom: 24 },
+  lockedCard: { backgroundColor: '#393a40', borderWidth: 1, borderColor: '#666' },
   card: { minHeight: 150, padding: 24, justifyContent: 'center', marginBottom: 14, overflow: 'hidden' },
   year: { color: '#d7d8df', fontSize: 14, marginBottom: 4 },
   period: { color: '#fff', fontSize: 25, fontFamily: DesignFonts.bold, letterSpacing: 1 },
