@@ -1,32 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, FlatList, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import Svg, { Circle, Defs, Ellipse, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { ActivityIndicator, FlatList, Image, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ArchiveCardArt } from '@/components/ui/archive-card-art';
 import { Text } from '@/components/app-text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFontScale } from '@/hooks/use-font-scale';
 import { DesignFonts } from '@/constants/ui-design';
 import { ARCHIVE_QUARTERS, groupArchive } from '@/lib/diary-archive';
 import { goBackSafe } from '@/lib/navigation';
 import { useDiary } from '@/store/diary-context';
 
 const dateLabel = (time: number) => new Date(time).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
-function CardArt({ index }: { index: number }) {
-  const color = ['#8d9fff', '#c49bad', '#a6b8e5', '#cab58c'][index % 4];
-  return <Svg width="100%" height="100%" viewBox="0 0 400 150" preserveAspectRatio="none" pointerEvents="none">
-    <Defs><RadialGradient id={`planet-${index}`}><Stop offset="0" stopColor="#090a14" /><Stop offset="0.88" stopColor={color} stopOpacity="0.2" /><Stop offset="1" stopColor={color} stopOpacity="0.8" /></RadialGradient></Defs>
-    <Path d="M12 1H388L399 12V138L388 149H12L1 138V12Z" fill="#0b0c14" stroke="#989ba6" />
-    {Array.from({ length: 20 }, (_, i) => <Circle key={i} cx={180 + i * 67 % 210} cy={10 + i * 37 % 130} r={0.7} fill="#fff" opacity={0.3} />)}
-    <Circle cx="310" cy="160" r="100" fill={`url(#planet-${index})`} />
-    <Ellipse cx="300" cy="138" rx="94" ry="13" rotation="-18" origin="300, 138" fill="none" stroke={color} strokeOpacity="0.35" />
-    <Rect x="12" y="110" width="376" height="38" fill="#080910" opacity="0.3" />
-    <Path d="M20 6L25 1 M27 6L32 1 M34 6L39 1 M41 6L46 1" stroke="#fff" strokeWidth="2" />
-  </Svg>;
-}
 
 export function DiaryHistory() {
   const { entries, dataLoading, loadError, retryLoad, isLoggedIn } = useDiary();
   const { period, entry: entryId, year } = useLocalSearchParams<{ period?: string; entry?: string; year?: string }>();
   const insets = useSafeAreaInsets();
+  const [cardsHeight, setCardsHeight] = useState(480);
+  const compact = cardsHeight < 390;
+  const appFontScale = useFontScale();
+  const { fontScale } = useWindowDimensions();
+  const minCardHeight = 76 * Math.max(1, appFontScale * fontScale);
   const [now, setNow] = useState(() => Date.now());
   useFocusEffect(useCallback(() => { setNow(Date.now()); }, []));
   useEffect(() => {
@@ -80,49 +74,55 @@ export function DiaryHistory() {
             {item.photos.length > 0 && <Text style={styles.subtitle}>사진 {item.photos.length}장</Text>}
           </Pressable>} />
       ) : (
-        <FlatList key={`periods-${selectedYear}`} data={groups} keyExtractor={item => item.id} contentContainerStyle={styles.content}
-          ListEmptyComponent={<Text style={styles.message}>아직 저장된 기록이 없어요.{'\n'}오늘의 이야기를 별로 남겨보세요.</Text>}
-          renderItem={({ item, index }) => <Pressable accessibilityRole="button" accessibilityLabel={`${item.year}년 ${item.quarter}분기, ${item.locked ? '잠김' : `기록 ${item.entries.length}개`}`} disabled={item.locked} accessibilityState={{ disabled: item.locked }} onPress={() => router.push({ pathname: '/archive', params: { period: item.id, year: String(selectedYear) } })} style={[styles.card, item.locked && styles.lockedCard]}>
-            {!item.locked && <View style={StyleSheet.absoluteFill}><CardArt index={index} /></View>}
-            <Text style={styles.year}>{item.year}</Text><Text style={styles.period}>{ARCHIVE_QUARTERS[item.quarter - 1].label}</Text>
-            <View style={styles.cardFoot}><Text style={styles.range}>{ARCHIVE_QUARTERS[item.quarter - 1].range}</Text><Text style={styles.count}>{item.locked ? `🔒 ${(item.quarter - 1) * 3 + 1}월 1일 열림` : `${item.entries.length} ENTRIES　 ›`}</Text></View>
-          </Pressable>} />
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.cards, { minHeight: 4 * minCardHeight + 38 }]} onLayout={e => setCardsHeight(e.nativeEvent.layout.height)}>
+          {groups.map((item, index) => <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`${item.year}년 ${item.quarter}분기, ${item.locked ? '잠김' : `기록 ${item.entries.length}개`}`} disabled={item.locked} accessibilityState={{ disabled: item.locked }} onPress={() => router.push({ pathname: '/archive', params: { period: item.id, year: String(selectedYear) } })} style={[styles.card, { minHeight: minCardHeight, maxHeight: Math.max(145, minCardHeight) }]}>
+            <View style={StyleSheet.absoluteFill}><ArchiveCardArt index={index} locked={item.locked}/></View>
+            <View style={styles.cardCopy}>
+              <Text style={[styles.year, compact && {fontSize:10}]}>{item.year}</Text>
+              <Text numberOfLines={1} style={[styles.period, compact && {fontSize:17}]}>{ARCHIVE_QUARTERS[item.quarter - 1].label}</Text>
+              <Text style={[styles.range, compact && {fontSize:8, marginTop:4}]}>{ARCHIVE_QUARTERS[item.quarter - 1].range}</Text>
+            </View>
+            <View style={styles.countBadge}><Text numberOfLines={1} style={[styles.count, compact && {fontSize:7}]}>{item.locked ? `🔒 ${(item.quarter - 1) * 3 + 1}월 1일 열림` : `${item.entries.length} ENTRIES`}</Text></View>
+          </Pressable>)}
+        </ScrollView>
       )}
       <View style={styles.footer}><Text style={styles.stripes}>▰▰</Text><Text style={styles.footerLabel}>기록 아카이브</Text><Text style={styles.stripes}>▰▰</Text></View>
     </View>
   </View>;
 }
 const styles = StyleSheet.create({
-  yearPicker: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 24, marginTop: 20 },
+  yearPicker: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 24, marginTop: 6 },
   yearArrow: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   arrowText: { color: '#ddd', fontSize: 25 },
   selectedYear: { color: '#eee', fontFamily: DesignFonts.regular, fontSize: 25, minWidth: 76, textAlign: 'center' },
   disabled: { opacity: 0.25 },
   screen: { flex: 1, backgroundColor: '#050507' },
-  shell: { flex: 1, width: '100%', maxWidth: 600, alignSelf: 'center', paddingHorizontal: 24 },
+  shell: { flex: 1, width: '100%', maxWidth: 520, alignSelf: 'center', paddingHorizontal: 20 },
   text: { color: '#eee', fontFamily: DesignFonts.regular, fontSize: 16 },
-  topbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#55565e', paddingVertical: 8, gap: 12 },
+  topbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#55565e', paddingVertical: 2, gap: 12 },
   button: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 6 },
   telemetry: { color: '#999ba5', fontSize: 9, letterSpacing: 1, flexShrink: 1 },
-  heading: { borderWidth: 1, borderColor: '#92949d', padding: 14, marginTop: 30 },
+  heading: { borderWidth: 1, borderColor: '#92949d', padding: 10, marginTop: 12 },
   headingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  title: { color: '#f1f1f3', fontFamily: DesignFonts.bold, fontSize: 23, letterSpacing: -0.8, flexShrink: 1 },
+  title: { color: '#f1f1f3', fontFamily: DesignFonts.bold, fontSize: 21, letterSpacing: -0.8, flexShrink: 1 },
   stripes: { color: '#d3d4da', fontSize: 20 },
   eyebrow: { color: '#9b9ca8', fontSize: 9, marginTop: 8 },
-  subtitle: { color: '#b5b5bf', fontSize: 12, lineHeight: 20, marginVertical: 18 },
+  subtitle: { color: '#b5b5bf', fontSize: 12, lineHeight: 20, marginVertical: 8 },
   content: { paddingBottom: 24 },
-  lockedCard: { backgroundColor: '#393a40', borderWidth: 1, borderColor: '#666' },
-  card: { minHeight: 150, padding: 24, justifyContent: 'center', marginBottom: 14, overflow: 'hidden' },
-  year: { color: '#d7d8df', fontSize: 14, marginBottom: 4 },
-  period: { color: '#fff', fontSize: 25, fontFamily: DesignFonts.bold, letterSpacing: 1 },
+  cards: { flexGrow: 1, gap: 10, paddingBottom: 8 },
+  card: { flex: 1, minHeight: 0, maxHeight: 145, overflow: 'hidden' },
+  cardCopy: { position: 'absolute', top: '14%', left: '7%', width: '61%' },
+  countBadge: { position: 'absolute', right: '8%', bottom: '8%', width: '23%', alignItems: 'center' },
+  year: { color: '#d7d8df', fontSize: 12, marginBottom: 3 },
+  period: { color: '#fff', fontSize: 21, fontFamily: DesignFonts.bold, letterSpacing: 1 },
   cardFoot: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginTop: 14 },
-  range: { color: '#b2b4c3', fontSize: 10, letterSpacing: 1 },
+  range: { color: '#b2b4c3', fontSize: 9, letterSpacing: 1, marginTop: 9 },
   count: { color: '#e1e1e9', fontSize: 9, letterSpacing: 1 },
   entry: { borderWidth: 1, borderColor: '#555762', backgroundColor: '#101118', padding: 20, marginBottom: 14 },
   date: { color: '#eee', fontSize: 16, fontWeight: '700', marginBottom: 18 },
   body: { color: '#dddde6', fontFamily: DesignFonts.regular, fontSize: 16, lineHeight: 28 },
   photo: { width: '100%', height: 260, marginTop: 18 },
   message: { color: '#ccc', paddingVertical: 32, lineHeight: 28, textAlign: 'center' },
-  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderColor: '#777', paddingVertical: 16, gap: 12 },
-  footerLabel: { color: '#eee', backgroundColor: '#55565d', borderWidth: 1, borderColor: '#aaa', paddingHorizontal: 28, paddingVertical: 12, fontSize: 12 },
+  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderColor: '#777', paddingVertical: 8, gap: 12 },
+  footerLabel: { color: '#eee', backgroundColor: '#55565d', borderWidth: 1, borderColor: '#aaa', paddingHorizontal: 28, paddingVertical: 8, fontSize: 11 },
 });
