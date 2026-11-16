@@ -1,247 +1,694 @@
-// [MODIFIED 2026-09-29] 원본: back_end_wodnjs 브랜치의 mockup/src/app/index.tsx (평면 그리드 형태).
-// 여기에 front 브랜치 frontend/index.jsx의 3D 우주 디자인을 이식함. 자세한 변경 내용은
-// mockup/CHANGES_FRONTEND.md 참고. 변경된 부분은 아래에 [MODIFIED] 주석으로 표시함.
-import { useEffect, useRef, useState } from 'react';
-import { router } from 'expo-router';
+import { DiaryUniverse } from '@/components/diary-universe';
+import { JoinGroupDialog } from '@/components/ui/join-group-dialog';
+import { NEW_STAR_HIGHLIGHT_MS, type NewStarHighlight } from '@/lib/new-star-highlight';
+import { authSession } from '@/lib/auth-session';
+import { useGroupUniverse } from '@/hooks/use-group-universe';
+import { useQuest } from '@/store/quest-context';
+import { QuestRewardAnimation } from '@/components/quest-reward-animation';
+import { Text } from '@/components/app-text';
+// [MODIFIED 2026-11-05] fffju 브랜치 index.jsx의 화면 구성·디자인으로 교체하고, 데이터는 서버(로그인)로 연결.
+//  - 화면: 가운데=나의 우주 / 왼쪽=일기 작성 / 오른쪽=그룹 우주 / 상점 (fffju 하단 네비·HUD·퀘스트 그대로)
+//  - 별·일기·그룹: 서버(useDiary). fffju의 기기 저장(useJournal)은 사용하지 않는다.
+//  - 별을 누르면 행성 상세(/planet/[id]), 메뉴의 검색·달력은 검색 화면(/search)으로 간다.
+//  - 서버 기능이 아직 없는 테마·소리·알림은 화면만 보여주고 반응하지 않는다(나중에 하나씩 연결).
+//  - [MODIFIED 2026-11-07] 코인·상점은 서버 연결(useShop). HUD 코인을 누르면 상점, 장착한 배경·혜성이 나의 우주에 보인다.
+//  - 폰은 fffju 배율 그대로, 웹·PC는 폭 최대 520px 가운데 정렬(useDesignFrame).
+//  - [ADDED 2026-11-12] 별자리 보기: HUD 아래 [나의 우주 | 별자리 보기] 전환, 아래쪽 별자리 정보 패널.
+//    별자리는 화면 표시만 바꾼다(행성 원래 좌표·DB는 그대로). 규칙: lib/constellation.ts
+//  - [ADDED 2026-11-15] Level 4 나만의 별자리: 같은 주제 일기 30개 이상이면 동의 후 서버(LLM)가 만든다.
+//    만든 결과는 서버에 저장되고, 볼 때는 저장된 좌표만 불러와 기존 별자리 애니메이션으로 그린다.
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { AppState, Modal, StyleSheet, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+
+import { CreateGroupDialog } from '@/components/ui/create-group-dialog';
+import { SpaceButton } from '@/components/ui/space-ui';
+import { GroupMemberStars } from '@/components/ui/group-member-stars';
+import { getMemberStars, groupDayKey } from '@/lib/group-attendance';
+import { DiaryComposer } from '@/components/diary-composer';
+import { SearchScreen } from '@/components/search-screen';
+import { PopupWindow } from '@/components/ui/popup-window';
+import { BackgroundTint, CometLayer } from '@/components/item-effects';
+import { ShopSheet } from '@/components/shop-screen';
+import { GroupSpaceScreen } from '@/components/ui/group-space-screen';
+import { HomeHud } from '@/components/ui/home-hud';
+import { ConstellationModeToggle, ConstellationPanel } from '@/components/ui/constellation-panel';
+import { QuestPanel } from '@/components/ui/quest-panel';
+import { UniverseBottomNav } from '@/components/ui/universe-bottom-nav';
+import type { ConstellationRequest } from '@/components/universe-scene';
+import { DesignPaint } from '@/constants/ui-design';
+import { useDesignFrame } from '@/hooks/use-design-frame';
+import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
+import { showMessage } from '@/lib/feedback';
 import {
-  Dimensions,
-  Modal,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-
-import WriteScreen from '@/app/write';
-import { CommunityScreen } from '@/components/community-screen';
-import { GroupsScreen } from '@/components/groups-screen';
-import { ShopScreen } from '@/components/shop-screen';
-import { UniverseCanvas } from '@/components/universe-scene';
+  CONSTELLATION_TOPICS,
+  TOPIC_CONCEPTS,
+  allTopicStatus,
+  personalStatus,
+  personalTemplateId,
+  selectMembers,
+  selectPersonalMembers,
+  topicCounts,
+  type ConstellationTemplate,
+  type PersonalStatus,
+} from '@/lib/constellation';
+import {
+  apiCreatePersonalConstellation,
+  apiListPersonalConstellations,
+  type ApiPersonalConstellation,
+} from '@/lib/api';
+import { localDateKey } from '@/lib/journal';
+import type { DiaryTopic } from '@/lib/special-planet';
+import { getRotateSensitivity, loadSettings, setRotateSensitivity } from '@/lib/settings';
 import { useDiary } from '@/store/diary-context';
+import { useShop } from '@/store/shop-context';
 
-const { width, height } = Dimensions.get('window');
-// fffju 디자인대로 스와이프 3면: 왼쪽=일기 작성 / 가운데=나의 우주 / 오른쪽=그룹.
-// 상점은 우주 화면 상단 stats 알약 탭, 커뮤니티는 상단 ☰ 버튼으로 각각 팝업으로 연다.
-const PAGE_LABELS = ['일기', '나의 우주', '그룹'];
+type Screen = 'home' | 'diary' | 'group';
 
 export default function HomeScreen() {
-  const { isLoggedIn } = useDiary();
-  const scrollRef = useRef<ScrollView>(null);
-  // 가운데(나의 우주 = index 1)에서 시작
-  const [pageIndex, setPageIndex] = useState(1);
+  const { isLoggedIn, isRestoring, dataLoading, loadError, retryLoad, accessToken, entries, groups, createGroup, joinGroup, leaveGroup, logout, refreshGroups } = useDiary();
+  const { coins, activeEffects, refresh: refreshShop } = useShop();
+  const { frameWidth } = useDesignFrame();
+  const { refresh: refreshQuest, rewardEvent, clearReward } = useQuest();
+  // fffju 반응형 레이아웃: 전체 뷰포트로 그리는 화면(홈 HUD·하단바·그룹)은 이 scale을 쓴다.
+  // 아직 520 프레임을 쓰는 화면(일기 작성·상점)은 useDesignFrame(frameWidth/scale)을 유지.
+  const responsive = useResponsiveLayout();
+  const { scale: rScale, chromeLeft, chromeWidth, headerTop } = responsive;
 
-  useEffect(() => {
-    if (!isLoggedIn) {
-      router.replace('/login');
+  const [screen, setScreen] = useState<Screen>('home');
+  const [newStar, setNewStar] = useState<NewStarHighlight | null>(null);
+  const [questVisible, setQuestVisible] = useState(false);
+  // [MODIFIED 2026-11-10] 상점은 별도 화면이 아니라 아래에서 올라오는 팝업
+  const [shopVisible, setShopVisible] = useState(false);
+  // [ADDED 2026-11-12] 검색 팝업: null=닫힘, keyword=키워드 검색, calendar=달력으로 열기.
+  // 열 때마다 key 를 바꿔 새로 시작하고, 행성 상세에 갔다 와도 닫지 않아 검색어·결과가 남는다.
+  const [searchPopup, setSearchPopup] = useState<{ mode: 'keyword' | 'calendar'; key: number } | null>(null);
+  const [createGroupVisible, setCreateGroupVisible] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const createGroupLock = useRef(false);
+  const { groupId: routeGroupId } = useLocalSearchParams<{ groupId?: string }>();
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(routeGroupId ?? null);
+  // 그룹 공유 우주: 그룹을 열면 멤버 전체의 별을 서버에서 받아온다(본인 것만이 아님).
+  const { entries: groupStars, loading: groupLoading, error: groupError, reload: reloadGroup } = useGroupUniverse(activeGroupId);
+  // 그룹 우주에서 별을 눌러 행성 상세로 갈 때, 돌아오면 목록이 아니라 그 그룹 우주로 복귀하려고 기억해둔다.
+  const [sharedDiaryId, setSharedDiaryId] = useState<string | null>(null);
+  const [inviteVisible, setInviteVisible] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [joinVisible, setJoinVisible] = useState(false);
+  const [joinCode, setJoinCode] = useState('');
+  const [joining, setJoining] = useState(false);
+  const joinLock = useRef(false);
+  const [sensitivity, setSensitivity] = useState(getRotateSensitivity());
+  const [today, setToday] = useState(groupDayKey);
+
+  // ---------------------------------------------------------------- 별자리 보기 [ADDED 2026-11-12]
+  const [constellationOn, setConstellationOn] = useState(false);
+  const [constellationTopic, setConstellationTopic] = useState<DiaryTopic | null>(null);
+  const [constellationTemplateId, setConstellationTemplateId] = useState<string | null>(null);
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [panelHeight, setPanelHeight] = useState(0);
+  const [frontViewRequest, setFrontViewRequest] = useState(0);
+  // 해금은 저장하지 않고 지금 주제별 일기 수로 계산한다(주제 없는 일기는 세지 않음)
+  const topicStatuses = useMemo(() => allTopicStatus(entries), [entries]);
+
+  // [2026-11-15] Level 4 나만의 별자리: 서버에 저장된 결과(주제별 0~1개)
+  const [personalList, setPersonalList] = useState<Partial<Record<DiaryTopic, ApiPersonalConstellation>>>({});
+  const [personalBusy, setPersonalBusy] = useState(false);
+  const [consentTopic, setConsentTopic] = useState<DiaryTopic | null>(null);
+  const [personalDone, setPersonalDone] = useState<ApiPersonalConstellation | null>(null);
+  // 이 화면에서 생성을 시작한 주제 → 완성되면 완료 창을 띄운다
+  const watchingRef = useRef(new Set<DiaryTopic>());
+  const personalStatuses = useMemo(() => {
+    const counts = topicCounts(entries);
+    return Object.fromEntries(
+      CONSTELLATION_TOPICS.map((t) => [t, personalStatus(counts[t], personalList[t])])
+    ) as Record<DiaryTopic, PersonalStatus>;
+  }, [entries, personalList]);
+
+  const activeTemplate: ConstellationTemplate | null = useMemo(() => {
+    if (!constellationOn || !constellationTopic) return null;
+    if (constellationTemplateId === personalTemplateId(constellationTopic)) {
+      const p = personalStatuses[constellationTopic];
+      return p.state === 'ready' ? p.template : null;
     }
-  }, [isLoggedIn]);
+    const status = topicStatuses.find((s) => s.topic === constellationTopic);
+    return status?.levels.find((l) => l.unlocked && l.template.id === constellationTemplateId)?.template ?? null;
+  }, [constellationOn, constellationTopic, constellationTemplateId, topicStatuses, personalStatuses]);
+  const constellationMembers = useMemo(() => {
+    if (!activeTemplate) return [];
+    if (activeTemplate.level === 4) {
+      // 서버가 저장한 행성 순서(생성 당시 오래된 순 30개)를 그대로 쓴다
+      const ids = personalList[activeTemplate.topic]?.planet_ids ?? [];
+      return selectPersonalMembers(entries, activeTemplate.topic, ids, activeTemplate.requiredPlanets);
+    }
+    return selectMembers(entries, activeTemplate.topic, activeTemplate.requiredPlanets);
+  }, [entries, activeTemplate, personalList]);
+
+  const applyPersonal = useCallback((list: ApiPersonalConstellation[]) => {
+    const map: Partial<Record<DiaryTopic, ApiPersonalConstellation>> = {};
+    for (const pc of list) map[pc.topic] = pc;
+    setPersonalList(map);
+    for (const t of [...watchingRef.current]) {
+      const pc = map[t];
+      if (pc?.status === 'pending') continue;
+      watchingRef.current.delete(t);
+      if (pc?.status === 'ready') setPersonalDone(pc);
+      else if (pc?.status === 'failed') showMessage('나만의 별자리', pc.error_message ?? '나만의 별자리를 만들지 못했어요.');
+    }
+  }, []);
+  // 서버가 예전 버전이거나 연결 오류면 조용히 넘어간다: Level 4 카드는 기본 상태, Level 1~3 은 그대로
+  const refreshPersonal = useCallback(() => {
+    if (!accessToken) return;
+    apiListPersonalConstellations(accessToken).then(applyPersonal).catch(() => {});
+  }, [accessToken, applyPersonal]);
+  useEffect(() => {
+    if (!constellationOn || !accessToken) return;
+    let alive = true;
+    apiListPersonalConstellations(accessToken)
+      .then((list) => alive && applyPersonal(list))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [constellationOn, accessToken, applyPersonal]);
+  // 만드는 중인 별자리가 있으면 서버의 실제 진행 단계를 2.5초마다 다시 읽는다(LLM 을 다시 부르지 않는 조회)
+  const anyPending = Object.values(personalList).some((p) => p?.status === 'pending');
+  useEffect(() => {
+    if (!anyPending) return;
+    const timer = setInterval(refreshPersonal, 2500);
+    return () => clearInterval(timer);
+  }, [anyPending, refreshPersonal]);
+
+  const createPersonal = useCallback(async () => {
+    const topic = consentTopic;
+    if (!topic || !accessToken || personalBusy) return;
+    setPersonalBusy(true);
+    try {
+      const pc = await apiCreatePersonalConstellation(accessToken, topic, true);
+      setPersonalList((prev) => ({ ...prev, [topic]: pc }));
+      if (pc.status === 'ready') setPersonalDone(pc);
+      else if (pc.status === 'pending') watchingRef.current.add(topic);
+      else if (pc.status === 'failed') showMessage('나만의 별자리', pc.error_message ?? '나만의 별자리를 만들지 못했어요.');
+    } catch (e) {
+      showMessage('나만의 별자리', e instanceof Error ? e.message : '나만의 별자리를 만들지 못했어요.');
+      refreshPersonal();
+    } finally {
+      setConsentTopic(null);
+      setPersonalBusy(false);
+    }
+  }, [consentTopic, accessToken, personalBusy, refreshPersonal]);
+  // 패널 위치: 폰은 하단바 위(가로 전체), 넓은 화면은 왼쪽 아래에 붙여 별자리가 오른쪽 넓은 영역을 쓰게 한다
+  const { width: windowWidth } = useWindowDimensions();
+  const panelBox = responsive.wide
+    ? { left: responsive.chromeLeft + 12, width: Math.min(400 * rScale, responsive.chromeWidth * 0.42) }
+    : { left: responsive.contentLeft + 12, width: Math.min(responsive.contentWidth, 460 * rScale) - 24 };
+  const constellationInsets = useMemo(() => {
+    const h = Math.max(responsive.height, 1);
+    const w = Math.max(windowWidth, 1);
+    const top = responsive.headerTop + 75 * rScale + 8 + 32 * rScale + 12;
+    const nav = responsive.navBottom + responsive.navHeight + 12;
+    if (responsive.wide) {
+      const left = panelBox.left + panelBox.width + 16;
+      return { top: Math.min(top / h, 0.45), bottom: Math.min(nav / h, 0.4), left: Math.min(left / w, 0.5), right: 0.03 };
+    }
+    const bottom = nav + 10 + panelHeight;
+    return { top: Math.min(top / h, 0.45), bottom: Math.min(bottom / h, 0.6), left: 0.04, right: 0.04 };
+  }, [responsive.height, responsive.headerTop, responsive.navBottom, responsive.navHeight, responsive.wide, rScale,
+    panelHeight, windowWidth, panelBox.left, panelBox.width]);
+  const constellationRequest: ConstellationRequest | null = useMemo(
+    () =>
+      activeTemplate && constellationMembers.length === activeTemplate.requiredPlanets
+        ? {
+            template: activeTemplate,
+            memberIds: constellationMembers.map((e) => e.id),
+            color: TOPIC_CONCEPTS[activeTemplate.topic].color,
+            insets: constellationInsets,
+          }
+        : null,
+    [activeTemplate, constellationMembers, constellationInsets]
+  );
+  const selectConstellationTopic = useCallback(
+    (topic: DiaryTopic) => {
+      setConstellationTopic(topic);
+      // 기본 선택은 해금된 가장 높은 단계(나만의 별자리가 완성돼 있으면 Level 4). 이전 단계는 레벨 카드에서 고를 수 있다.
+      const personal = personalStatuses[topic];
+      setConstellationTemplateId(
+        personal.state === 'ready'
+          ? personalTemplateId(topic)
+          : (topicStatuses.find((s) => s.topic === topic)?.highest?.id ?? null)
+      );
+    },
+    [topicStatuses, personalStatuses]
+  );
+  const viewPersonal = useCallback((pc: ApiPersonalConstellation) => {
+    setPersonalDone(null);
+    setConstellationTopic(pc.topic);
+    setConstellationTemplateId(personalTemplateId(pc.topic));
+    setConstellationOn(true);
+  }, []);
+  const setConstellationMode = useCallback(
+    (on: boolean) => {
+      if (on && !constellationTopic) {
+        // 처음 열 때: 가장 높은 단계가 열린 주제(같으면 일기가 많은 주제)
+        const best = [...topicStatuses].sort(
+          (a, b) => (b.highest?.level ?? 0) - (a.highest?.level ?? 0) || b.count - a.count
+        )[0];
+        if (best) selectConstellationTopic(best.topic);
+      }
+      setConstellationOn(on);
+    },
+    [constellationTopic, topicStatuses, selectConstellationTopic]
+  );
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ x: width, y: 0, animated: false });
+    if (!isRestoring && !isLoggedIn) router.replace('/login');
+  }, [isLoggedIn, isRestoring]);
+
+  // 기기에 저장된 회전 민감도를 불러와 메뉴 슬라이더에 반영한다.
+  useEffect(() => {
+    let alive = true;
+    loadSettings().then(() => {
+      if (alive) setSensitivity(getRotateSensitivity());
+    });
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  if (!isLoggedIn) {
-    return <View style={styles.container} />;
-  }
+  // 자정이 지나면 퀘스트의 "오늘"을 갱신한다 (fffju 동작 유지).
+  useEffect(() => {
+    const timer = setInterval(() => setToday(groupDayKey()), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
-  const goToPage = (index: number) => {
-    scrollRef.current?.scrollTo({ x: width * index, y: 0, animated: true });
-    setPageIndex(index);
+  useEffect(() => {
+    if (screen !== 'group' || !isLoggedIn) return;
+    void refreshGroups();
+    const timer = setInterval(() => { if (AppState.currentState !== 'background') void refreshGroups(); }, 30000);
+    const subscription = AppState.addEventListener('change', state => { if (state === 'active') void refreshGroups(); });
+    return () => { clearInterval(timer); subscription.remove(); };
+  }, [screen, isLoggedIn, refreshGroups]);
+
+  // Keep this callback stable: setting the return target must not reopen the modal before navigation.
+  useFocusEffect(useCallback(() => {
+    const groupId = routeGroupId;
+    if (groupId) { setScreen('group'); setActiveGroupId(groupId); }
+  }, [routeGroupId]));
+
+  useEffect(() => {
+    if (!newStar) return;
+    const timer = setTimeout(() => setNewStar(null), Math.max(0, newStar.startedAt + NEW_STAR_HIGHLIGHT_MS - Date.now()));
+    return () => clearTimeout(timer);
+  }, [newStar]);
+
+  if (isRestoring || !isLoggedIn) return <View style={styles.container} />;
+
+  const checkCount = new Set(entries.map((e) => localDateKey(new Date(e.createdAt)))).size;
+  const groupEntries = (diaryIds: string[]) => entries.filter((e) => diaryIds.includes(e.id));
+  const activeGroup = groups.find((g) => g.id === activeGroupId) ?? null;
+
+  const handleLogout = () => {
+    setNewStar(null);
+    logout();
+    router.replace('/login');
   };
 
-  const handleScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const index = Math.round(e.nativeEvent.contentOffset.x / width);
-    setPageIndex(index);
+  const handleCreateGroup = async () => {
+    if (createGroupLock.current) return;
+    if (newGroupName.trim().length > 24) {
+      showMessage('그룹 이름', '그룹 이름은 24자 이내로 입력해주세요.');
+      return;
+    }
+    createGroupLock.current = true;
+    setCreatingGroup(true);
+    const result = await createGroup(newGroupName.trim() || `그룹${groups.length + 1}`);
+    createGroupLock.current = false;
+    setCreatingGroup(false);
+    if (!result.ok) {
+      showMessage('그룹 생성 실패', result.error);
+      return;
+    }
+    setNewGroupName('');
+    setCreateGroupVisible(false);
+  };
+
+  const handleJoinGroup = async () => {
+    if (joinLock.current) return;
+    const code = joinCode.trim();
+    if (!code) return;
+    joinLock.current = true;
+    setJoining(true);
+    const result = await joinGroup(code);
+    joinLock.current = false;
+    setJoining(false);
+    if (!result.ok) {
+      showMessage('참여 실패', result.error);
+      return;
+    }
+    setJoinCode('');
+    setJoinVisible(false);
+  };
+
+  const handleLeaveGroup = async () => {
+    if (leaving || !activeGroup) return;
+    setLeaving(true);
+    const result = await leaveGroup(activeGroup.id);
+    setLeaving(false);
+    if (!result.ok) {
+      showMessage('나가기 실패', result.error);
+      return;
+    }
+    setConfirmLeave(false);
+    setInviteVisible(false);
+    setActiveGroupId(null); // 상세 화면도 닫는다
+  };
+
+  // 초대 코드(방 ID) 복사: 웹에선 클립보드, 네이티브에선 안내만. (clipboard 모듈 의존성 추가 안 함)
+  const copyInviteCode = () => {
+    const code = activeGroup?.invite_code;
+    if (!code) return;
+    const clip = (globalThis as { navigator?: { clipboard?: { writeText?: (s: string) => unknown } } }).navigator?.clipboard;
+    clip?.writeText?.(code);
+    showMessage('초대 코드', `${code} — 친구에게 이 코드를 보내 참여하게 하세요.`);
   };
 
   return (
-    <View style={styles.pagerWrap}>
-      <ScrollView
-        ref={scrollRef}
-        style={styles.pager}
-        horizontal
-        pagingEnabled
-        scrollEnabled={false}
-        showsHorizontalScrollIndicator={false}
-        contentOffset={{ x: width, y: 0 }}
-        onMomentumScrollEnd={handleScrollEnd}
-        onScrollEndDrag={handleScrollEnd}
-      >
-        <View style={{ width, height }}>
-          <WriteScreen onComplete={() => goToPage(1)} />
-        </View>
-        <View style={{ width, height }}>
-          <UniversePage />
-        </View>
-        <View style={{ width, height }}>
-          <GroupsScreen />
-        </View>
-      </ScrollView>
-
-      {/* 화면 오른쪽 끝을 탭하면 다음 페이지로 넘어가는 보조 동작. 우주(가운데) 화면에서만 —
-          왼쪽 일기 작성 폼 위에 겹쳐 탭을 가로채지 않도록 가운데 페이지로 한정함. */}
-      {pageIndex === 1 && (
-        <Pressable
-          style={styles.nextZone}
-          onPress={() => goToPage(pageIndex + 1)}
-          pointerEvents="box-only"
-        />
-      )}
-
-      {/* fffju 하단 네비게이션: 글자 없는 회색 pill 3개 (왼쪽=일기 / 가운데 긴 pill=우주 / 오른쪽=그룹).
-          스와이프는 꺼두고(scrollEnabled=false) 이 pill로만 페이지 전환 — 우주 화면의 별 드래그와 겹침 방지 */}
-      <View style={styles.bottomNav} pointerEvents="box-none">
-        {PAGE_LABELS.map((label, index) => (
-          <Pressable
-            key={label}
-            accessibilityLabel={label}
-            style={[
-              styles.navPill,
-              index === 1 && styles.navPillLong,
-              pageIndex === index && styles.activePill,
-            ]}
-            onPress={() => goToPage(index)}
+    <View style={styles.container}>
+      {/* ===== 가운데: 나의 우주 ===== */}
+      {screen === 'home' && (
+        // [MODIFIED 2026-11-12] 배경 사진(night-sky.png) 제거 → 단색 배경 + 3D 우주의 배경 별만 사용
+        <View style={[styles.fill, styles.spaceBackground]}>
+          <BackgroundTint effects={activeEffects} />
+          {/* Comets sit behind the transparent 3D canvas so planets occlude them. */}
+          <CometLayer effects={activeEffects} />
+          <DiaryUniverse
+            sceneKey={`${authSession.getRevision()}:home`}
+            entries={entries}
+            newStar={newStar ?? undefined}
+            onNewStarFound={() => setNewStar(null)}
+            constellation={constellationRequest}
+            frontViewRequest={frontViewRequest}
           />
-        ))}
-      </View>
-    </View>
-  );
-}
 
-// [MODIFIED] 원본은 FlatList로 별을 3열 그리드에 평면 배치했음.
-// frontend/index.jsx의 3D 우주(react-three-fiber) 렌더링으로 통째로 교체.
-function UniversePage() {
-  const { entries } = useDiary();
-  const [questVisible, setQuestVisible] = useState(false);
-  const [shopVisible, setShopVisible] = useState(false);
-  const [communityVisible, setCommunityVisible] = useState(false);
+          {entries.length === 0 && (
+            <View style={styles.emptyState} pointerEvents="none">
+              <Text style={styles.emptyText}>{dataLoading ? '기록을 불러오는 중…' : loadError ?? '아직 기록이 없어요. 아래 왼쪽 버튼으로 첫 별을 띄워보세요.'}</Text>
+            </View>
+          )}
 
-  return (
-    <View style={styles.universeContainer}>
-      <UniverseCanvas entries={entries} onStarPress={(id) => router.push(`/planet/${id}`)} />
+          {loadError && <TouchableOpacity onPress={retryLoad} style={{ position: 'absolute', top: headerTop + 100, alignSelf: 'center', padding: 12 }}><Text style={styles.whiteText}>다시 불러오기</Text></TouchableOpacity>}
 
-      {entries.length === 0 && (
-        <View style={styles.emptyState} pointerEvents="none">
-          <Text style={styles.emptyText}>아직 기록이 없어요.{'\n'}왼쪽으로 넘겨 첫 별을 띄워보세요.</Text>
+          {/* HUD는 fffju 반응형(전체 뷰포트). 520 프레임으로 감싸지 않는다. */}
+          <HomeHud
+            scale={rScale}
+            starCount={entries.length}
+            coinCount={coins ?? 0}
+            checkCount={checkCount}
+            onStats={() => {
+              refreshShop();
+              setShopVisible(true);
+            }}
+            onQuest={() => { void refreshQuest(); setQuestVisible(true); }}
+            menuProps={{
+              onSearch: () => setSearchPopup({ mode: 'keyword', key: Date.now() }),
+              onCalendar: () => setSearchPopup({ mode: 'calendar', key: Date.now() }),
+              onLogout: handleLogout,
+              sensitivity,
+              onSensitivity: (value) => setSensitivity(setRotateSensitivity(value)),
+            }}
+          />
+
+          {/* 별자리 보기 전환 (HUD 바로 아래 가운데) */}
+          {entries.length > 0 && (
+            <View
+              pointerEvents="box-none"
+              style={[styles.constellationToggleRow, { top: responsive.headerTop + 75 * rScale + 8 }]}>
+              <ConstellationModeToggle scale={rScale} active={constellationOn} onChange={setConstellationMode} />
+            </View>
+          )}
+
+          {/* 별자리 정보 패널 (하단바 위) */}
+          {constellationOn && (
+            <View
+              pointerEvents="box-none"
+              style={[
+                styles.constellationPanelWrap,
+                {
+                  bottom: responsive.navBottom + responsive.navHeight + 10,
+                  left: panelBox.left,
+                  width: panelBox.width,
+                },
+              ]}>
+              <ConstellationPanel
+                scale={Math.min(rScale, 1.1)}
+                statuses={topicStatuses}
+                topic={constellationTopic}
+                templateId={activeTemplate?.id ?? null}
+                members={constellationMembers.map((e) => ({ id: e.id, createdAt: e.createdAt, color: e.color }))}
+                collapsed={panelCollapsed}
+                onToggleCollapsed={() => setPanelCollapsed((v) => !v)}
+                onSelectTopic={selectConstellationTopic}
+                onSelectTemplate={(t) => setConstellationTemplateId(t.id)}
+                onOpenEntry={(id) => router.push(`/planet/${id}`)}
+                onFrontView={() => setFrontViewRequest((n) => n + 1)}
+                onLayout={(e) => setPanelHeight(Math.round(e.nativeEvent.layout.height))}
+                personal={constellationTopic ? personalStatuses[constellationTopic] : null}
+                personalBusy={personalBusy}
+                onCreatePersonal={() => constellationTopic && setConsentTopic(constellationTopic)}
+              />
+            </View>
+          )}
         </View>
       )}
 
-      {/* 우주 위에 떠 있는 상단 바. fffju 디자인대로 ☰=커뮤니티, 가운데 stats 알약=상점, 오른쪽=퀘스트. */}
-      <View style={styles.topBar} pointerEvents="box-none">
-        <TouchableOpacity style={styles.iconButton} onPress={() => setCommunityVisible(true)}>
-          <Text style={styles.iconButtonText}>☰</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.statsPill} onPress={() => setShopVisible(true)}>
-          <Text style={styles.statsText}>★ {entries.length}   🪙 999   ✔️ 2</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.questButton} onPress={() => setQuestVisible(true)}>
-          <Text style={styles.questText}>퀘스트</Text>
-        </TouchableOpacity>
+      {/* ===== 왼쪽: 일기 작성 — 다른 탭에 갔다 와도 쓰던 내용이 남도록 화면을 숨기기만 한다 ===== */}
+      <View style={[styles.fill, screen !== 'diary' && styles.hidden]}>
+        <DiaryComposer scale={rScale} onBack={() => setScreen('home')} onSaved={id => { if (id) setNewStar({ id, startedAt: Date.now() }); setScreen('home'); }} />
       </View>
 
-      {/* [MODIFIED] 원래 frontend/index.jsx의 퀘스트 패널(진행률 바 포함)을 그대로 복원함. */}
-      <Modal transparent visible={questVisible} animationType="fade">
-        <Pressable style={styles.modalOverlay} onPress={() => setQuestVisible(false)}>
-          <View style={styles.questCard}>
-            <Text style={styles.questCardTitle}>퀘스트</Text>
-            <Text style={styles.questSectionTitle}>진행 중</Text>
-            <View style={styles.questItem}>
-              <Text style={styles.whiteText}>오늘의 별 띄우기</Text>
-              <Text style={styles.whiteText}>★ 5</Text>
-            </View>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: '80%' }]} />
-            </View>
+      {/* ===== 오른쪽: 그룹 우주 (반응형 그리드 — 전체 뷰포트, useResponsiveLayout 사용) ===== */}
+      {screen === 'group' && (
+        <View style={styles.fill}>
+          <GroupSpaceScreen
+            scale={rScale}
+            groups={groups.map((g) => ({
+              id: g.id,
+              name: g.name,
+              members: getMemberStars(g, entries, today),
+              stars: groupEntries(g.diary_ids).map((e) => ({
+                color: e.color,
+                size: 0.36,
+                // 카드 미리보기 위치: 3D 위치(x, y)를 카드 안 비율로 옮긴다 (별 배치 반경 최대 약 12).
+                previewX: `${Math.round(50 + Math.max(-1, Math.min(1, e.position[0] / 12)) * 40)}%`,
+                previewY: `${Math.round(50 - Math.max(-1, Math.min(1, e.position[1] / 12)) * 40)}%`,
+              })),
+            }))}
+            onSelectGroup={(g) => { setSharedDiaryId(null); setActiveGroupId(g.id); }}
+            onAddGroup={() => setCreateGroupVisible(true)}
+            onJoinByCode={() => setJoinVisible(true)}
+          />
+        </View>
+      )}
 
-            <View style={styles.questItem}>
-              <Text style={styles.whiteText}>운석 3개 치우기</Text>
-              <Text style={styles.whiteText}>★ 3</Text>
-            </View>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: '40%' }]} />
-            </View>
+      {/* ===== 상점 팝업 (HUD 코인을 누르면 열림, ✕ 또는 바깥을 누르면 닫힘) ===== */}
+      <ShopSheet visible={shopVisible} width={frameWidth} onClose={() => setShopVisible(false)} />
 
-            <Text style={styles.questSectionTitle}>진행 완료</Text>
-            <View style={styles.questItem}>
-              <Text style={styles.grayText}>친구 우주에 편지 보내기</Text>
-              <Text style={styles.grayText}>★ 3</Text>
-            </View>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: '100%', backgroundColor: '#80e03e' }]} />
+      {/* ===== 그룹 카드를 눌렀을 때: 그 그룹의 우주를 3D로 크게 보기 ===== */}
+      <Modal transparent={false} visible={activeGroup !== null} animationType="slide" onRequestClose={() => sharedDiaryId ? setSharedDiaryId(null) : setActiveGroupId(null)}>
+        {activeGroup && (
+          <View style={[styles.fill, styles.spaceBackground]}>
+            <DiaryUniverse key={activeGroup.id} groupId={activeGroup.id}
+              sceneKey={`${authSession.getRevision()}:group-${activeGroup.id}`} entries={groupStars} backgroundStarScale={1.4}
+              selection={{ id: sharedDiaryId, onChange: setSharedDiaryId }} />
+            {(groupLoading || groupError || groupStars.length === 0) && (
+              <View style={styles.emptyState} pointerEvents={groupError ? 'auto' : 'none'}>
+                <Text style={styles.emptyText}>{groupError ?? (groupLoading ? '그룹의 별을 불러오는 중…' : '아직 이 그룹에 공유된 별이 없어요.')}</Text>
+                {groupError && <SpaceButton scale={rScale} label="다시 불러오기" onPress={reloadGroup} />}
+              </View>
+            )}
+            <View style={{ position: 'absolute', top: headerTop, left: chromeLeft + 20 * rScale,
+              width: chromeWidth - 40 * rScale, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10 * rScale }}>
+              <SpaceButton scale={rScale} label="‹ 목록" onPress={() => setActiveGroupId(null)} />
+              <View style={{ flex: 1, minWidth: 70 }}>
+                <Text numberOfLines={1} style={{ color: '#fff', fontSize: 16 * rScale }}>{activeGroup.name}</Text>
+                <Text style={{ color: '#aeb7c4', fontSize: 11 * rScale }}>별 {groupStars.length}개</Text>
+              </View>
+              <SpaceButton scale={rScale} label="친구 초대" onPress={() => { setConfirmLeave(false); setInviteVisible(true); }} />
+              <GroupMemberStars scale={rScale} dark members={getMemberStars(activeGroup, entries, today)} />
             </View>
           </View>
-        </Pressable>
+        )}
       </Modal>
 
-      {/* 상점: 상단 stats 알약으로 여는 전체화면 팝업 */}
-      <Modal visible={shopVisible} animationType="slide" onRequestClose={() => setShopVisible(false)}>
-        <ShopScreen onClose={() => setShopVisible(false)} />
+      {/* ===== 그룹에 친구 초대 (방 ID 코드 공유 + 멤버 목록) ===== */}
+      <Modal transparent visible={inviteVisible} animationType="fade" onRequestClose={() => setInviteVisible(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setInviteVisible(false)}>
+          <TouchableOpacity activeOpacity={1} style={[styles.inviteModalCard, { width: Math.min(frameWidth * 0.82, 420) }]}>
+            <Text style={styles.inviteModalTitle}>🪐 친구 초대</Text>
+            <Text style={styles.inviteModalDesc}>
+              이 방 ID를 친구에게 보내세요. 친구가 그룹 목록에서 “코드로 참여”에 입력하면 함께 쓰는 우주가 돼요.
+            </Text>
+            <TouchableOpacity style={styles.codeBox} onPress={copyInviteCode}>
+              <Text style={styles.codeText}>{activeGroup?.invite_code ?? ''}</Text>
+              <Text style={styles.codeCopy}>탭하여 복사</Text>
+            </TouchableOpacity>
+            <Text style={styles.membersTitle}>멤버 {activeGroup?.members.length ?? 0}명</Text>
+            {(activeGroup?.members ?? []).map((m) => (
+              <Text key={m.user_id} style={styles.memberRow}>· {m.nickname ?? '익명'}</Text>
+            ))}
+            {confirmLeave ? (
+              <View style={styles.leaveBox}>
+                <Text style={styles.leaveWarn}>나가면 이 그룹이 목록에서 사라져요. 아무도 안 남으면 그룹이 삭제돼요.</Text>
+                <View style={styles.inviteModalButtonRow}>
+                  <TouchableOpacity style={styles.inviteCancelBtn} onPress={() => setConfirmLeave(false)}>
+                    <Text style={styles.whiteText}>취소</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.leaveConfirmBtn} onPress={handleLeaveGroup} disabled={leaving}>
+                    <Text style={styles.whiteText}>{leaving ? '나가는 중…' : '나가기'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.leaveLink} onPress={() => setConfirmLeave(true)}>
+                <Text style={styles.leaveLinkText}>그룹 나가기</Text>
+              </TouchableOpacity>
+            )}
+            <View style={styles.inviteModalButtonRow}>
+              <TouchableOpacity style={styles.inviteConfirmBtn} onPress={() => setInviteVisible(false)}>
+                <Text style={styles.inviteConfirmText}>닫기</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
-      {/* 커뮤니티: 상단 ☰ 버튼으로 여는 전체화면 팝업 (fffju 디자인) */}
-      <Modal
-        visible={communityVisible}
-        animationType="slide"
-        onRequestClose={() => setCommunityVisible(false)}
-      >
-        <CommunityScreen onClose={() => setCommunityVisible(false)} />
+      <JoinGroupDialog visible={joinVisible} code={joinCode} joining={joining} onChangeCode={setJoinCode}
+        onClose={() => setJoinVisible(false)} onJoin={handleJoinGroup} />
+
+      {/* ===== 퀘스트 (서버 진행률·보상 기록) ===== */}
+      <Modal transparent visible={questVisible} animationType="fade" onRequestClose={() => setQuestVisible(false)}>
+        <QuestPanel scale={rScale}
+          onWriteDiary={() => { setQuestVisible(false); setScreen('diary'); }}
+          onClose={() => setQuestVisible(false)} />
       </Modal>
+
+      {/* ===== 공통: 하단 네비게이션 (fffju 반응형 — 전체 뷰포트) ===== */}
+      {rewardEvent && <QuestRewardAnimation key={rewardEvent.id} event={rewardEvent} onDone={clearReward} />}
+      <UniverseBottomNav
+        scale={rScale}
+        activeScreen={screen}
+        onDiary={() => setScreen('diary')}
+        onHome={() => setScreen('home')}
+        onGroup={() => setScreen('group')}
+      />
+
+      {/* ===== 새 그룹 만들기 팝업 (✕ · 바깥 · 취소로 닫힘) ===== */}
+      <CreateGroupDialog visible={createGroupVisible} scale={rScale} name={newGroupName}
+        defaultName={`그룹${groups.length + 1}`} saving={creatingGroup} onChangeName={setNewGroupName}
+        onClose={() => { if (!creatingGroup) setCreateGroupVisible(false); }} onCreate={handleCreateGroup} />
+
+      {/* ===== 일기 검색 팝업 (메뉴의 검색·달력에서 열림) ===== */}
+      <PopupWindow
+        visible={searchPopup !== null}
+        onClose={() => setSearchPopup(null)}
+        title="일기 검색"
+        appearance="search"
+        width={frameWidth}
+        height="80%"
+        testID="search-popup">
+        {searchPopup && (
+          <SearchScreen
+            key={searchPopup.key}
+            embedded
+            onBack={() => setSearchPopup(null)}
+            onOpenEntry={(id) => router.push(`/planet/${id}`)}
+            initialCalendarOpen={searchPopup.mode === 'calendar'}
+          />
+        )}
+      </PopupWindow>
+
+      {/* ===== [2026-11-15] 나만의 별자리: 외부 AI 전송 안내·동의 (동의해야만 서버가 LLM 을 부른다) ===== */}
+      <PopupWindow
+        visible={consentTopic !== null}
+        onClose={() => !personalBusy && setConsentTopic(null)}
+        title="✨ 나만의 별자리 만들기"
+        width={Math.min(frameWidth, 444)}
+        testID="personal-consent-popup">
+        <Text style={styles.inviteModalDesc}>
+          {consentTopic ? TOPIC_CONCEPTS[consentTopic].label : ''} 주제 일기를 AI가 함께 읽고, 기록을 상징하는 별자리
+          모양을 만들어요.
+        </Text>
+        <View style={styles.consentBox}>
+          <Text style={styles.consentText}>
+            • 이 주제 일기의 <Text style={styles.consentStrong}>작성 날짜와 본문</Text>이 외부 AI 서비스(OpenAI)로
+            전송돼요.
+          </Text>
+          <Text style={styles.consentText}>
+            • 이메일·계정 정보는 보내지 않고, 본문 속 이메일·전화번호·링크는 가린 뒤 보내요.
+          </Text>
+          <Text style={styles.consentText}>• 만든 별자리는 저장되어, 다시 볼 때는 AI를 다시 부르지 않아요.</Text>
+          <Text style={styles.consentText}>• 한 번 만든 별자리는 일기가 늘어도 바뀌지 않아요.</Text>
+        </View>
+        <View style={styles.inviteModalButtonRow}>
+          <TouchableOpacity
+            style={styles.inviteCancelBtn}
+            onPress={() => setConsentTopic(null)}
+            disabled={personalBusy}
+            testID="personal-consent-cancel">
+            <Text style={styles.whiteText}>취소</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.inviteConfirmBtn, personalBusy && { opacity: 0.6 }]}
+            onPress={createPersonal}
+            disabled={personalBusy}
+            testID="personal-consent-agree">
+            <Text style={styles.inviteConfirmText}>{personalBusy ? '요청하는 중…' : '동의하고 만들기'}</Text>
+          </TouchableOpacity>
+        </View>
+      </PopupWindow>
+
+      {/* ===== 나만의 별자리 완성 ===== */}
+      <PopupWindow
+        visible={personalDone !== null}
+        onClose={() => setPersonalDone(null)}
+        title="✨ 나만의 별자리"
+        width={Math.min(frameWidth, 444)}
+        testID="personal-done-popup">
+        {personalDone && (
+          <>
+            <Text style={styles.doneText}>나만의 별자리가 완성되었습니다.</Text>
+            <Text style={styles.doneName}>{personalDone.name}</Text>
+            {!!personalDone.description && <Text style={styles.doneText}>{personalDone.description}</Text>}
+            <Text style={styles.doneText}>이 기억들을 모아 {personalDone.name}를 만들었습니다.</Text>
+            {!!personalDone.reason && <Text style={styles.doneReason}>{personalDone.reason}</Text>}
+            {personalDone.keywords.length > 0 && (
+              <Text style={styles.doneKeywords}>{personalDone.keywords.map((k) => `#${k}`).join('  ')}</Text>
+            )}
+            <View style={styles.inviteModalButtonRow}>
+              <TouchableOpacity
+                style={styles.inviteConfirmBtn}
+                onPress={() => viewPersonal(personalDone)}
+                testID="personal-done-view">
+                <Text style={styles.inviteConfirmText}>별자리 보기</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+      </PopupWindow>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  pagerWrap: {
-    flex: 1,
-    backgroundColor: '#05050A',
-  },
-  pager: {
-    flex: 1,
-    backgroundColor: '#05050A',
-  },
-  nextZone: {
-    // 우주 화면 오른쪽 가장자리 중간 구간만 탭 영역으로 사용 (상단바/하단 네비와 안 겹치게)
-    position: 'absolute',
-    top: 110,
-    bottom: 130,
-    right: 0,
-    width: 50,
-  },
-  // fffju 하단 네비게이션
-  bottomNav: {
-    position: 'absolute',
-    bottom: 40,
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-  },
-  navPill: {
-    width: 38,
-    height: 18,
-    backgroundColor: '#7f8c8d',
-    borderRadius: 10,
-  },
-  navPillLong: {
-    width: 115,
-  },
-  activePill: {
-    backgroundColor: '#dcdde1',
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#05050A',
-    paddingTop: 60,
-  },
-  universeContainer: {
-    flex: 1,
-    backgroundColor: '#05050A',
-  },
+  container: { flex: 1, backgroundColor: DesignPaint.background },
+  spaceBackground: { backgroundColor: '#000' },
+  fill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  hidden: { display: 'none' },
+  frameOuter: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center' },
+  frameInner: { flex: 1 },
+  whiteText: { color: '#fff' },
   emptyState: {
     position: 'absolute',
     top: 0,
@@ -252,101 +699,55 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 40,
   },
-  emptyText: {
-    color: '#6E6E90',
-    fontSize: 15,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
+  emptyText: { color: '#A4B0BE', fontSize: 15, textAlign: 'center', lineHeight: 22 },
+  constellationToggleRow: { position: 'absolute', left: 0, right: 0, alignItems: 'center', zIndex: 9 },
+  constellationPanelWrap: { position: 'absolute', zIndex: 15 },
+
   topBar: {
-    position: 'absolute',
-    top: 60,
-    left: 20,
-    right: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    position: 'absolute', left: 20, right: 20,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 10,
   },
-  iconButton: {
-    backgroundColor: '#7f8c8d',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-  },
-  iconButtonText: {
-    color: '#111',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  statsPill: {
-    backgroundColor: '#7f8c8d',
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-  statsText: {
-    fontWeight: 'bold',
-    color: '#111',
-    fontSize: 14,
-  },
-  questButton: {
-    backgroundColor: '#7f8c8d',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
-  },
-  questText: {
-    fontWeight: 'bold',
-    color: '#111',
-    fontSize: 14,
-  },
-  whiteText: {
-    color: '#FFFFFF',
-  },
-  grayText: {
-    color: '#A4B0BE',
-  },
-  progressBar: {
-    height: 4,
-    backgroundColor: '#444',
-    borderRadius: 2,
-    marginBottom: 10,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#80e03e',
-    borderRadius: 2,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
-  questCard: {
-    position: 'absolute',
-    top: 120,
-    right: 20,
-    width: 220,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+  statsPill: { backgroundColor: '#7f8c8d', paddingHorizontal: 18, paddingVertical: 8, borderRadius: 12 },
+  statsText: { fontWeight: 'bold', color: '#111', fontSize: 14 },
+  questButton: { backgroundColor: '#7f8c8d', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+  questText: { fontWeight: 'bold', color: '#111', fontSize: 14 },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  inviteModalCard: {
+    backgroundColor: '#1E1E24',
     borderRadius: 20,
-    padding: 20,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: '#333',
   },
-  questCardTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 15,
+  inviteModalTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginBottom: 8 },
+  inviteModalDesc: { color: '#a4b0be', fontSize: 13, marginBottom: 16, lineHeight: 18 },
+  inviteInput: {
+    backgroundColor: '#111115', color: '#fff', borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, marginBottom: 16,
   },
-  questSectionTitle: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-    marginTop: 15,
-    marginBottom: 10,
-  },
-  questItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
+  inviteModalButtonRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
+  inviteCancelBtn: { backgroundColor: '#444', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
+  inviteConfirmBtn: { backgroundColor: '#3498db', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
+  inviteConfirmText: { color: '#fff', fontWeight: 'bold' },
+  inviteButton: { backgroundColor: '#3498db', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  inviteButtonText: { fontWeight: 'bold', color: '#fff', fontSize: 13 },
+  codeBox: { backgroundColor: '#1e272e', borderRadius: 10, paddingVertical: 14, alignItems: 'center', marginBottom: 14 },
+  codeText: { color: '#fff', fontSize: 26, fontWeight: 'bold', letterSpacing: 4 },
+  codeCopy: { color: '#7f8c8d', fontSize: 12, marginTop: 4 },
+  membersTitle: { color: '#a4b0be', fontSize: 13, fontWeight: 'bold', marginBottom: 6 },
+  memberRow: { color: '#dfe6e9', fontSize: 14, marginBottom: 2 },
+  leaveLink: { alignSelf: 'flex-start', marginTop: 14, paddingVertical: 4 },
+  leaveLinkText: { color: '#e74c3c', fontSize: 14, fontWeight: '600' },
+  leaveBox: { marginTop: 14, backgroundColor: 'rgba(231,76,60,0.12)', borderRadius: 10, padding: 12 },
+  leaveWarn: { color: '#ffb8b0', fontSize: 13, lineHeight: 18, marginBottom: 10 },
+  leaveConfirmBtn: { backgroundColor: '#e74c3c', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
+
+  consentBox: { backgroundColor: '#111115', borderRadius: 12, padding: 12, marginBottom: 16, gap: 6 },
+  consentText: { color: '#dfe6e9', fontSize: 13, lineHeight: 19 },
+  consentStrong: { color: '#fff', fontWeight: 'bold' },
+  doneName: { color: '#fff', fontSize: 20, fontWeight: 'bold', textAlign: 'center', marginVertical: 10 },
+  doneText: { color: '#dfe6e9', fontSize: 14, lineHeight: 21, textAlign: 'center', marginBottom: 8 },
+  doneReason: { color: '#a4b0be', fontSize: 12.5, lineHeight: 18, textAlign: 'center', marginBottom: 8 },
+  doneKeywords: { color: '#9fc3ff', fontSize: 12.5, textAlign: 'center', marginBottom: 16 },
 });
