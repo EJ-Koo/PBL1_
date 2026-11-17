@@ -26,3 +26,10 @@ class Diary(BaseModel):
     visibility: Visibility
     created_at: str
     updated_at: str
+
+
+class RelatedDiary(BaseModel):
+    diary_id: str
+    similarity: float  # 코사인 유사도(확률 아님)
+    content: str
+    created_at: str

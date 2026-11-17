@@ -1,0 +1,76 @@
+{
+  "description": "2단계 의미 임베딩 후보 모델. 값은 각 모델의 공식 Hugging Face 카드·설정 파일(1_Pooling/config.json, modules.json, sentence_bert_config.json)에서 확인했다(2026-10-26). 학습·미세조정 없이 공식 사용법 그대로 추론만 한다.",
+  "device": "cuda",
+  "device_note": "GPU(RTX 4060 Ti 8GB, float32)로 추론한다. 모델은 한 번에 하나만 GPU에 올리고 다음 모델 전에 내린다. 2026-10-26 첫 실행은 GPU가 다른 학습에 점유돼 CPU였고, 2026-10-27에 GPU로 다시 실행했다.",
+  "batch_size": 16,
+  "models": {
+    "kure_v1": {
+      "model_id": "nlpai-lab/KURE-v1",
+      "revision": "8b418a58414668e75532ed045c22d9ca018ae2b2",
+      "license": "MIT",
+      "architecture": "XLM-RoBERTa (BAAI/bge-m3를 한국어 검색 데이터로 미세조정한 모델)",
+      "pooling": "cls",
+      "normalize": true,
+      "prefix": "",
+      "max_length": 8192,
+      "dim": 1024,
+      "allow_patterns": [
+        "config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "special_tokens_map.json",
+        "modules.json",
+        "sentence_bert_config.json",
+        "1_Pooling/config.json"
+      ],
+      "card_notes": "SentenceTransformer 구성: Transformer → Pooling(pooling_mode_cls_token) → Normalize. max_seq_length 8192. 카드 예시에 prefix 없음."
+    },
+    "bge_m3": {
+      "model_id": "BAAI/bge-m3",
+      "revision": "5617a9f61b028005a4858fdac845db406aefb181",
+      "license": "MIT",
+      "architecture": "XLM-RoBERTa (다국어, dense·sparse·multi-vector 중 dense만 사용)",
+      "pooling": "cls",
+      "normalize": true,
+      "prefix": "",
+      "max_length": 8192,
+      "dim": 1024,
+      "allow_patterns": [
+        "config.json",
+        "pytorch_model.bin",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "special_tokens_map.json",
+        "sentencepiece.bpe.model",
+        "modules.json",
+        "sentence_bert_config.json",
+        "1_Pooling/config.json"
+      ],
+      "card_notes": "Pooling(pooling_mode_cls_token) → Normalize. 카드: 'no longer requires adding instructions to the queries'. colbert_linear.pt·sparse_linear.pt·onnx/는 받지 않는다."
+    },
+    "e5_small": {
+      "model_id": "intfloat/multilingual-e5-small",
+      "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+      "license": "MIT",
+      "architecture": "BERT 계열 12층 (다국어, 118M)",
+      "pooling": "mean",
+      "normalize": true,
+      "prefix": "query: ",
+      "max_length": 512,
+      "dim": 384,
+      "allow_patterns": [
+        "config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "special_tokens_map.json",
+        "sentencepiece.bpe.model",
+        "modules.json",
+        "sentence_bert_config.json",
+        "1_Pooling/config.json"
+      ],
+      "card_notes": "카드 예시: average_pool(attention mask 평균) → F.normalize, max_length=512. 'Use \"query: \" prefix for symmetric tasks such as semantic similarity, bitext mining, paraphrase retrieval' → 일기↔일기 비교는 양쪽 모두 'query: '."
+    }
+  }
+}

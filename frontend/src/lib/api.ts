@@ -1,6 +1,10 @@
 import { Platform } from 'react-native';
 
-export const API_BASE_URL = 'https://diary-galaxy-backend-production-b42c.up.railway.app';
+import type { PlanetVisual } from '@/lib/planet-visual';
+
+// 기본은 운영 백엔드. 로컬 백엔드로 확인할 때만 EXPO_PUBLIC_API_BASE_URL(예: http://127.0.0.1:8000)을 지정한다.
+export const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL || 'https://diary-galaxy-backend-production-b42c.up.railway.app';
 
 export type ApiVisibility = 'public' | 'friends' | 'private';
 
@@ -61,6 +65,8 @@ export type ApiStar = {
   color: string;
   size: number;
   brightness: number;
+  /** AI 감정 분석으로 정한 행성 외형. AI 서비스가 없으면 null/없음. */
+  planet?: PlanetVisual | null;
 };
 
 export async function apiListStars(accessToken: string) {

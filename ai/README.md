@@ -4,21 +4,20 @@
 
 | 기능 | 역할 | 상태 |
 |---|---|---|
-| 일기 감정 분석 | 감정 → 별 색·밝기 | KOTE 분석, 모델 5종 비교·개선 실험 완료. 서비스 기본은 KcELECTRA 단일. 후처리(44 → 10 그룹+없음 → 3 정서)와 행성 매핑은 **초안 v0.1** (행성 매핑 코드·설정만 이 브랜치에 있음, 나머지는 `feature/ai-service-draft` 브랜치(Draft PR)에서 작업 중, main 미반영) |
-| 의미 임베딩 | 관련 기억 검색 | 로컬 구현 완료 — `feature/ai-service-draft` 브랜치(Draft PR)에서 작업 중, main 미반영 |
-| 공간 알고리즘 | 별 3D 위치 | 로컬 구현 완료 — `feature/ai-service-draft` 브랜치(Draft PR)에서 작업 중, main 미반영 |
+| 일기 감정 분석 | 감정 → 별 색·밝기 | KOTE 분석, 모델 5종 비교·개선 실험 완료. 서비스 기본은 KcELECTRA 단일. 후처리(44 → 10 그룹+없음 → 3 정서)와 행성 매핑은 **초안 v0.1** |
+| 의미 임베딩 | 관련 기억 검색 | KURE-v1로 로컬 구현·연동 완료 (가상 일기로만 평가) |
+| 공간 알고리즘 | 별 3D 위치 | 관련 기억 근처 배치(기존 별 고정)로 로컬 구현·연동 완료 |
 | 군집·별자리 | 비슷한 기억 묶기, 선 잇기 | 미구현 (설계만) |
 
 ## 현재 진행 상황 (2026-10-27 기준)
 
 팀원이 헷갈리지 않도록 **확정된 것**과 **앞으로 바뀔 것**을 나눠 적는다.
-이 브랜치(main 대상)에는 **확정** 항목만 들어 있다. 초안·로컬 완료 항목의 코드는 `feature/ai-service-draft` 브랜치(Draft PR)에 있다.
 
 | 구분 | 내용 | 상태 | 앞으로 |
 |---|---|---|---|
 | 확정 | KOTE 데이터 분석 (노트북 01) | 완료 | 없음 |
 | 확정 | 감정 분류 모델 학습·비교·개선 실험 (노트북 02·04·05) | 완료 (실험 기록) | 서비스에 앙상블을 쓸지는 배포 자원을 보고 결정 |
-| 초안 | 감정 후처리, 감정 → 색·밝기·행성 매핑 (노트북 03·06) | v0.1 동작함 | **수정 예정**: 그룹 묶기, 색·밝기 규칙, 부정 편향 보정 |
+| 초안 | 감정 후처리, 감정 → 색·밝기·행성 매핑 (노트북 03·06) | v0.1 동작함. 행성 외형 v0.2 시안(`planet_visual.py`)은 이 PC에서만 확인 | **수정 예정**: 그룹 묶기, 색·밝기 규칙, 부정 편향 보정, v0.2 기준값을 실제 일기로 보정 |
 | 로컬 완료 | 의미 임베딩·관련 기억·3D 위치 (노트북 07·08) | 가상 일기 76개로 검증 | 실제 데이터로 τ(관련 기억 기준값) 다시 정하기 |
 | 로컬 완료 | AI 서비스(`ai/service/`) ↔ 백엔드 ↔ 프론트 연동 | 이 PC에서 동작 확인 (실제 AI 서비스 + 가짜 DB, 백엔드 테스트 23개). 실제 DB로 앱 화면 확인은 진행 전 | **배포 위치 미정**(GPU 서버·Railway 등), 모델 가중치 공유 방법 미정 |
 | 미정 | 프론트 디자인 (관련 기억 표시, 별 모양) | 지금은 좌표·색·밝기만 반영, 화면 디자인 변경 없음 | 팀 논의 후 결정 |
@@ -32,6 +31,13 @@
 - [reports/emotion_baseline_ko.md](reports/emotion_baseline_ko.md): 감정 분류 베이스라인 성능
 - [reports/model_comparison_ko.md](reports/model_comparison_ko.md): 감정 분류 모델 비교(KcELECTRA, KLUE-RoBERTa base/large, 앙상블)
 - [reports/improvement_experiments_ko.md](reports/improvement_experiments_ko.md): 성능 개선 실험(그룹 동시 학습, soft label, seed 앙상블)
+- [reports/postprocess_ax_ko.md](reports/postprocess_ax_ko.md): A.X Encoder 추가 실험, 감정 후처리(라벨 묶기·부정 편향 보정)
+- [reports/planet_mapping_design_ko.md](reports/planet_mapping_design_ko.md): 감정 → 행성 외형 매핑 설계
+- [reports/planet_visual_v02_ko.md](reports/planet_visual_v02_ko.md): 행성 외형 v0.2 시안(대표색표, 드문 감정 보조색, 애매·없음 표시, 크기 = 글 분량)
+- [reports/progress_2026-10-15_ko.md](reports/progress_2026-10-15_ko.md): 진행 현황 요약(2026-10-15 미팅용, 그 시점 기준)
+- [reports/step2_positioning_design_ko.md](reports/step2_positioning_design_ko.md): 2단계 설계(의미 임베딩 → 위치·군집·별자리)
+- [reports/step2_local_validation_ko.md](reports/step2_local_validation_ko.md): 2단계 로컬 검증(임베딩 모델 선택, 좌표 방식 선택)
+- [reports/step2_integration_local_ko.md](reports/step2_integration_local_ko.md): AI 서비스 ↔ 백엔드 ↔ DB ↔ 프론트 로컬 연동·실행 방법
 
 ## 폴더 구성
 
@@ -40,8 +46,12 @@ ai/
 ├── notebooks/                         # 실행 결과(출력)를 포함해 올림 → GitHub에서 결과 확인 가능
 │   ├── 01_data_analysis.ipynb         #   KOTE 데이터 분석
 │   ├── 02_emotion_baseline.ipynb      #   감정 분류 베이스라인 성능 확인
+│   ├── 03_planet_mapping.ipynb        #   감정 → 행성 외형 매핑 설계·미리보기
 │   ├── 04_model_comparison.ipynb      #   감정 분류 모델 비교·앙상블
-│   └── 05_improvement_experiments.ipynb  # 그룹 동시 학습·soft label·seed 앙상블 실험
+│   ├── 05_improvement_experiments.ipynb  # 그룹 동시 학습·soft label·seed 앙상블 실험
+│   ├── 06_postprocess_ax.ipynb        #   A.X Encoder, 라벨 계층 묶기, 부정 편향 보정
+│   ├── 07_embedding_retrieval.ipynb   #   2단계: 의미 임베딩 3종 비교, 관련 기억 검색
+│   └── 08_positioning.ipynb           #   2단계: 3D 좌표 방식 비교(기존 좌표 고정)
 ├── src/
 │   ├── env_check.py                   # 노트북 커널에 필요한 패키지가 있는지 점검
 │   ├── data/                          # 다운로드·로딩·라벨 변환·품질 점검 함수
@@ -58,28 +68,53 @@ ai/
 │   │   ├── train.py                   #   학습·추론 루프 (PyTorch), 다중 과제 손실
 │   │   ├── metrics.py                 #   다중 라벨 지표, threshold 조정 (numpy)
 │   │   ├── predict.py                 #   학습된 모델로 추론 (EmotionPredictor)
-│   │   └── planet_mapping.py          #   감정 확률 → 행성 외형 파라미터 (초안 v0.1, 실험 코드가 감정 그룹 정의로 사용)
+│   │   ├── postprocess.py             #   후처리: 44 → 11 그룹 → 3 정서, 사전확률 보정
+│   │   ├── pipeline.py                #   서비스용: 일기 → 감정 → 후처리 → 행성 매핑
+│   │   ├── planet_mapping.py          #   감정 확률 → 행성 외형 파라미터
+│   │   └── planet_preview.py          #   행성 파라미터 2D 미리보기
+│   ├── embedding/                     # 2단계: 의미 임베딩
+│   │   ├── encoders.py                #   모델 wrapper (카드 기준 pooling·정규화·prefix, 기본 GPU)
+│   │   └── retrieval.py               #   관련성 정의, 검색 지표, dev 임계값, 사례 유형 분석
+│   ├── positioning/                   # 2단계: 3D 좌표
+│   │   ├── projectors.py              #   고정 PCA / PCA+UMAP (참조에만 fit)
+│   │   ├── store.py                   #   좌표 저장소(기존 좌표 불변, 중복 방지, 버전), 배치 방식
+│   │   ├── evaluate.py                #   이웃 보존, 관련 배치, 간격, 순서 의존성
+│   │   ├── universe.py                #   텍스트 → 임베딩 → 관련 기억 → 좌표 흐름
+│   │   └── service_layout.py          #   AI 서비스용: 사용자별 저장소, 좌표·관련 기억 API 처리
 │   ├── clustering/                    # 향후 기능 위치 (현재 비어 있음)
+├── service/app.py                     # AI 추론 서비스 (FastAPI, 백엔드가 호출)
 ├── scripts/
 │   ├── run_notebook.py                # 노트북 전체 실행 → 실행본 저장 (--keep-outputs: 원본에 출력 남김 + 비밀값 점검)
 │   ├── train_emotion_baseline.py      # 감정 분류 학습 (초기 3개 실행에 사용)
-│   └── train_emotion.py               # 감정 분류 학습 확장판: 그룹 동시 학습, soft label, --seed
+│   ├── train_emotion.py               # 감정 분류 학습 확장판: 그룹 동시 학습, soft label, --seed
+│   ├── measure_embedding_resources.py # 임베딩 모델 1개의 메모리·속도를 새 프로세스에서 측정
+│   ├── step2_e2e_check.py             # 2단계 핵심 흐름을 실제 모델로 끝까지 실행 → 로그
+│   └── check_service_layout.py        # AI 서비스 2단계 API 12항목 점검 (임시 저장소 사용)
 ├── configs/                           # Git 관리: 출처 revision, 라벨 대응, 분석·학습·매핑 설정
 │   ├── kote_source.json, kote_labels.json, analysis.json
 │   ├── emotion_baseline.json          #   학습 설정 (KcELECTRA-base)
 │   ├── emotion_klue_roberta_base.json, emotion_klue_roberta_large.json   # 비교 모델 학습 설정
-│   ├── exp_kc_{bin,mt,soft,mtsoft}.json, exp_kl_mtsoft.json   # 개선 실험 설정
+│   ├── exp_kc_{bin,mt,soft,mtsoft}.json, exp_kl_mtsoft.json, exp_ax_bin_lr{2e5,5e5}.json   # 개선·추가 실험 설정
+│   ├── emotion_postprocess.json       #   후처리: 그룹·정서 계층, KOTE train 라벨 빈도, 보정 설정(기본 끔)
 │   ├── planet_mapping.json            #   감정 그룹·색·행성 규칙 (설계 초안)
-│   └── demo_diaries.json              #   시연용 가상 일기 (개발자 작성)
+│   ├── demo_diaries.json              #   시연용 가상 일기 (개발자 작성)
+│   ├── pilot_diaries.json             #   2단계 평가용 가상 일기 76개·관련성 규칙 (개발자 작성)
+│   ├── embedding_models.json          #   임베딩 모델 3종 (revision 고정, 카드 사용법)
+│   ├── step2_experiment.json          #   2단계 실험 설정 (지표, 모델 선택 규칙, 좌표 설정)
+│   └── service.json                   #   AI 서비스 설정 (감정 모델, 밝기 범위, 좌표: KURE-v1·τ·장면 배율)
 ├── reports/                           # Git 관리: 원문 없는 요약 보고서
 ├── requirements.txt                   # 분석 단계 (CPU)
 ├── requirements-train.txt             # 학습·추론 단계 (+ PyTorch CUDA)
+├── requirements-service.txt           # AI 추론 서비스 실행
+├── requirements-step2.txt             # 2단계 임베딩·좌표 실험 (+ scikit-learn, umap-learn, plotly)
 │
 ├── data/raw/kote/          # (Git 제외) 원본 다운로드
 ├── data/processed/kote/    # (Git 제외) 가공 결과 (parquet, multi-hot npy)
 ├── outputs/kote/           # (Git 제외) 상세 CSV, 그림, 출력 포함 실행 노트북
 ├── outputs/emotion/<run>/  # (Git 제외) 학습 로그, 지표, 예측 확률, 그림
+├── outputs/step2/          # (Git 제외) 2단계 임베딩 캐시, 검토용 표, 결과, 3D HTML, 좌표 저장소
 ├── checkpoints/emotion_baseline/<run>/   # (Git 제외) 모델 가중치·토크나이저·thresholds.json
+├── data/service/           # (Git 제외) AI 서비스의 사용자별 임베딩·좌표 저장소 (일기에서 만든 민감 정보)
 └── .cache/                 # (Git 제외) Hugging Face 캐시
 ```
 
@@ -95,7 +130,7 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1          # Git Bash: source .venv/Scripts/activate
 python -m pip install --upgrade pip
 pip install -r ai/requirements.txt          # 데이터 분석(01)만 할 때: CPU, PyTorch 불필요
-pip install -r ai/requirements-train.txt    # 학습·추론(02·04·05): PyTorch 2.14.1 + CUDA 13.0
+pip install -r ai/requirements-train.txt    # 학습·추론(02~06): PyTorch 2.14.1 + CUDA 13.0
 ```
 
 - `requirements-train.txt`는 NVIDIA 드라이버가 CUDA 13.x를 지원하는 환경 기준이다(`nvidia-smi`의 `CUDA Version` 확인).
@@ -150,15 +185,20 @@ pip install -r ai/requirements-train.txt    # 학습·추론(02·04·05): PyTorc
 | 1. 데이터 분석 | `.venv\Scripts\python ai\scripts\run_notebook.py` | KOTE 다운로드, `ai/data/processed/kote/`, `ai/outputs/kote/` |
 | 2. 감정 모델 학습 | `.venv\Scripts\python ai\scripts\train_emotion_baseline.py` | `ai/checkpoints/emotion_baseline/<run>/`, `ai/outputs/emotion/<run>/` |
 | 3. 성능 확인 | `.venv\Scripts\python ai\scripts\run_notebook.py --notebook ai\notebooks\02_emotion_baseline.ipynb --executed-out ai\outputs\emotion\02_emotion_baseline.executed.ipynb` | 학습 곡선, test 성능, 라벨·그룹별 성능 |
-| 4. 모델 비교 | `.venv\Scripts\python ai\scripts\train_emotion_baseline.py --config ai\configs\emotion_klue_roberta_large.json --run-id klue_roberta_large_s42` (base도 같은 방식) 후 `.venv\Scripts\python ai\scripts\run_notebook.py --notebook ai\notebooks\04_model_comparison.ipynb --executed-out ai\outputs\emotion\04_model_comparison.executed.ipynb` | 성능 비교, bootstrap 신뢰구간, 앙상블, 속도 |
-| 5. 개선 실험 | `.venv\Scripts\python ai\scripts\train_emotion.py --config ai\configs\exp_kc_mtsoft.json --seed 42 --run-id kc_mtsoft_s42` (실험별로 반복) 후 `.venv\Scripts\python ai\scripts\run_notebook.py --notebook ai\notebooks\05_improvement_experiments.ipynb --executed-out ai\outputs\emotion\05_improvement_experiments.executed.ipynb` | 2×2 실험, seed 변동, 앙상블 |
+| 4. 행성 매핑 | `.venv\Scripts\python ai\scripts\run_notebook.py --notebook ai\notebooks\03_planet_mapping.ipynb --executed-out ai\outputs\emotion\03_planet_mapping.executed.ipynb` | 매핑 분포 점검, 행성 미리보기 |
+| 5. 모델 비교 | `.venv\Scripts\python ai\scripts\train_emotion_baseline.py --config ai\configs\emotion_klue_roberta_large.json --run-id klue_roberta_large_s42` (base도 같은 방식) 후 `.venv\Scripts\python ai\scripts\run_notebook.py --notebook ai\notebooks\04_model_comparison.ipynb --executed-out ai\outputs\emotion\04_model_comparison.executed.ipynb` | 성능 비교, bootstrap 신뢰구간, 앙상블, 속도 |
+| 6. 개선 실험 | `.venv\Scripts\python ai\scripts\train_emotion.py --config ai\configs\exp_kc_mtsoft.json --seed 42 --run-id kc_mtsoft_s42` (실험별로 반복) 후 `.venv\Scripts\python ai\scripts\run_notebook.py --notebook ai\notebooks\05_improvement_experiments.ipynb --executed-out ai\outputs\emotion\05_improvement_experiments.executed.ipynb` | 2×2 실험, seed 변동, 앙상블 |
+| 7. 후처리·A.X | `.venv\Scripts\python ai\scripts\train_emotion.py --config ai\configs\exp_ax_bin_lr5e5.json --run-id ax_bin_lr5e5_s42` 후 `.venv\Scripts\python ai\scripts\run_notebook.py --notebook ai\notebooks\06_postprocess_ax.ipynb --executed-out ai\outputs\emotion\06_postprocess_ax.executed.ipynb` | A.X 비교, 44→11→3 계층 성능, 편향 보정 평가 |
+| 8. 2단계 임베딩 | `.venv\Scripts\python -m pip install -r ai\requirements-step2.txt` 후 `.venv\Scripts\python ai\scripts\run_notebook.py --notebook ai\notebooks\07_embedding_retrieval.ipynb --executed-out ai\outputs\step2\notebooks\07_embedding_retrieval.executed.ipynb --keep-outputs` | 모델 3종 비교, dev 임계값, `ai/outputs/step2/` |
+| 9. 2단계 좌표 | `.venv\Scripts\python ai\scripts\run_notebook.py --notebook ai\notebooks\08_positioning.ipynb --executed-out ai\outputs\step2\notebooks\08_positioning.executed.ipynb --keep-outputs` 후 `.venv\Scripts\python ai\scripts\step2_e2e_check.py` | 좌표 방식 비교, 3D HTML, 끝까지 실행 로그 |
 
 - 각 노트북은 VS Code에서 `.venv` 커널을 고르고 **Run All**로 실행해도 된다.
 - `run_notebook.py`는 새 커널로 처음부터 실행하고, 출력이 포함된 실행본을 `--executed-out` 위치(Git 제외)에 저장한다. `--keep-outputs`를 주면 원본 노트북에도 출력을 남긴다(Git에 올리는 방식). 주지 않으면 원본의 출력을 지운다.
 - 2단계 학습은 RTX 4060 Ti 기준 epoch당 약 3~4분이며 최대 10 epoch(조기 종료 있음)이다. 먼저 `--smoke`로 1분 정도의 동작 확인을 할 수 있다.
   다른 프로그램이 GPU 메모리를 많이 쓰면 Windows가 시스템 메모리로 넘겨 크게 느려질 수 있으니, 학습 중에는 GPU를 쓰는 프로그램을 줄인다.
-- 02 노트북은 `RUN_ID = "baseline_v2021_s42"`(KcELECTRA)를 읽는다. 다른 모델을 보려면 `RUN_ID`를 바꾼다.
+- 02·03 노트북은 `RUN_ID = "baseline_v2021_s42"`(KcELECTRA)를 읽는다. 행성 매핑 기준을 이 모델로 보정했기 때문이다. 다른 모델을 보려면 `RUN_ID`를 바꾸고, 03은 4절로 다시 보정한다.
 - 04 노트북은 세 실행(`baseline_v2021_s42`, `klue_roberta_base_s42`, `klue_roberta_large_s42`)이 모두 있어야 한다. KLUE-large 학습은 이 PC에서 약 2시간 걸린다.
+- 07·08은 GPU(`configs/embedding_models.json`의 `device: "cuda"`)로 실행한다. 모델 3종 약 4.9GB를 처음에 받는다. GPU가 없으면 `device`를 `"cpu"`로 바꾼다(KURE 일기 1개 약 57ms, GPU 약 10ms). 요약: `ai/reports/step2_local_validation_ko.md`.
 - **노트북은 실행 결과를 남긴 채 올린다**(팀원이 GitHub에서 결과를 볼 수 있게). `--keep-outputs`로 실행하면 셀 코드·출력에 비밀값·개인 경로로 보이는 패턴이 있는지 자동으로 점검한다. 올리기 전에 출력에 KOTE 원문이나 실제 사용자 일기가 없는지도 확인한다.
 
 ## 캐시와 결과 저장 위치
@@ -172,7 +212,9 @@ pip install -r ai/requirements-train.txt    # 학습·추론(02·04·05): PyTorc
 | `ai/outputs/emotion/<run>/` | 학습 로그(`train.log`), `history.csv`, `metrics.json`, 예측 확률, 라벨별 성능, 그림 | 제외 |
 | `ai/checkpoints/emotion/<run>/` | `train_emotion.py`로 학습한 모델(가중치·토크나이저·thresholds.json) | 제외 |
 | `ai/checkpoints/emotion_baseline/<run>/` | **모델 가중치**(`model.safetensors`), 토크나이저, `thresholds.json` (`*.pt`, `*.safetensors` 등은 저장소 전체에서도 제외) | 제외 |
-| `ai/configs/`, `ai/reports/`, `ai/src/`, `ai/notebooks/` | 설정, 요약 보고서, 코드, 실행 결과 포함 노트북 | **추적** |
+| `ai/outputs/step2/` | 2단계 임베딩 캐시(`embeddings/`), 검토용 표(`review/`), 결과 CSV·JSON(`results/`), 3D HTML·그림(`figures/`), 좌표 저장소(`layouts/`, `e2e/`), 실행 노트북 | 제외 |
+| `ai/data/service/positioning/` | AI 서비스의 사용자별 임베딩·좌표 저장소, 고정 PCA 투영기 | 제외 |
+| `ai/configs/`, `ai/reports/`, `ai/src/`, `ai/notebooks/`, `ai/service/` | 설정, 요약 보고서, 코드, 실행 결과 포함 노트북 | **추적** |
 
 토크나이저는 `beomi/KcELECTRA-base`의 토크나이저 파일만 받는다(`*.bin`, `*.safetensors` 제외).
 기본 revision은 KOTE 공식 코드와 같은 `v2021`이다. `main`(2023 BBPE 토크나이저)은 `[CLS]/[SEP]`를 자동으로 붙이지 않아 이번 측정에서 제외했다(`configs/analysis.json` 참고).
@@ -185,9 +227,58 @@ pip install -r ai/requirements-train.txt    # 학습·추론(02·04·05): PyTorc
 - Windows에서 HF 캐시 symlink 경고가 나올 수 있다. 캐시가 파일 복사 방식으로 저장될 뿐 결과에는 영향이 없다.
 - 실제 사용자 일기·사진은 이 분석에 쓰지 않았다. 앞으로도 사용자 데이터는 `ai/data/`(Git 제외) 밖에 두지 말고, 노트북 출력에 남기지 않는다.
 
-## AI 추론 서비스·2단계 (작업 중)
+## AI 추론 서비스 (백엔드 연동)
 
-감정 후처리, 행성 매핑 조정, 의미 임베딩·3D 위치, AI 서비스(`ai/service/`)와 백엔드·프론트 연동은 `feature/ai-service-draft` 브랜치(Draft PR)에서 작업 중이다. 로컬에서는 동작을 확인했지만 후처리·디자인·배포 위치가 정해지지 않아 main에는 아직 넣지 않는다.
+일기를 저장하면 백엔드가 AI 서비스에 일기 내용을 보내고, 별(`stars`)의 **색(color)·밝기(brightness)**(1단계)와 **3D 위치(x, y, z)**(2단계)를 받아 저장한다.
+AI 서비스는 백엔드와 분리된 별도 서버다. 주소가 설정되지 않았거나 응답이 없으면 백엔드는 기존 방식(무작위 위치, 흰색, 밝기 1)으로 별을 만들고, 일기 저장은 항상 성공한다.
+**DB 스키마는 바꾸지 않았다.** 좌표는 기존 `stars.x/y/z`에 들어간다.
+
+```
+앱(frontend) ──▶ 백엔드(FastAPI, backend/) ──HTTP──▶ AI 서비스(FastAPI, ai/service/, GPU)
+                     │                                   /analyze        일기 → 감정 모델 → 후처리 → 행성 매핑 → 색·밝기
+                     │                                   /layout/add     일기 → KURE-v1 임베딩 → 관련 기억 근처 좌표
+                     │                                   /layout/related 관련 기억(코사인 ≥ τ, 최대 3개)
+                     └─ stars.color / brightness / x, y, z 저장
+```
+
+| 구성 | 파일 |
+|---|---|
+| 파이프라인 | `ai/src/emotion/pipeline.py` (`DiaryEmotionPipeline`) |
+| 서버 | `ai/service/app.py` — `GET /health`, `POST /analyze` (`{"text"}`), `POST /analyze/batch` (`{"texts"}`), 2단계 `POST /layout/add·update·remove·related` (`{"user_id", "diary_id", "text"}`) |
+| 2단계 좌표 | `ai/src/positioning/service_layout.py` — 사용자별 임베딩·좌표 저장소(`ai/data/service/`, Git 제외), 연동 안내: `ai/reports/step2_integration_local_ko.md` |
+| 설정 | `ai/configs/service.json` — 사용할 모델 체크포인트, 밝기 범위(0.5~1.5), `positioning`(임베딩 모델 KURE-v1, τ, 장면 배율) |
+| 의존성 | `ai/requirements-service.txt` |
+| 백엔드 호출 | `backend/app/ai_client.py`, `backend/app/routers/diaries.py` (일기 작성·수정·삭제에 연결, 새 API `GET /diaries/{id}/related`) |
+| 프론트 표시 | `frontend/src/store/diary-context.tsx`(서버 색·밝기·좌표 사용), `frontend/src/components/universe-scene.tsx`(밝기 → 발광 세기), `frontend/src/lib/api.ts`(백엔드 주소를 `EXPO_PUBLIC_API_BASE_URL`로 바꿀 수 있게, 없으면 운영 주소) |
+
+### 로컬 실행
+
+AI 서비스·백엔드·프론트를 PowerShell 창 3개로 띄우는 방법은 [reports/step2_integration_local_ko.md](reports/step2_integration_local_ko.md) 3절에 있다. 요약:
+
+```powershell
+# 1) AI 서비스 (저장소 루트)
+$env:AI_SERVICE_TOKEN = "<backend/.env 의 AI_SERVICE_TOKEN 과 같은 값>"
+.venv\Scripts\python -m uvicorn --app-dir ai service.app:app --host 127.0.0.1 --port 8100
+# 확인: http://127.0.0.1:8100/health  → "layout": {"device": "cuda", ...}
+
+# 2) 백엔드 .env 에 추가
+AI_SERVICE_URL=http://127.0.0.1:8100
+AI_SERVICE_TOKEN=<직접 정한 긴 임의 문자열>
+```
+
+- 기본 모델은 KcELECTRA 단일(`checkpoints/emotion_baseline/baseline_v2021_s42`)이다. 앙상블은 `service.json`의 `models`에 추가하고, 매핑 고리 기준을 03 노트북으로 다시 보정한다.
+- 좌표 규칙: 새 일기는 관련 기억(코사인 ≥ τ=0.5571) 근처, 없으면 고정 PCA 위치. **이미 있는 별은 움직이지 않는다**(일기 수정·삭제 때도). 저장소 좌표 × 1.6(`scene_scale`)을 화면 좌표로 쓴다.
+- 별 색 = 행성 매핑 기본색, 밝기 = 0.5 + 행성 빛 번짐(glow). glow 0.5가 기존 밝기 1에 해당한다.
+- 프론트는 AI 분석 전에 만들어진 별(흰색 기본값)에는 기존 팔레트 색을 그대로 쓴다.
+
+### 배포 시 주의
+
+아직 배포하지 않았다. 배포 위치와 방법은 팀 협의로 정한다.
+
+- **감정 모델 가중치는 Git에 없다**(약 0.5GB). 배포 서버에 따로 올려야 한다. 예: Hugging Face Hub 비공개 저장소, 서버 볼륨. 그 위치를 `service.json`의 `checkpoint_dir`에 맞춘다. 임베딩 모델(KURE-v1, 약 2.3GB)은 처음 실행 때 Hugging Face에서 받는다.
+- 이 PC(RTX 4060 Ti) 기준 GPU 메모리는 KURE 약 2.3GB, 일기 1개당 임베딩 약 10ms. GPU 없는 서버에서는 CPU 빌드 torch를 설치하고 `AI_DEVICE=cpu`로 실행한다(KURE 일기 1개 약 57ms).
+- **임베딩·좌표 저장소(`ai/data/service/`)는 AI 서비스 PC에만 있다.** 서버로 옮길 때는 서버 볼륨에 둘지, DB(pgvector)로 옮길지 정해야 한다.
+- `AI_SERVICE_TOKEN`을 백엔드와 AI 서비스에 같은 값으로 설정해, 외부에서 AI 서비스를 직접 호출하지 못하게 한다.
 
 ## Git 관리 규칙
 

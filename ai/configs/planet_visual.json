@@ -1,0 +1,52 @@
+{
+  "version": "0.2-draft",
+  "status": "행성 외형 규칙 시안. 그룹 정의(라벨 묶음)는 planet_mapping.json을 그대로 쓰고, 이 파일은 색·외형 규칙만 정한다. 실제 화면과 사용자 검토로 조정한다.",
+  "basis": "ai/reports/planet_visual_v02_ko.md (KOTE validation에서 규칙을 정하고 test에서 확인, 모델 baseline_v2021_s42)",
+  "colors": {
+    "joy":       {"hex": "#FFC93C", "name": "금빛 노랑"},
+    "warmth":    {"hex": "#FF9CC2", "name": "연분홍"},
+    "calm":      {"hex": "#3FCF8E", "name": "초록"},
+    "curiosity": {"hex": "#2EC4E8", "name": "하늘 청록"},
+    "anger":     {"hex": "#E5383B", "name": "빨강"},
+    "contempt":  {"hex": "#8FA12A", "name": "올리브"},
+    "sadness":   {"hex": "#3157E6", "name": "파랑"},
+    "anxiety":   {"hex": "#B888FF", "name": "연보라"},
+    "fatigue":   {"hex": "#C0773A", "name": "황갈색"},
+    "shame":     {"hex": "#9E2266", "name": "자주"}
+  },
+  "none_color": {"hex": "#AEB4C0", "name": "차분한 회청색"},
+  "color_note": "v0.1 팔레트에서 지침(#8C7B6B)이 '없음' 회색과, 슬픔과 불안이 서로 가까워(CIELAB 거리 29.0, 19.9) 바꿨다. 10개 그룹 + 없음 사이 최소 거리 19.9 → 32.8.",
+  "label_shade": {
+    "hue_step_deg": 7,
+    "lightness_step": 0.05,
+    "note": "같은 그룹 안에서 모델이 가장 높게 본 라벨에 따라 무늬색(tone_color)만 조금 바꾼다. 대표색(base_color)은 그룹 색 그대로다."
+  },
+  "confidence": {
+    "clear_min": 0.70,
+    "soft_min": 0.50,
+    "note": "주 그룹 점수(그룹 안 라벨 확률의 최댓값) 구간별로 주 그룹이 공식 라벨에 있는 비율(validation): 0.7 미만 약 0.65~0.70, 0.7 이상 0.80~0.98. 0.5 미만은 23개뿐이라 근거가 약하다. 실제 일기로 다시 정한다."
+  },
+  "saturation": {"clear": 1.0, "soft": 0.7, "muted": 0.3, "none": 0.0},
+  "accent": {
+    "max_weights": [0.26, 0.12],
+    "rare_weight": 0.07,
+    "note": "보조 감정 후보 = 모델 판정(라벨별 기준값, validation에서 정함)을 통과한 그룹 중 주 그룹이 아닌 것. ① 기준값 대비 여유(logit p − logit 기준값)가 큰 순서로 2자리(soft 상태는 1자리), ② 남은 판정 그룹 중 KOTE train에서 가장 드문 그룹 1자리(작은 면적). 면적 = 최대 비율 × (보조 점수 / 주 점수)라 주 그룹 색이 항상 55% 이상이다. ②가 없으면 validation에서 판정된 부끄러움·자책의 94.6%, 지침·무기력의 64%가 화면에 나타나지 않았다(②로 0%, 21%). ② 자리의 정답률은 약 0.5라 작게만 그린다(면적 3.5~7%)."
+  },
+  "group_train_prevalence": {
+    "values": {"joy": 0.3819, "warmth": 0.423, "calm": 0.2286, "curiosity": 0.5625, "anger": 0.575, "contempt": 0.5089, "sadness": 0.507, "anxiety": 0.4182, "fatigue": 0.2768, "shame": 0.0965},
+    "note": "KOTE train 40,000개에서 그룹 안 라벨이 하나라도 붙은 글의 비율. 드문 그룹 자리(accent ②)를 고를 때만 쓴다."
+  },
+  "ring": {
+    "min_second_accent_score": 0.85,
+    "note": "고리 = 뚜렷한 복합 감정. 확실(clear) 상태이고 보조 감정 2개가 있으며 두 번째 보조 그룹 점수가 이 값 이상일 때만. validation에서 고리 비율 14.6%(v0.1 고리 13.7%, 평가자 기준 뚜렷한 복합 감정 12.4%와 비슷하게). 0.65면 53%라 고리가 흔해진다."
+  },
+  "atmosphere": {
+    "min_glow": 0.6,
+    "note": "대기광 = 밝게 빛나는 감정(긍정적이고 강한 감정). 확실(clear) 상태이고 glow가 이 값 이상일 때만."
+  },
+  "pattern_by_arousal": {
+    "storm_min": 0.6,
+    "bands_min": 0.3,
+    "note": "주 그룹 각성(planet_mapping.json의 arousal)으로 무늬 종류를 정한다. 높음 → 소용돌이(storm), 중간 → 띠(bands), 낮음 → 부드러운 결(soft). 없음·애매 → 옅은 안개(mist)."
+  }
+}
