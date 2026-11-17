@@ -1,3 +1,4 @@
+import { GroupPushGuard } from '@/components/group-push-guard';
 import { QuestProvider } from '@/store/quest-context';
 import { SessionGuard } from '@/components/session-guard';
 import { Stack } from 'expo-router';
@@ -39,7 +40,7 @@ export default function RootLayout() {
             <Stack.Screen name="admin/login" />
             <Stack.Screen name="admin/index" />
           </Stack>
-          <NoticeDialogHost /><SessionGuard />
+          <NoticeDialogHost /><SessionGuard /><GroupPushGuard />
           </QuestProvider>
         </ShopProvider>
       </DiaryProvider>

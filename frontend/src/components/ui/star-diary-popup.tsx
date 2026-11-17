@@ -1,3 +1,4 @@
+import { DiaryHeart } from '@/components/diary-heart';
 import { useEffect, useState } from 'react';
 import { BackHandler, Image, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
@@ -8,6 +9,7 @@ import { getStarPopupLayout, type StarPopupAnchor } from '@/lib/star-popup-layou
 import type { DiaryEntry } from '@/store/diary-context';
 
 type Props = {
+  groupId?: string;
   entry: DiaryEntry;
   anchor: StarPopupAnchor;
   viewport: { width: number; height: number; topInset: number; bottomInset: number };
@@ -43,7 +45,7 @@ function AuthorAvatar({ author, size }: { author: NonNullable<Props['author']>; 
   );
 }
 
-export function StarDiaryPopup({ entry, anchor, viewport, editable, owned, loading, error, onRetry, author, onClose, onEdit, onDecorate }: Props) {
+export function StarDiaryPopup({ entry, anchor, viewport, editable, owned, loading, error, onRetry, author, onClose, onEdit, onDecorate, groupId }: Props) {
   useEffect(() => {
     if (Platform.OS === 'web') {
       const onKeyDown = (event: KeyboardEvent) => {
@@ -113,10 +115,11 @@ export function StarDiaryPopup({ entry, anchor, viewport, editable, owned, loadi
             </ScrollView>
           )}
         </ScrollView>
-        {owned && !loading && !error && <View style={styles.actions}>
-          <Pressable onPress={onDecorate} accessibilityRole="button" style={styles.action}>
+        {(owned || groupId) && !loading && !error && <View style={styles.actions}>
+          {groupId && <DiaryHeart key={`${groupId}:${entry.id}`} groupId={groupId} diaryId={entry.id} />}
+          {owned && <Pressable onPress={onDecorate} accessibilityRole="button" style={styles.action}>
             <Text style={styles.actionText}>행성 꾸미기</Text>
-          </Pressable>
+          </Pressable>}
           {editable && (
             <Pressable onPress={onEdit} accessibilityRole="button" style={styles.action}>
               <Text style={styles.actionText}>수정</Text>

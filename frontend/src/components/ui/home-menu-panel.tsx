@@ -2,7 +2,7 @@ import { Text } from '@/components/app-text';
 // [MODIFIED 2026-11-05] fffju 메뉴 외관은 그대로 두고, 동작을 서버 구조에 맞게 연결함.
 //  - "일기 내용 검색" → 검색 화면(/search, 최근 검색어 표시), 달력 아이콘 → 검색 화면을 달력이 펼쳐진 채로 연다.
 //    (기존 fffju의 팝업 JournalDialog는 삭제)
-//  - 회전 민감도 → lib/settings.ts (0.1~1.5배, 기기에 저장)
+//  - 우주 조작 민감도 → lib/settings.ts (0.1~1.5배, 기기에 저장)
 //  - 로그아웃 → 실제 로그아웃 후 로그인 화면
 //  - 서버 기능이 아직 없는 항목(배경음악·테마·소리·알림·회원 탈퇴·이용약관)은 값만 보여주고 눌러도 반응하지 않는다.
 //    펼치기/접기(아코디언)만 동작한다. 나중에 기능이 생기면 하나씩 연결.
@@ -33,7 +33,7 @@ type Props = {
   onSearch: () => void;
   onCalendar: () => void;
   onLogout: () => void;
-  // 회전 민감도 (배수, 0.1~1.5)
+  // 우주 조작 민감도 (배수, 0.1~1.5)
   sensitivity: number;
   onSensitivity: (value: number) => void;
 };
@@ -124,7 +124,7 @@ export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, 
           {heading('사용자 설정')}
           <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 34 * scale, marginLeft: 10 * scale }}>
             <Text style={[styles.label, { width: 50 * scale * Math.max(1, fontScale) }, type(14, 22)]}>민감도</Text>
-            <MenuSlider scale={scale} label="우주 회전 민감도" value={sensitivityValue}
+            <MenuSlider scale={scale} label="우주 우주 조작 민감도" value={sensitivityValue}
               min={Math.round(ROTATE_SENSITIVITY_MIN * 100)} max={Math.round(ROTATE_SENSITIVITY_MAX * 100)}
               onPreview={setSensitivityPreview}
               onChange={(value) => {

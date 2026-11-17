@@ -2,6 +2,10 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    web_push_public_key: str = ""
+    web_push_private_key: str = ""
+    web_push_subject: str = ""
+
     supabase_url: str = ""
     supabase_key: str = ""
     admin_jwt_secret: str = ""

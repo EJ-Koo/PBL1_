@@ -184,3 +184,6 @@ ai/**/*.bin
 # OS 파일
 .DS_Store
 Thumbs.db
+
+# Private push signing keys (created manually)
+*.private.pem

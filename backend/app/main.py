@@ -11,6 +11,7 @@ from app.routers import (
     constellations,
     diaries,
     groups,
+    group_social,
     legal,
     profiles,
     quests,
@@ -47,6 +48,7 @@ app.include_router(admin_shop.router)
 app.include_router(profiles.router)
 app.include_router(diaries.router)
 app.include_router(groups.router)
+app.include_router(group_social.router)
 app.include_router(stars.router)
 app.include_router(constellations.router)
 app.include_router(uploads.router)
