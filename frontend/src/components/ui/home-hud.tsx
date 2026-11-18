@@ -1,3 +1,4 @@
+import { useLanguage } from '@/lib/language';
 import { Text } from '@/components/app-text';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useState } from 'react';
@@ -20,6 +21,7 @@ type Props = {
 };
 
 export function HomeHud({ scale, starCount, coinCount, checkCount, onStats, onQuest, menuProps }: Props) {
+  const { t } = useLanguage();
   const { chromeLeft, chromeWidth, headerTop, wide } = useResponsiveLayout();
   const [menuVisible, setMenuVisible] = useState(false);
   const showLabels = wide && chromeWidth >= 700 * scale;
@@ -40,7 +42,7 @@ export function HomeHud({ scale, starCount, coinCount, checkCount, onStats, onQu
         style={[styles.container, { left: chromeLeft, top: headerTop, width: chromeWidth, height: 75 * scale }]}>
         <HomeHudFrame scale={scale} width={chromeWidth} wide={wide} />
         <TouchableOpacity
-          accessibilityLabel="메뉴"
+          accessibilityLabel={t("메뉴")}
           hitSlop={{ top: 6, bottom: 6 }}
           onPress={() => setMenuVisible((visible) => !visible)}
           style={[styles.button, { left: 15 * scale, top: 10 * scale, width: 51 * scale, height: 38 * scale }]}
@@ -49,10 +51,7 @@ export function HomeHud({ scale, starCount, coinCount, checkCount, onStats, onQu
           style={[styles.brand, { left: 88 * scale, top: 16 * scale,
             width: Math.max(0, (chromeWidth - statsWidth) / 2 - 104 * scale),
             fontSize: 20 * scale, lineHeight: 30 * scale, letterSpacing: 2 * scale }]}>STAR2DAY</Text>}
-        <TouchableOpacity
-          accessibilityLabel="상점"
-          hitSlop={{ top: 10, bottom: 10 }}
-          onPress={onStats}
+        <View
           style={[styles.button, { left: (chromeWidth - statsWidth) / 2, top: 16 * scale, width: statsWidth, height: 27 * scale }]}>
           {stats.map(({ kind, value, x, textX, width }) => (
             <View key={kind} style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -67,14 +66,11 @@ export function HomeHud({ scale, starCount, coinCount, checkCount, onStats, onQu
               </Text>
             </View>
           ))}
-        </TouchableOpacity>
-        {showLabels && <TouchableOpacity accessibilityRole="button" accessibilityLabel="상점 열기" onPress={onStats}
-          style={[styles.button, { right: 100 * scale, top: 8 * scale, width: 70 * scale, height: 40 * scale,
-            alignItems: 'center', justifyContent: 'center' }]}>
-          <Text style={{ color: DesignPaint.ink, fontFamily: DesignFonts.regular, fontSize: 14 * scale }}>상점</Text>
-        </TouchableOpacity>}
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('상점')} testID="home-shop-coin" onPress={onStats}
+            hitSlop={{top:8,bottom:8}} style={{position:'absolute',left:(wide?92:67)*scale,top:0,width:(wide?100:66)*scale,height:30*scale}} />
+        </View>
         <TouchableOpacity
-          accessibilityLabel="퀘스트"
+          accessibilityLabel={t("퀘스트")}
           hitSlop={{ top: 6, bottom: 6 }}
           onPress={() => {
             setMenuVisible(false);

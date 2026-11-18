@@ -1,3 +1,4 @@
+import { useLanguage } from '@/lib/language';
 import { Text } from '@/components/app-text';
 import { useEffect, useState } from 'react';
 import { AccessibilityInfo, Animated, AppState, Easing, View } from 'react-native';
@@ -6,6 +7,7 @@ import { DesignFonts } from '@/constants/ui-design';
 import type { MemberStar } from '@/lib/group-attendance';
 
 function MemberLight({ member, scale }: { member: MemberStar; scale: number }) {
+  const { t } = useLanguage();
   const [pulse] = useState(() => new Animated.Value(0));
   const [reduced, setReduced] = useState(true);
   const [active, setActive] = useState(AppState.currentState === 'active');
@@ -26,7 +28,7 @@ function MemberLight({ member, scale }: { member: MemberStar; scale: number }) {
     return () => animation.stop();
   }, [member.completed, reduced, active, pulse]);
   return (
-    <View accessible accessibilityLabel={`${member.name}, ${member.completed ? '오늘 공유한 일기 있음' : member.known ? '오늘 공유한 일기 없음' : '작성 여부 확인 불가'}`}
+    <View accessible accessibilityLabel={`${member.name}, ${t(member.completed ? '오늘 공유한 일기 있음' : member.known ? '오늘 공유한 일기 없음' : '작성 여부 확인 불가')}`}
       style={{ width: 18 * scale, height: 22 * scale, alignItems: 'center', justifyContent: 'center' }}>
       {member.completed && <Animated.View pointerEvents="none" style={{ position: 'absolute', width: 22 * scale, height: 22 * scale,
         borderRadius: 11 * scale, backgroundColor: member.color, opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.12, 0.35] }),
@@ -43,6 +45,7 @@ function MemberLight({ member, scale }: { member: MemberStar; scale: number }) {
 }
 
 export function GroupMemberStars({ members, scale, dark = false, readable = false }: { members: MemberStar[]; scale: number; dark?: boolean; readable?: boolean }) {
+  const { t } = useLanguage();
   const complete = members.filter(member => member.completed).length;
   const allKnown = members.length > 0 && members.every(member => member.known);
   return <View style={{ width: 120 * scale }}>
@@ -50,7 +53,7 @@ export function GroupMemberStars({ members, scale, dark = false, readable = fals
       {members.map(member => <MemberLight key={member.id} member={member} scale={scale} />)}
     </View>
     <Text style={{ color: dark ? '#bbc4d0' : '#252b35', fontFamily: DesignFonts.regular, fontSize: readable ? Math.max(11, 9 * scale) : 9 * scale, lineHeight: readable ? Math.max(16, 13 * scale) : 13 * scale }}>
-      {allKnown ? `오늘 ${complete}/${members.length}명` : `멤버 ${members.length}명 · 확인된 작성 ${complete}명`}
+      {allKnown ? t('오늘 {completed}/{total}명',{completed:complete,total:members.length}) : t('멤버 {total}명 · 확인된 작성 {completed}명',{total:members.length,completed:complete})}
     </Text>
   </View>;
 }

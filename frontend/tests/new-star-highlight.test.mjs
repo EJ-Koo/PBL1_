@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { NEW_STAR_HIGHLIGHT_MS, newStarFocus, newStarGlow } from '../src/lib/new-star-highlight.ts';
+import { NEW_STAR_HIGHLIGHT_MS, newStarFocus, newStarGlow, unreadStarGlow } from '../src/lib/new-star-highlight.ts';
 
 test('new stars, including ones behind the camera, are centered in front with safe viewing distance', () => {
   const center = [2, -3, 4];
@@ -30,4 +30,11 @@ test('halo pulses slowly, fades out, and expires instead of restarting on old en
 test('reduced motion keeps a steady halo without pulsing', () => {
   assert.deepEqual(newStarGlow(800, true), newStarGlow(1600, true));
   assert.equal(newStarGlow(800, true).scale, 1.04);
+});
+
+test('unread group stars remain visible after the home marker expires, with stable reduced motion', () => {
+  for (const elapsed of [0, 800, NEW_STAR_HIGHLIGHT_MS, 86_400_000]) {
+    assert.ok(unreadStarGlow(elapsed, false).opacity >= 0.55);
+    assert.deepEqual(unreadStarGlow(elapsed, true), {opacity:0.7250000000000001,scale:1.04});
+  }
 });

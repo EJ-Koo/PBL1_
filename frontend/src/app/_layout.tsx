@@ -1,3 +1,5 @@
+import { loadLanguage } from '@/lib/language';
+import { GroupPushGuard } from '@/components/group-push-guard';
 import { QuestProvider } from '@/store/quest-context';
 import { SessionGuard } from '@/components/session-guard';
 import { Stack } from 'expo-router';
@@ -15,7 +17,7 @@ import { ShopMusic } from '@/components/shop-music';
 import { NoticeDialogHost } from '@/components/notice-dialog-host';
 
 export default function RootLayout() {
-  useEffect(() => { void loadSettings(); }, []);
+  useEffect(() => { void loadSettings(); void loadLanguage(); }, []);
   // fffju 디자인 글꼴(Inter). 불러오기에 실패해도 기본 글꼴로 화면은 띄운다.
   const [fontsLoaded, fontError] = useFonts({ Inter_400Regular, Inter_700Bold });
   if (!fontsLoaded && !fontError) return null;
@@ -33,12 +35,13 @@ export default function RootLayout() {
             <Stack.Screen name="signup" />
             <Stack.Screen name="index" />
             <Stack.Screen name="search" />
+            <Stack.Screen name="archive" />
             <Stack.Screen name="write" />
             <Stack.Screen name="planet/[id]" />
             <Stack.Screen name="admin/login" />
             <Stack.Screen name="admin/index" />
           </Stack>
-          <NoticeDialogHost /><SessionGuard />
+          <NoticeDialogHost /><SessionGuard /><GroupPushGuard />
           </QuestProvider>
         </ShopProvider>
       </DiaryProvider>

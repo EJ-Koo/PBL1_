@@ -57,7 +57,7 @@ import {
 } from '@/lib/constellation';
 import { controlsFor, frontView, rotateView, setView, zoomView, type UniverseControls } from '@/lib/universe-controls';
 import { getRotateSensitivity, loadSettings } from '@/lib/settings';
-import { newStarFocus, newStarGlow, type NewStarHighlight } from '@/lib/new-star-highlight';
+import { newStarGlow, unreadStarGlow, type NewStarHighlight } from '@/lib/new-star-highlight';
 import type { StarPopupAnchor } from '@/lib/star-popup-layout';
 import type { DiaryEntry } from '@/store/diary-context';
 
@@ -124,7 +124,7 @@ function createNewStarHaloTexture() {
 
 const NEW_STAR_HALO_TEXTURE = createNewStarHaloTexture();
 
-function NewStarHalo({ radius, startedAt }: { radius: number; startedAt: number }) {
+function NewStarHalo({ radius, startedAt, persistent = false }: { radius: number; startedAt: number; persistent?: boolean }) {
   const sprite = useRef<Sprite>(null);
   const material = useRef<SpriteMaterial>(null);
   const [reducedMotion, setReducedMotion] = useState(true);
@@ -135,7 +135,7 @@ function NewStarHalo({ radius, startedAt }: { radius: number; startedAt: number 
     return () => { alive = false; subscription.remove(); };
   }, []);
   useFrame(() => {
-    const glow = newStarGlow(Date.now() - startedAt, reducedMotion);
+    const glow = persistent ? unreadStarGlow(Date.now() - startedAt, reducedMotion) : newStarGlow(Date.now() - startedAt, reducedMotion);
     sprite.current?.scale.setScalar(radius * 5.4 * glow.scale);
     if (material.current) material.current.opacity = glow.opacity;
   });
@@ -491,6 +491,7 @@ function Planet({
   brightness = 1,
   quality,
   selected = false,
+  unread = false,
   newStar,
   special = null,
   effectIntensity = SPECIAL_EFFECT_SETTINGS.intensity,
@@ -512,7 +513,9 @@ function Planet({
   quality: PlanetQuality;
   /** 마우스를 올렸거나 누르고 있는 행성 */
   selected?: boolean;
+  unread?: boolean;
   newStar?: NewStarHighlight;
+  unreadIds?: readonly string[];
   /** 사용자가 적용한 특수 효과(상점에서 산 효과). null이면 일반 행성. 본체(색·무늬·크기)는 같고 바깥 효과만 더한다. */
   special?: SpecialType | null;
   effectIntensity?: number;
@@ -638,7 +641,7 @@ function Planet({
         moved.current = false;
       }
     }
-    const target = selected ? 1 : 0;
+    const target = selected ? 1 : unread ? 0.55 + Math.sin(_.clock.elapsedTime * 2) * 0.18 : 0;
     if (Math.abs(highlight.current - target) > 0.001) {
       highlight.current += (target - highlight.current) * Math.min(1, delta * 8);
       const h = highlight.current;
@@ -664,7 +667,7 @@ function Planet({
     // 자전축 기울기는 일기마다 고정된 값(감정과 무관). 북극 쪽을 카메라로 13~20도만 기울여
     // 층은 거의 가로로 흐르고, 고리는 정면에서 얇은 타원으로 보인다.
     <group ref={bodyRef} position={position} rotation={[0.22 + r5 * 0.13, 0, (r4 - 0.5) * 0.5]}>
-      {newStar && <NewStarHalo radius={radius} startedAt={newStar.startedAt} />}
+      {unread ? <NewStarHalo radius={radius} startedAt={0} persistent /> : newStar && <NewStarHalo radius={radius} startedAt={newStar.startedAt} />}
       <group ref={spinRef}>
         <mesh
           ref={registerMesh}
@@ -783,7 +786,7 @@ function DragPlane({ controls, onBackgroundPress }: { controls: RefObject<Univer
         if (activePointers.current.size >= 2) {
           const currentDist = pointerDistance(activePointers.current);
           if (lastPinchDist.current !== null) {
-            zoomView(controls.current, lastPinchDist.current / Math.max(currentDist, 1));
+            zoomView(controls.current, Math.pow(lastPinchDist.current / Math.max(currentDist, 1),getRotateSensitivity()));
           }
           lastPinchDist.current = currentDist;
           return;
@@ -833,7 +836,7 @@ function installWheelZoom() {
     if (!scene) return;
     const unit = e.deltaMode === 1 ? WHEEL_PIXELS_PER_LINE : e.deltaMode === 2 ? window.innerHeight : 1;
     const dy = Math.min(Math.max(e.deltaY * unit, -WHEEL_STEP_LIMIT), WHEEL_STEP_LIMIT);
-    zoomView(controlsFor(scene), Math.exp(dy * 0.0015));
+    zoomView(controlsFor(scene), Math.exp(dy * 0.0015 * getRotateSensitivity()));
   };
   window.addEventListener('wheel', onWheel, { passive: true });
   removeWheel = () => window.removeEventListener('wheel', onWheel);
@@ -892,7 +895,7 @@ export function UniverseScene({
   constellation = null,
   frontViewRequest = 0,
   backgroundStarScale = 1,
-  selectedEntryId, onStarPositionChange, onBackgroundPress, newStar,
+  selectedEntryId, onStarPositionChange, onBackgroundPress, newStar, unreadIds,
 }: {
   entries: DiaryEntry[];
   onStarPress: (id: string) => void;
@@ -907,6 +910,7 @@ export function UniverseScene({
   onStarPositionChange?: (anchor: StarPopupAnchor) => void;
   onBackgroundPress?: () => void;
   newStar?: NewStarHighlight;
+  unreadIds?: readonly string[];
 }) {
   const controls = useRef(controlsFor(sceneKey));
   const groupRef = useRef<Group>(null);
@@ -1050,17 +1054,7 @@ export function UniverseScene({
     frontView(controls.current, fittedCameraZ.current / Math.max(framing?.distance ?? 5, 0.1));
   }, [frontViewRequest]);
 
-  const focusedNewStar = useRef<string | null>(null);
-  const newEntry = newStar ? entries.find(entry => entry.id === newStar.id) : undefined;
-  useEffect(() => {
-    if (!newEntry || !framing || focusedNewStar.current === newEntry.id) return;
-    focusedNewStar.current = newEntry.id;
-    const focus = newStarFocus(newEntry.position, framing.center);
-    controls.current.yaw = focus.rotationY;
-    controls.current.pitch = focus.rotationX;
-    controls.current.zoom = Math.max(0.25, Math.min(5, focus.distance / framing.distance));
-    synced.current = false;
-  }, [newEntry, framing, controls]);
+  // New diary markers are visual only; keep the user's current camera and zoom.
 
   // 선택: 웹은 마우스를 올린 행성, 터치는 누른 행성. 누른 강조는 잠깐 보였다가(일기 화면으로 넘어가는 동안) 서서히 꺼진다.
   const [hoverId, setHoverId] = useState<string | null>(null);
@@ -1250,6 +1244,7 @@ export function UniverseScene({
               brightness={entry.brightness}
               quality={quality}
               selected={entry.id === selectedId}
+              unread={unreadIds?.includes(entry.id)}
               newStar={entry.id === newStar?.id ? newStar : undefined}
               special={effectToDraw(entry.effect)}
               runtime={runtimeRef}
@@ -1284,7 +1279,7 @@ export function UniverseCanvas({
   constellation,
   frontViewRequest,
   backgroundStarScale = 1,
-  selectedEntryId, onStarPositionChange, onBackgroundPress, newStar,
+  selectedEntryId, onStarPositionChange, onBackgroundPress, newStar, unreadIds,
 }: {
   entries: DiaryEntry[];
   onStarPress: (id: string) => void;
@@ -1298,6 +1293,7 @@ export function UniverseCanvas({
   onStarPositionChange?: (anchor: StarPopupAnchor) => void;
   onBackgroundPress?: () => void;
   newStar?: NewStarHighlight;
+  unreadIds?: readonly string[];
 }) {
   useEffect(() => installWheelZoom(), []);
   return (
@@ -1306,7 +1302,7 @@ export function UniverseCanvas({
       {/* 시야각 50도(기본 75도): 화면 가장자리 행성이 타원처럼 늘어나는 왜곡과 가까운 행성만 크게 보이는 차이를 줄인다 */}
       <Canvas style={{ flex: 1 }} camera={{ fov: CAMERA_FOV, position: [0, 0, 5] }}>
         <UniverseScene key={sceneKey} entries={entries} onStarPress={onStarPress} sceneKey={sceneKey} backgroundStarScale={backgroundStarScale}
-          selectedEntryId={selectedEntryId} onStarPositionChange={onStarPositionChange} onBackgroundPress={onBackgroundPress} newStar={newStar}
+          selectedEntryId={selectedEntryId} onStarPositionChange={onStarPositionChange} onBackgroundPress={onBackgroundPress} newStar={newStar} unreadIds={unreadIds}
           constellation={constellation} frontViewRequest={frontViewRequest} />
       </Canvas>
     </View>

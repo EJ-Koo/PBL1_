@@ -1,13 +1,15 @@
+import { useLanguage } from '@/lib/language';
+import { ScrollView } from '@/components/app-scroll-view';
 import { Text } from '@/components/app-text';
 // [MODIFIED 2026-11-05] fffju 메뉴 외관은 그대로 두고, 동작을 서버 구조에 맞게 연결함.
 //  - "일기 내용 검색" → 검색 화면(/search, 최근 검색어 표시), 달력 아이콘 → 검색 화면을 달력이 펼쳐진 채로 연다.
 //    (기존 fffju의 팝업 JournalDialog는 삭제)
-//  - 회전 민감도 → lib/settings.ts (0.1~1.5배, 기기에 저장)
+//  - 우주 조작 민감도 → lib/settings.ts (0.1~1.5배, 기기에 저장)
 //  - 로그아웃 → 실제 로그아웃 후 로그인 화면
 //  - 서버 기능이 아직 없는 항목(배경음악·테마·소리·알림·회원 탈퇴·이용약관)은 값만 보여주고 눌러도 반응하지 않는다.
 //    펼치기/접기(아코디언)만 동작한다. 나중에 기능이 생기면 하나씩 연결.
 import { useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { MenuCalendarIcon, MenuChevron, MenuDecoration, MenuNotificationToggle, MenuSearchIcon } from './menu-decoration';
 import { MenuSlider } from './menu-slider';
@@ -33,7 +35,7 @@ type Props = {
   onSearch: () => void;
   onCalendar: () => void;
   onLogout: () => void;
-  // 회전 민감도 (배수, 0.1~1.5)
+  // 우주 조작 민감도 (배수, 0.1~1.5)
   sensitivity: number;
   onSensitivity: (value: number) => void;
 };
@@ -63,6 +65,7 @@ function Inactive({ children }: { children: ReactNode }) {
 }
 
 export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, sensitivity, onSensitivity }: Props) {
+  const { t, language, setLanguage } = useLanguage();
   const fontScale = useFontScale();
   const [expanded, setExpanded] = useState<Partial<Record<AccordionId, boolean>>>({});
   const [sensitivityPreview, setSensitivityPreview] = useState<number | null>(null);
@@ -72,13 +75,13 @@ export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, 
   const visibleHeight = Math.min(558 * scale, Math.max(0, height - top - bottomSpace - 14 * scale));
   const type = (fontSize = 16, lineHeight = 24) => ({ fontSize: fontSize * scale, lineHeight: lineHeight * scale });
   const toggle = (id: AccordionId) => setExpanded((value) => ({ ...value, [id]: !value[id] }));
-  const heading = (text: string) => <Text style={[styles.label, styles.heading, { marginLeft: 10 * scale, marginBottom: 4 * scale }, type(20, 28)]}>{text}</Text>;
+  const heading = (text: string) => <Text style={[styles.label, styles.heading, { marginLeft: 10 * scale, marginBottom: 4 * scale }, type(20, 28)]}>{t(text)}</Text>;
   const divider = <View style={{ height: 1.5 * scale, marginVertical: 8 * scale, backgroundColor: DesignPaint.menuText }} />;
   const volumeRow = (label: string, value: number) => (
     <Inactive>
       <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 34 * scale, marginLeft: 10 * scale }}>
-        <Text style={[styles.label, { width: 50 * scale * Math.max(1, fontScale) }, type(14, 22)]}>{label}</Text>
-        <MenuSlider scale={scale} label={label} value={value} onPreview={() => {}} onChange={() => {}} />
+        <Text style={[styles.label, { width: 50 * scale * Math.max(1, fontScale) }, type(14, 22)]}>{t(label)}</Text>
+        <MenuSlider scale={scale} label={t(label)} value={value} onPreview={() => {}} onChange={() => {}} />
         <Text style={[styles.label, { width: 41 * scale, textAlign: 'right' }, type(14, 22)]}>{value}%</Text>
       </View>
     </Inactive>
@@ -88,7 +91,7 @@ export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, 
 
   return (
     <View style={styles.overlay} pointerEvents="box-none">
-      <Pressable accessibilityLabel="메뉴 닫기" onPress={onClose} style={StyleSheet.absoluteFill} />
+      <Pressable accessibilityLabel={t("메뉴 닫기")} onPress={onClose} style={StyleSheet.absoluteFill} />
       <View style={[styles.panel, { left: chromeLeft + 15 * scale, top, width: panelWidth, height: visibleHeight }]}>
         <View style={StyleSheet.absoluteFill} pointerEvents="none"><MenuDecoration scale={scale} height={visibleHeight} width={panelWidth} /></View>
         {/* 아코디언을 펼치면 내용이 길어지므로 메뉴 안에서 세로 스크롤된다. */}
@@ -103,12 +106,12 @@ export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, 
           contentInsetAdjustmentBehavior="never"
           contentContainerStyle={{ paddingHorizontal: 22 * scale, paddingTop: 15 * scale, paddingBottom: 24 * scale }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 * scale, marginBottom: 13 * scale }}>
-            <Pressable accessibilityRole="button" accessibilityLabel="일기 내용 검색" onPress={() => { onClose(); onSearch(); }}
+            <Pressable accessibilityRole="button" accessibilityLabel={t("일기 내용 검색")} onPress={() => { onClose(); onSearch(); }}
               style={{ flex: 1, minHeight: 34 * scale, borderWidth: 2 * scale, borderColor: DesignPaint.ink, paddingHorizontal: 5 * scale, flexDirection: 'row', alignItems: 'center', gap: 4 * scale }}>
               <MenuSearchIcon scale={scale} />
-              <Text style={[styles.label, { color: DesignPaint.ink }, type(14, 21)]}>일기 내용 검색</Text>
+              <Text style={[styles.label, { color: DesignPaint.ink }, type(14, 21)]}>{t("일기 내용 검색")}</Text>
             </Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel="날짜로 일기 찾기" onPress={() => { onClose(); onCalendar(); }}
+            <Pressable accessibilityRole="button" accessibilityLabel={t("날짜로 일기 찾기")} onPress={() => { onClose(); onCalendar(); }}
               style={{ width: 26 * scale, minHeight: 34 * scale, alignItems: 'center', justifyContent: 'center' }}>
               <MenuCalendarIcon scale={scale} />
             </Pressable>
@@ -123,28 +126,28 @@ export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, 
           {divider}
           {heading('사용자 설정')}
           <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 34 * scale, marginLeft: 10 * scale }}>
-            <Text style={[styles.label, { width: 50 * scale * Math.max(1, fontScale) }, type(14, 22)]}>민감도</Text>
-            <MenuSlider scale={scale} label="우주 회전 민감도" value={sensitivityValue}
+            <Text style={[styles.label, { width: 50 * scale * Math.max(1, fontScale) }, type(14, 22)]}>{t("민감도")}</Text>
+            <MenuSlider scale={scale} label={t("우주 조작 민감도")} value={sensitivityValue}
               min={Math.round(ROTATE_SENSITIVITY_MIN * 100)} max={Math.round(ROTATE_SENSITIVITY_MAX * 100)}
               onPreview={setSensitivityPreview}
               onChange={(value) => {
                 setSensitivityPreview(null);
                 onSensitivity(value / 100);
               }} />
-            <Text style={[styles.label, { width: 41 * scale, textAlign: 'right' }, type(14, 22)]}>{(sensitivityValue / 100).toFixed(1)}배</Text>
+            <Text style={[styles.label, { width: 41 * scale, textAlign: 'right' }, type(14, 22)]}>{(sensitivityValue / 100).toFixed(1)}×</Text>
           </View>
 
           <View style={{ marginLeft: 10 * scale, marginTop: 8 * scale, gap: 8 * scale }}>
-            <Text style={[styles.label, type(14, 22)]}>글자 크기</Text>
+            <Text style={[styles.label, type(14, 22)]}>{t("글자 크기")}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44 }}>
-              <Pressable accessibilityRole="button" accessibilityLabel="글자 크기 줄이기"
+              <Pressable accessibilityRole="button" accessibilityLabel={t("글자 크기 줄이기")}
                 hitSlop={6} disabled={fontScale <= FONT_SCALE_MIN} accessibilityState={{ disabled: fontScale <= FONT_SCALE_MIN }}
                 onPress={() => setFontScale(fontScale - 0.1)}
                 style={[styles.sizeButton, fontScale <= FONT_SCALE_MIN && styles.inactive]}>
                 <Text style={[styles.label, type(18, 22)]}>−</Text>
               </Pressable>
               <Text accessibilityLiveRegion="polite" style={[styles.label, type(14, 22)]}>{Math.round(fontScale * 100)}%</Text>
-              <Pressable accessibilityRole="button" accessibilityLabel="글자 크기 키우기"
+              <Pressable accessibilityRole="button" accessibilityLabel={t("글자 크기 키우기")}
                 hitSlop={6} disabled={fontScale >= FONT_SCALE_MAX} accessibilityState={{ disabled: fontScale >= FONT_SCALE_MAX }}
                 onPress={() => setFontScale(fontScale + 0.1)}
                 style={[styles.sizeButton, fontScale >= FONT_SCALE_MAX && styles.inactive]}>
@@ -157,7 +160,7 @@ export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, 
           {heading('알림')}
           <Inactive>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginLeft: 10 * scale, minHeight: 44 * scale }}>
-              <Text style={[styles.label, type()]}>알림 설정</Text>
+              <Text style={[styles.label, type()]}>{t("알림 설정")}</Text>
               <View style={{ minHeight: 44 * scale, width: 44 * scale, alignItems: 'center', justifyContent: 'center' }}>
                 <MenuNotificationToggle scale={scale} enabled={PLACEHOLDER.notifications} />
               </View>
@@ -166,26 +169,37 @@ export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, 
 
           {divider}
           {heading('계정관리')}
-          <MenuAccordion scale={scale} title="로그아웃" expanded={!!expanded.logout} onToggle={() => toggle('logout')}>
-            <Text style={[styles.label, type(13, 20)]}>로그아웃하면 로그인 화면으로 돌아가요.</Text>
+          <MenuAccordion scale={scale} title={t("로그아웃")} expanded={!!expanded.logout} onToggle={() => toggle('logout')}>
+            <Text style={[styles.label, type(13, 20)]}>{t("로그아웃하면 로그인 화면으로 돌아가요.")}</Text>
             <Pressable accessibilityRole="button" onPress={() => { onClose(); onLogout(); }}
               style={[styles.accountButton, { minHeight: 36 * scale, padding: 6 * scale }]}>
-              <Text style={[styles.label, type(14, 22)]}>로그아웃</Text>
+              <Text style={[styles.label, type(14, 22)]}>{t("로그아웃")}</Text>
             </Pressable>
           </MenuAccordion>
-          <MenuAccordion scale={scale} title="회원 탈퇴" expanded={!!expanded['delete-account']} onToggle={() => toggle('delete-account')}>
-            <Text style={[styles.label, type(13, 20)]}>회원 탈퇴는 아직 준비 중이에요.</Text>
+          <MenuAccordion scale={scale} title={t("회원 탈퇴")} expanded={!!expanded['delete-account']} onToggle={() => toggle('delete-account')}>
+            <Text style={[styles.label, type(13, 20)]}>{t("회원 탈퇴는 아직 준비 중이에요.")}</Text>
             <Inactive>
               <View style={[styles.accountButton, { minHeight: 36 * scale, padding: 6 * scale }]}>
-                <Text style={[styles.label, type(14, 22)]}>회원 탈퇴</Text>
+                <Text style={[styles.label, type(14, 22)]}>{t("회원 탈퇴")}</Text>
               </View>
             </Inactive>
           </MenuAccordion>
 
           {divider}
+          {heading('언어 설정')}
+          <View accessibilityRole="radiogroup" accessibilityLabel={t('언어 설정')} style={{flexDirection:'row',gap:8,marginHorizontal:8,marginVertical:8}}>
+            {([{id:'ko',label:'한국어'},{id:'en',label:'English'}] as const).map(item=><Pressable key={item.id}
+              accessibilityRole="radio" accessibilityState={{checked:language===item.id}} onPress={()=>setLanguage(item.id)}
+              style={{flex:1,minHeight:44,alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:DesignPaint.menuText,backgroundColor:language===item.id?'#202431':'transparent'}}>
+              <Text style={[styles.label,type(13,20),language===item.id&&{color:'#fff'}]}>{item.label}</Text>
+            </Pressable>)}
+          </View>
+          <Text style={[styles.label,type(11,17),{marginHorizontal:10}]}>{t('선택한 언어는 이 기기에 저장돼요.')}</Text>
+
+          {divider}
           <Inactive>
             <View style={{ minHeight: 36 * scale, justifyContent: 'center', paddingHorizontal: 10 * scale }}>
-              <Text style={[styles.label, type()]}>이용약관</Text>
+              <Text style={[styles.label, type()]}>{t("이용약관")}</Text>
             </View>
           </Inactive>
         </ScrollView>

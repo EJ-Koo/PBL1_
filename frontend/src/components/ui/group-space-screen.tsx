@@ -1,8 +1,10 @@
+import { useLanguage } from '@/lib/language';
+import { ScrollView } from '@/components/app-scroll-view';
 import { GroupProfileControl } from './group-profile-control';
 import { Text } from '@/components/app-text';
 import { Image } from 'expo-image';
 import { useId } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 
 import { GroupMemberStars } from './group-member-stars';
@@ -75,6 +77,7 @@ function GroupPreview({ stars, scale }: { stars: PreviewStar[]; scale: number })
 }
 
 export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup, onJoinByCode }: Props) {
+  const { t } = useLanguage();
   const { headerTop, bottomSpace, pageLeft, pageWidth, pagePadding, pageGap, innerWidth, groupCardWidth } = useResponsiveLayout();
   const cardWidth = groupCardWidth;
   const cardScale = cardWidth / 362;
@@ -93,7 +96,7 @@ export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup, onJ
             }]}>OUR SPACE</Text>
           </View>
           <Text style={[styles.text, { fontSize: Math.max(12, 13 * scale), lineHeight: Math.max(20, 20 * scale), marginTop: 10 * scale, paddingHorizontal: 18 * scale, flexShrink: 1 }]}>
-            별일을 함께 나누는 우리의 우주
+            {t("별일을 함께 나누는 우리의 우주")}
           </Text>
         </View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start',
@@ -135,16 +138,16 @@ export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup, onJ
           })}
         </View>
         <TouchableOpacity
-          accessibilityLabel="그룹 추가"
+          accessibilityLabel={t("그룹 추가")}
           onPress={onAddGroup}
           style={{ alignSelf: 'center', alignItems: 'center', justifyContent: 'center', marginTop: 33 * scale, width: Math.max(44, 44 * scale), height: Math.max(44, 44 * scale) }}>
           <GroupAddIcon scale={scale} />
         </TouchableOpacity>
         <TouchableOpacity
-          accessibilityLabel="코드로 참여"
+          accessibilityLabel={t("코드로 참여")}
           onPress={onJoinByCode}
           style={{ alignSelf: 'center', marginTop: 14 * scale, paddingHorizontal: 18 * scale, paddingVertical: 8 * scale }}>
-          <Text style={[styles.joinByCode, { fontSize: 14 * scale }]}>코드로 참여</Text>
+          <Text style={[styles.joinByCode, { fontSize: 14 * scale }]}>{t("코드로 참여")}</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>

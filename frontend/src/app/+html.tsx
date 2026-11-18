@@ -41,6 +41,13 @@ export default function RootHtml({ children }: PropsWithChildren) {
         <meta name="twitter:image:alt" content="오늘의 별일 행성 로고" />
         <link rel="apple-touch-icon" href="/share-planet-v1.png" />
         <ScrollViewStyleReset />
+        <style>{`
+          [data-app-scroll-axis="vertical"] { scrollbar-gutter: stable; }
+          [data-app-scroll-axis] { scrollbar-color: #aeb4c4 transparent; }
+          [data-app-scroll-axis]::-webkit-scrollbar { width: 10px; height: 10px; }
+          [data-app-scroll-axis]::-webkit-scrollbar-thumb { background: #aeb4c4; border: 3px solid transparent; background-clip: padding-box; border-radius: 8px; }
+          [data-app-scroll-axis]::-webkit-scrollbar-track { background: transparent; }
+        `}</style>
       </head>
       <body>{children}</body>
     </html>

@@ -1,5 +1,8 @@
+import { useLanguage } from '@/lib/language';
+import { ScrollView } from '@/components/app-scroll-view';
+import { DiaryHeart } from '@/components/diary-heart';
 import { useEffect, useState } from 'react';
-import { BackHandler, Image, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { BackHandler, Image, Platform, Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
 import { DesignFonts } from '@/constants/ui-design';
@@ -8,6 +11,7 @@ import { getStarPopupLayout, type StarPopupAnchor } from '@/lib/star-popup-layou
 import type { DiaryEntry } from '@/store/diary-context';
 
 type Props = {
+  groupId?: string;
   entry: DiaryEntry;
   anchor: StarPopupAnchor;
   viewport: { width: number; height: number; topInset: number; bottomInset: number };
@@ -43,7 +47,8 @@ function AuthorAvatar({ author, size }: { author: NonNullable<Props['author']>; 
   );
 }
 
-export function StarDiaryPopup({ entry, anchor, viewport, editable, owned, loading, error, onRetry, author, onClose, onEdit, onDecorate }: Props) {
+export function StarDiaryPopup({ entry, anchor, viewport, editable, owned, loading, error, onRetry, author, onClose, onEdit, onDecorate, groupId }: Props) {
+  const { t } = useLanguage();
   useEffect(() => {
     if (Platform.OS === 'web') {
       const onKeyDown = (event: KeyboardEvent) => {
@@ -67,14 +72,15 @@ export function StarDiaryPopup({ entry, anchor, viewport, editable, owned, loadi
   const bodyBottom = above ? bodyHeight : height - 1;
   const avatarSize = Math.min(88, width * 0.22);
   const compactAuthor = !!author && width < 340;
-  const corner = author && above ? avatarSize * 0.7 : 0;
+  const corner = author ? avatarSize * 0.7 : 0;
+  const bubbleTailBase = Math.max(corner + 28, Math.min(width - 40, tailBaseX));
   const tail = above
-    ? `L ${tailBaseX + 26} ${bodyBottom} L ${tailX} ${height - 1} L ${tailBaseX - 26} ${bodyBottom}`
+    ? `L ${bubbleTailBase + 26} ${bodyBottom} L ${tailX} ${height - 1} L ${bubbleTailBase - 26} ${bodyBottom}`
     : '';
   const topTail = above
     ? ''
-    : `L ${tailBaseX - 26} ${bodyTop} L ${tailX} 1 L ${tailBaseX + 26} ${bodyTop}`;
-  const outline = `M 1 ${bodyTop + corner} L ${1 + corner} ${bodyTop} ${topTail} L ${width - 1} ${bodyTop} L ${width - 1} ${bodyBottom} ${tail} L 1 ${bodyBottom} Z`;
+    : `L ${bubbleTailBase - 26} ${bodyTop} L ${tailX} 1 L ${bubbleTailBase + 26} ${bodyTop}`;
+  const outline = `M 1 ${bodyTop + corner} L ${1 + corner} ${bodyTop} ${topTail} L ${width - 11} ${bodyTop} L ${width - 1} ${bodyTop + 10} L ${width - 1} ${bodyBottom - 10} L ${width - 11} ${bodyBottom} ${tail} L 1 ${bodyBottom} Z`;
   const date = new Date(entry.createdAt);
   const dateLabel = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}.${WEEKDAYS[date.getDay()]}`;
 
@@ -98,13 +104,13 @@ export function StarDiaryPopup({ entry, anchor, viewport, editable, owned, loadi
             accessibilityRole="header" testID="star-diary-author">{author.nickname}</Text>}
           <Text style={[author ? styles.authorDate : styles.date, compactAuthor && styles.compactAuthorDate]} numberOfLines={1} adjustsFontSizeToFit
             accessibilityRole={author ? undefined : 'header'}>{dateLabel}</Text>
-          <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="일기 팝업 닫기"
+          <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={t("일기 팝업 닫기")}
             style={[styles.close, author && styles.authorClose]}>
             <Text style={styles.closeText}>×</Text>
           </Pressable>
         </View>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.content} nestedScrollEnabled testID="star-diary-content">
-          {loading ? <Text style={styles.text}>일기를 불러오는 중…</Text> : error ? <View style={{ gap: 8 }}><Text style={styles.text}>{error}</Text><Pressable accessibilityRole="button" accessibilityLabel="일기 다시 불러오기" onPress={onRetry}><Text style={styles.actionText}>다시 불러오기</Text></Pressable></View> : <Text style={styles.text} selectable>{entry.text}</Text>}
+          {loading ? <Text style={styles.text}>{t("일기를 불러오는 중…")}</Text> : error ? <View style={{ gap: 8 }}><Text style={styles.text}>{error}</Text><Pressable accessibilityRole="button" accessibilityLabel="일기 다시 불러오기" onPress={onRetry}><Text style={styles.actionText}>{t("다시 불러오기")}</Text></Pressable></View> : <Text style={styles.text} selectable>{entry.text}</Text>}
           {!loading && !error && entry.photos.length > 0 && (
             <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.photos} nestedScrollEnabled>
               {entry.photos.map((photo, index) => (
@@ -113,13 +119,14 @@ export function StarDiaryPopup({ entry, anchor, viewport, editable, owned, loadi
             </ScrollView>
           )}
         </ScrollView>
-        {owned && !loading && !error && <View style={styles.actions}>
-          <Pressable onPress={onDecorate} accessibilityRole="button" style={styles.action}>
-            <Text style={styles.actionText}>행성 꾸미기</Text>
-          </Pressable>
+        {(owned || groupId) && !loading && !error && <View style={styles.actions}>
+          {groupId && <DiaryHeart key={`${groupId}:${entry.id}`} groupId={groupId} diaryId={entry.id} />}
+          {owned && <Pressable onPress={onDecorate} accessibilityRole="button" style={styles.action}>
+            <Text style={styles.actionText}>{t("행성 꾸미기")}</Text>
+          </Pressable>}
           {editable && (
             <Pressable onPress={onEdit} accessibilityRole="button" style={styles.action}>
-              <Text style={styles.actionText}>수정</Text>
+              <Text style={styles.actionText}>{t("수정")}</Text>
             </Pressable>
           )}
         </View>}

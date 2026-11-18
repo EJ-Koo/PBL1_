@@ -1,5 +1,6 @@
+import { ScrollView, type ScrollViewHandle } from '@/components/app-scroll-view';
 import { Text, TextInput } from '@/components/app-text';
-import { Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -15,6 +16,7 @@ import {
 import { DesignFonts, DesignPaint } from '@/constants/ui-design';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { MAX_PHOTOS, type Photo } from '@/lib/journal';
+import { router } from 'expo-router';
 
 type Props = {
   scale: number;
@@ -47,7 +49,7 @@ export function DiaryWriteScreen({
 }: Props) {
   const insets = useSafeAreaInsets();
   const [preview, setPreview] = useState<Photo | null>(null);
-  const topicList = useRef<ScrollView>(null);
+  const topicList = useRef<ScrollViewHandle>(null);
   const [topicScroll, setTopicScroll] = useState({ width: 0, content: 0, offset: 0 });
   const { contentLeft, contentWidth, headerTop, bottomSpace } = useResponsiveLayout();
   const box = (left: number, top: number, width: number, height: number) => ({
@@ -68,8 +70,14 @@ export function DiaryWriteScreen({
         contentInsetAdjustmentBehavior="never">
         <View style={{ marginLeft: 17 * scale, width: 360 * scale, height: 40 * scale, marginBottom: 30 * scale }}>
           <DiaryBackFrame scale={scale} />
-          <TouchableOpacity onPress={onBack} style={[styles.positioned, box(12, 10, 117, 28)]}>
-            <Text style={[styles.text, styles.backText, { marginLeft: 24 * scale }, type(20, 26)]}>나의 우주</Text>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="지난 기록 열기"
+            onPress={() => { Keyboard.dismiss(); router.push('/archive'); }}
+            style={[styles.positioned, box(12, 0, 150, 40), { justifyContent: 'center' }]}>
+            <Text style={[styles.text, styles.backText, type(20, 26)]}>‹ 지난 기록</Text>
+          </TouchableOpacity>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="나의 우주로 이동" onPress={onBack}
+            style={[styles.positioned, box(198, 0, 150, 40), { justifyContent: 'center', alignItems: 'flex-end' }]}>
+            <Text style={[styles.text, styles.backText, type(20, 26)]}>나의 우주 ›</Text>
           </TouchableOpacity>
         </View>
 

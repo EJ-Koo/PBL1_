@@ -1,3 +1,4 @@
+import { GroupExperience } from '@/components/group-experience';
 import { DiaryUniverse } from '@/components/diary-universe';
 import { JoinGroupDialog } from '@/components/ui/join-group-dialog';
 import { NEW_STAR_HIGHLIGHT_MS, type NewStarHighlight } from '@/lib/new-star-highlight';
@@ -22,8 +23,6 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { AppState, Modal, StyleSheet, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
 import { CreateGroupDialog } from '@/components/ui/create-group-dialog';
-import { SpaceButton } from '@/components/ui/space-ui';
-import { GroupMemberStars } from '@/components/ui/group-member-stars';
 import { getMemberStars, groupDayKey } from '@/lib/group-attendance';
 import { DiaryComposer } from '@/components/diary-composer';
 import { SearchScreen } from '@/components/search-screen';
@@ -73,7 +72,7 @@ export default function HomeScreen() {
   // fffju 반응형 레이아웃: 전체 뷰포트로 그리는 화면(홈 HUD·하단바·그룹)은 이 scale을 쓴다.
   // 아직 520 프레임을 쓰는 화면(일기 작성·상점)은 useDesignFrame(frameWidth/scale)을 유지.
   const responsive = useResponsiveLayout();
-  const { scale: rScale, chromeLeft, chromeWidth, headerTop } = responsive;
+  const { scale: rScale, headerTop } = responsive;
 
   const [screen, setScreen] = useState<Screen>('home');
   const [newStar, setNewStar] = useState<NewStarHighlight | null>(null);
@@ -87,14 +86,12 @@ export default function HomeScreen() {
   const [newGroupName, setNewGroupName] = useState('');
   const [creatingGroup, setCreatingGroup] = useState(false);
   const createGroupLock = useRef(false);
-  const { groupId: routeGroupId } = useLocalSearchParams<{ groupId?: string }>();
+  const { groupId: routeGroupId, diaryId: routeDiaryId, chat: routeChat } = useLocalSearchParams<{ groupId?: string; diaryId?: string; chat?: string }>();
   const [activeGroupId, setActiveGroupId] = useState<string | null>(routeGroupId ?? null);
   // 그룹 공유 우주: 그룹을 열면 멤버 전체의 별을 서버에서 받아온다(본인 것만이 아님).
   const { entries: groupStars, loading: groupLoading, error: groupError, reload: reloadGroup } = useGroupUniverse(activeGroupId);
   // 그룹 우주에서 별을 눌러 행성 상세로 갈 때, 돌아오면 목록이 아니라 그 그룹 우주로 복귀하려고 기억해둔다.
   const [sharedDiaryId, setSharedDiaryId] = useState<string | null>(null);
-  const [inviteVisible, setInviteVisible] = useState(false);
-  const [confirmLeave, setConfirmLeave] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [joinVisible, setJoinVisible] = useState(false);
   const [joinCode, setJoinCode] = useState('');
@@ -294,8 +291,8 @@ export default function HomeScreen() {
   // Keep this callback stable: setting the return target must not reopen the modal before navigation.
   useFocusEffect(useCallback(() => {
     const groupId = routeGroupId;
-    if (groupId) { setScreen('group'); setActiveGroupId(groupId); }
-  }, [routeGroupId]));
+    if (groupId) { setScreen('group'); setActiveGroupId(groupId); if(routeDiaryId)setSharedDiaryId(routeDiaryId); }
+  }, [routeGroupId,routeDiaryId]));
 
   useEffect(() => {
     if (!newStar) return;
@@ -360,18 +357,7 @@ export default function HomeScreen() {
       showMessage('나가기 실패', result.error);
       return;
     }
-    setConfirmLeave(false);
-    setInviteVisible(false);
     setActiveGroupId(null); // 상세 화면도 닫는다
-  };
-
-  // 초대 코드(방 ID) 복사: 웹에선 클립보드, 네이티브에선 안내만. (clipboard 모듈 의존성 추가 안 함)
-  const copyInviteCode = () => {
-    const code = activeGroup?.invite_code;
-    if (!code) return;
-    const clip = (globalThis as { navigator?: { clipboard?: { writeText?: (s: string) => unknown } } }).navigator?.clipboard;
-    clip?.writeText?.(code);
-    showMessage('초대 코드', `${code} — 친구에게 이 코드를 보내 참여하게 하세요.`);
   };
 
   return (
@@ -497,72 +483,13 @@ export default function HomeScreen() {
 
       {/* ===== 그룹 카드를 눌렀을 때: 그 그룹의 우주를 3D로 크게 보기 ===== */}
       <Modal transparent={false} visible={activeGroup !== null} animationType="slide" onRequestClose={() => sharedDiaryId ? setSharedDiaryId(null) : setActiveGroupId(null)}>
-        {activeGroup && (
-          <View style={[styles.fill, styles.spaceBackground]}>
-            <DiaryUniverse key={activeGroup.id} groupId={activeGroup.id}
-              sceneKey={`${authSession.getRevision()}:group-${activeGroup.id}`} entries={groupStars} backgroundStarScale={1.4}
-              selection={{ id: sharedDiaryId, onChange: setSharedDiaryId }} />
-            {(groupLoading || groupError || groupStars.length === 0) && (
-              <View style={styles.emptyState} pointerEvents={groupError ? 'auto' : 'none'}>
-                <Text style={styles.emptyText}>{groupError ?? (groupLoading ? '그룹의 별을 불러오는 중…' : '아직 이 그룹에 공유된 별이 없어요.')}</Text>
-                {groupError && <SpaceButton scale={rScale} label="다시 불러오기" onPress={reloadGroup} />}
-              </View>
-            )}
-            <View style={{ position: 'absolute', top: headerTop, left: chromeLeft + 20 * rScale,
-              width: chromeWidth - 40 * rScale, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10 * rScale }}>
-              <SpaceButton scale={rScale} label="‹ 목록" onPress={() => setActiveGroupId(null)} />
-              <View style={{ flex: 1, minWidth: 70 }}>
-                <Text numberOfLines={1} style={{ color: '#fff', fontSize: 16 * rScale }}>{activeGroup.name}</Text>
-                <Text style={{ color: '#aeb7c4', fontSize: 11 * rScale }}>별 {groupStars.length}개</Text>
-              </View>
-              <SpaceButton scale={rScale} label="친구 초대" onPress={() => { setConfirmLeave(false); setInviteVisible(true); }} />
-              <GroupMemberStars scale={rScale} dark members={getMemberStars(activeGroup, entries, today)} />
-            </View>
-          </View>
-        )}
+        {activeGroup && <GroupExperience key={`${authSession.getRevision()}:${activeGroup.id}`} group={activeGroup} entries={groupStars}
+          loading={groupLoading} error={groupError} onReload={reloadGroup} onBack={()=>setActiveGroupId(null)}
+          onLeave={handleLeaveGroup} leaving={leaving} selection={{id:sharedDiaryId,onChange:setSharedDiaryId}} initialChat={routeChat==='1'} />}
       </Modal>
 
       {/* ===== 그룹에 친구 초대 (방 ID 코드 공유 + 멤버 목록) ===== */}
-      <Modal transparent visible={inviteVisible} animationType="fade" onRequestClose={() => setInviteVisible(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setInviteVisible(false)}>
-          <TouchableOpacity activeOpacity={1} style={[styles.inviteModalCard, { width: Math.min(frameWidth * 0.82, 420) }]}>
-            <Text style={styles.inviteModalTitle}>🪐 친구 초대</Text>
-            <Text style={styles.inviteModalDesc}>
-              이 방 ID를 친구에게 보내세요. 친구가 그룹 목록에서 “코드로 참여”에 입력하면 함께 쓰는 우주가 돼요.
-            </Text>
-            <TouchableOpacity style={styles.codeBox} onPress={copyInviteCode}>
-              <Text style={styles.codeText}>{activeGroup?.invite_code ?? ''}</Text>
-              <Text style={styles.codeCopy}>탭하여 복사</Text>
-            </TouchableOpacity>
-            <Text style={styles.membersTitle}>멤버 {activeGroup?.members.length ?? 0}명</Text>
-            {(activeGroup?.members ?? []).map((m) => (
-              <Text key={m.user_id} style={styles.memberRow}>· {m.nickname ?? '익명'}</Text>
-            ))}
-            {confirmLeave ? (
-              <View style={styles.leaveBox}>
-                <Text style={styles.leaveWarn}>나가면 이 그룹이 목록에서 사라져요. 아무도 안 남으면 그룹이 삭제돼요.</Text>
-                <View style={styles.inviteModalButtonRow}>
-                  <TouchableOpacity style={styles.inviteCancelBtn} onPress={() => setConfirmLeave(false)}>
-                    <Text style={styles.whiteText}>취소</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.leaveConfirmBtn} onPress={handleLeaveGroup} disabled={leaving}>
-                    <Text style={styles.whiteText}>{leaving ? '나가는 중…' : '나가기'}</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : (
-              <TouchableOpacity style={styles.leaveLink} onPress={() => setConfirmLeave(true)}>
-                <Text style={styles.leaveLinkText}>그룹 나가기</Text>
-              </TouchableOpacity>
-            )}
-            <View style={styles.inviteModalButtonRow}>
-              <TouchableOpacity style={styles.inviteConfirmBtn} onPress={() => setInviteVisible(false)}>
-                <Text style={styles.inviteConfirmText}>닫기</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+
 
       <JoinGroupDialog visible={joinVisible} code={joinCode} joining={joining} onChangeCode={setJoinCode}
         onClose={() => setJoinVisible(false)} onJoin={handleJoinGroup} />

@@ -1,7 +1,8 @@
+import { ScrollView } from '@/components/app-scroll-view';
 import { Text, TextInput } from '@/components/app-text';
 import { useRef, useState } from 'react';
 import { router } from 'expo-router';
-import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { GoogleAuthButton } from '@/components/google-auth-button';
