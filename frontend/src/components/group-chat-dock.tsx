@@ -1,5 +1,7 @@
+import { useLanguage } from '@/lib/language';
+import { ScrollView, type ScrollViewHandle } from '@/components/app-scroll-view';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Keyboard, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, AppState, Keyboard, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import { Text, TextInput } from '@/components/app-text';
 import { Avatar } from '@/components/ui/group-profile-control';
@@ -9,6 +11,7 @@ import { mergeChat } from '@/lib/group-chat';
 import { useDiary } from '@/store/diary-context';
 
 export function GroupChatDock({ groupId, bottom, left, width, unread, onRead, initialExpanded = false, onExpandedChange }: {groupId:string;bottom:number;left:number;width:number;unread:number;onRead:()=>void;initialExpanded?:boolean;onExpandedChange?:(expanded:boolean)=>void}) {
+  const { t, language } = useLanguage();
   const {accessToken,profile}=useDiary();
   const revision=authSession.getRevision();
   const {height}=useWindowDimensions();
@@ -24,7 +27,7 @@ export function GroupChatDock({ groupId, bottom, left, width, unread, onRead, in
   const [hasNew,setHasNew]=useState(false);
   const alive=useRef(true),lock=useRef(false),nearBottom=useRef(true),pollLock=useRef(false);
   const retry=useRef<{body:string;id:string}|null>(null);
-  const scroll=useRef<ScrollView>(null);
+  const scroll=useRef<ScrollViewHandle>(null);
   const lastRead=useRef('');
   const read=useCallback(async (id:string) => {
     if(!accessToken || id===lastRead.current) return;
@@ -55,9 +58,9 @@ export function GroupChatDock({ groupId, bottom, left, width, unread, onRead, in
         if(expanded && nearBottom.current) { await read(last.id);setHasNew(false);requestAnimationFrame(()=>scroll.current?.scrollToEnd({animated:false})); }
         else if(expanded) setHasNew(true);
       }
-    } catch(reason) {if(alive.current && revision===authSession.getRevision()) setError(reason instanceof Error?reason.message:'채팅을 불러오지 못했어요.');}
+    } catch(reason) {if(alive.current && revision===authSession.getRevision()) setError(reason instanceof Error?reason.message:t('채팅을 불러오지 못했어요.'));}
     finally {pollLock.current=false;if(alive.current)setLoading(false);}
-  },[accessToken,groupId,revision,read,messages.length,expanded]);
+  },[accessToken,groupId,revision,read,messages.length,expanded,t]);
   useEffect(()=>{
     const initial=setTimeout(()=>void load(),0);
     const timer=setInterval(()=>{if(AppState.currentState!=='background')void load();},expanded?3000:10000);
@@ -73,42 +76,42 @@ export function GroupChatDock({ groupId, bottom, left, width, unread, onRead, in
       if(!alive.current || revision!==authSession.getRevision())return;
       setBody('');retry.current=null;nearBottom.current=true;
       await load();
-    }catch(reason){if(alive.current && revision===authSession.getRevision())setError(reason instanceof Error?reason.message:'전송하지 못했어요. 다시 시도해주세요.');}
+    }catch(reason){if(alive.current && revision===authSession.getRevision())setError(reason instanceof Error?reason.message:t('전송하지 못했어요. 다시 시도해주세요.'));}
     finally{lock.current=false;if(alive.current)setBusy(false);}
   };
   return <View style={[styles.dock,{left,width,bottom:Math.max(bottom,keyboard?keyboard+12:0)}]} testID="group-chat">
-    <Pressable accessibilityRole="button" accessibilityLabel={expanded?'그룹 채팅 접기':'그룹 채팅 펼치기'} onPress={()=>{changeExpanded(!expanded);if(expanded)Keyboard.dismiss();}} style={styles.heading}>
-      <Text style={styles.label}>그룹 채팅 {unread>0?`· ${unread}개 미확인`:''}</Text><Text style={styles.label}>{expanded?'⌄':'⌃'}</Text>
+    <Pressable accessibilityRole="button" accessibilityLabel={t(expanded?'그룹 채팅 접기':'그룹 채팅 펼치기')} onPress={()=>{changeExpanded(!expanded);if(expanded)Keyboard.dismiss();}} style={styles.heading}>
+      <Text style={styles.label}>{t('그룹 채팅')}{unread>0?` · ${t('미확인 {count}개',{count:unread})}`:''}</Text><Text style={styles.label}>{expanded?'⌄':'⌃'}</Text>
     </Pressable>
-    {!expanded && <Pressable accessibilityRole="button" accessibilityLabel="마지막 메시지 보기" onPress={()=>changeExpanded(true)} style={styles.preview}>
+    {!expanded && <Pressable accessibilityRole="button" accessibilityLabel={t("마지막 메시지 보기")} onPress={()=>changeExpanded(true)} style={styles.preview}>
       {messages.length>0?<View style={styles.message}>
         <Avatar uri={messages.at(-1)!.avatar_url} size={28}/><View style={{flex:1,minWidth:0}}>
-          <Text style={styles.name} numberOfLines={1}>{messages.at(-1)!.sender_id===profile?.user_id?'나':messages.at(-1)!.nickname}</Text>
+          <Text style={styles.name} numberOfLines={1}>{messages.at(-1)!.sender_id===profile?.user_id?t('나'):messages.at(-1)!.nickname}</Text>
           <Text style={styles.body} numberOfLines={1}>{messages.at(-1)!.body}</Text>
         </View>
-      </View>:<Text style={styles.hint}>{error?'채팅을 불러오지 못했어요. 눌러서 다시 시도':loading?'채팅을 불러오는 중…':'첫 이야기를 나눠보세요.'}</Text>}
+      </View>:<Text style={styles.hint}>{t(error?'채팅을 불러오지 못했어요. 눌러서 다시 시도':loading?'채팅을 불러오는 중…':'첫 이야기를 나눠보세요.')}</Text>}
     </Pressable>}
     {expanded && <>
       <ScrollView ref={scroll} maintainVisibleContentPosition={{minIndexForVisible:0}} style={{height:Math.max(92,Math.min(208,height*.28))}} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.messages}
         onScroll={event=>{const {layoutMeasurement,contentOffset,contentSize}=event.nativeEvent;nearBottom.current=layoutMeasurement.height+contentOffset.y>=contentSize.height-30;
           if(nearBottom.current && messages.length){void read(messages.at(-1)!.id).catch(()=>{});setHasNew(false);}}} scrollEventThrottle={100}
         onContentSizeChange={()=>{if(nearBottom.current)scroll.current?.scrollToEnd({animated:false});}}>
-        {more && <Pressable disabled={loading} onPress={()=>{nearBottom.current=false;setLoading(true);void load(messages[0]?.id);}}><Text style={styles.hint}>이전 대화 더 보기</Text></Pressable>}
-        {!messages.length && !error && <Text style={styles.hint}>첫 이야기를 나눠보세요.</Text>}
+        {more && <Pressable disabled={loading} onPress={()=>{nearBottom.current=false;setLoading(true);void load(messages[0]?.id);}}><Text style={styles.hint}>{t("이전 대화 더 보기")}</Text></Pressable>}
+        {!messages.length && !error && <Text style={styles.hint}>{t("첫 이야기를 나눠보세요.")}</Text>}
         {messages.map(message=><View key={message.id} style={styles.message}>
           <Avatar uri={message.avatar_url} size={28}/><View style={{flex:1,minWidth:0}}>
-            <Text style={styles.name}>{message.sender_id===profile?.user_id?'나':message.nickname} <Text style={styles.time}>{new Date(message.created_at).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})}</Text></Text>
+            <Text style={styles.name}>{message.sender_id===profile?.user_id?t('나'):message.nickname} <Text style={styles.time}>{new Date(message.created_at).toLocaleTimeString(language==='en'?'en-US':'ko-KR',{hour:'2-digit',minute:'2-digit'})}</Text></Text>
             <Text style={styles.body} selectable>{message.body}</Text>
           </View>
         </View>)}
       </ScrollView>
-      {hasNew && <Pressable onPress={()=>{nearBottom.current=true;scroll.current?.scrollToEnd({animated:true});if(messages.length)void read(messages.at(-1)!.id).catch(()=>{});setHasNew(false);}}><Text style={styles.hint}>새 메시지 ↓</Text></Pressable>}
-      {error && <Pressable onPress={()=>void load()}><Text style={styles.error}>{error} · 다시 시도</Text></Pressable>}
+      {hasNew && <Pressable onPress={()=>{nearBottom.current=true;scroll.current?.scrollToEnd({animated:true});if(messages.length)void read(messages.at(-1)!.id).catch(()=>{});setHasNew(false);}}><Text style={styles.hint}>{t("새 메시지 ↓")}</Text></Pressable>}
+      {error && <Pressable onPress={()=>void load()}><Text style={styles.error}>{error} · {t('다시 시도')}</Text></Pressable>}
     </>}
     <View style={styles.composer}>
-      <TextInput accessibilityLabel="그룹 채팅 메시지" style={styles.input} placeholder="입력하세요…" placeholderTextColor="#bfc0c9" value={body} onChangeText={setBody} maxLength={2000}
+      <TextInput accessibilityLabel={t("그룹 채팅 메시지")} style={styles.input} placeholder={t("입력하세요…")} placeholderTextColor="#bfc0c9" value={body} onChangeText={setBody} maxLength={2000}
         onFocus={()=>changeExpanded(true)} editable={!busy} returnKeyType="send" onSubmitEditing={()=>void send()}/>
-      <Pressable accessibilityRole="button" accessibilityLabel="메시지 보내기" disabled={busy||!body.trim()} onPress={()=>void send()} style={styles.send}>
+      <Pressable accessibilityRole="button" accessibilityLabel={t("메시지 보내기")} disabled={busy||!body.trim()} onPress={()=>void send()} style={styles.send}>
         {busy?<ActivityIndicator color="#fff" size="small"/>:<Text style={{color:body.trim()?'#fff':'#777',fontSize:26}}>➤</Text>}
       </Pressable>
     </View>

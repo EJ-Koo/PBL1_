@@ -1,6 +1,7 @@
+import { ScrollView } from '@/components/app-scroll-view';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { DiaryUniverse } from '@/components/diary-universe';
 import { authSession } from '@/lib/auth-session';
 import { ArchiveCardArt } from '@/components/ui/archive-card-art';

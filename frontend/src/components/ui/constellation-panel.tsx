@@ -1,3 +1,4 @@
+import { ScrollView } from '@/components/app-scroll-view';
 // [NEW FILE 2026-11-12] 별자리 보기 UI: [나의 우주 | 별자리 보기] 전환 버튼 + 아래쪽 별자리 정보 패널.
 // 홈 HUD와 같은 디자인 언어(얇은 흰 선, 모서리를 깎은 틀, 반투명 회색, Inter 글꼴)를 쓴다.
 //  - 주제 칩: 주제별 일기 수
@@ -6,7 +7,7 @@
 //  - 접기: 별자리를 크게 보고 싶을 때 한 줄로 접는다
 //  - [2026-11-15] Level 4 나만의 별자리 카드(LLM 개인화 생성): 잠김 → 생성하기 → 만드는 중(서버 실제 단계) → 완성/실패
 import { useState, type ReactNode } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View, type LayoutChangeEvent } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View, type LayoutChangeEvent } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 
 import { DesignFonts, DesignPaint, grayAlpha, whiteAlpha } from '@/constants/ui-design';
@@ -395,7 +396,8 @@ export function ConstellationPanel({
           {/* 주제 칩 */}
           <ScrollView
             horizontal
-            showsHorizontalScrollIndicator={false}
+            testID="constellation-topic-scroll"
+            showsHorizontalScrollIndicator
             style={{ marginTop: f(10), flexGrow: 0 }}
             contentContainerStyle={{ gap: f(6) }}>
             {statuses.map((s) => {
@@ -429,7 +431,7 @@ export function ConstellationPanel({
 
           {/* 레벨 카드 */}
           {status && (
-            <View style={[styles.levelRow, { marginTop: f(10), gap: f(8) }]}>
+            <ScrollView horizontal showsHorizontalScrollIndicator testID="constellation-level-scroll" style={{marginTop:f(10),flexGrow:0}} contentContainerStyle={[styles.levelRow,{gap:f(8)}]}>
               {status.levels.map((l) => {
                 const selected = l.unlocked && l.template.id === current?.id;
                 return (
@@ -441,7 +443,7 @@ export function ConstellationPanel({
                     accessibilityState={{ selected, disabled: !l.unlocked }}
                     accessibilityLabel={`Level ${l.template.level} ${l.template.shape} ${l.unlocked ? '해금' : `잠김, ${l.remaining}개 더 필요`}`}
                     testID={`constellation-level-${l.template.level}`}
-                    style={[styles.levelCard, { paddingVertical: f(6), paddingHorizontal: f(4) }]}>
+                    style={[styles.levelCard, { width: f(94), paddingVertical: f(6), paddingHorizontal: f(4) }]}>
                     <ChamferFrame
                       cut={f(8)}
                       fill={selected ? whiteAlpha(0.12) : grayAlpha(0.05)}
@@ -490,7 +492,7 @@ export function ConstellationPanel({
                       : `Level 4 나만의 별자리, ${personal.state === 'locked' ? `${personal.remaining}개 더 필요` : '자세히'}`
                   }
                   testID="constellation-level-4"
-                  style={[styles.levelCard, { paddingVertical: f(6), paddingHorizontal: f(4) }]}>
+                  style={[styles.levelCard, { width: f(94), paddingVertical: f(6), paddingHorizontal: f(4) }]}>
                   <ChamferFrame
                     cut={f(8)}
                     fill={isPersonalCurrent || personalOpen ? whiteAlpha(0.12) : grayAlpha(0.05)}
@@ -549,7 +551,7 @@ export function ConstellationPanel({
                   </Text>
                 </TouchableOpacity>
               )}
-            </View>
+            </ScrollView>
           )}
 
           {personal && showPersonalBox && onCreatePersonal && (
@@ -577,7 +579,8 @@ export function ConstellationPanel({
           {current && members.length > 0 && (
             <ScrollView
               horizontal
-              showsHorizontalScrollIndicator={false}
+              testID="constellation-diary-scroll"
+              showsHorizontalScrollIndicator
               style={{ marginTop: f(6), flexGrow: 0 }}
               contentContainerStyle={{ gap: f(5) }}>
               {members.map((m) => (
@@ -628,7 +631,7 @@ const styles = StyleSheet.create({
   },
   chipText: { color: DesignPaint.ink, fontFamily: DesignFonts.regular, includeFontPadding: false },
   levelRow: { flexDirection: 'row' },
-  levelCard: { flex: 1, alignItems: 'center' },
+  levelCard: { flexShrink: 0, alignItems: 'center' },
   lockBadge: { position: 'absolute' },
   levelText: { color: DesignPaint.ink, fontFamily: DesignFonts.regular, marginTop: 2, includeFontPadding: false },
   levelSub: { color: whiteAlpha(0.55), fontFamily: DesignFonts.regular, includeFontPadding: false },

@@ -1,5 +1,6 @@
+import { ScrollView, type ScrollViewHandle } from '@/components/app-scroll-view';
 import { Text, TextInput } from '@/components/app-text';
-import { Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -48,7 +49,7 @@ export function DiaryWriteScreen({
 }: Props) {
   const insets = useSafeAreaInsets();
   const [preview, setPreview] = useState<Photo | null>(null);
-  const topicList = useRef<ScrollView>(null);
+  const topicList = useRef<ScrollViewHandle>(null);
   const [topicScroll, setTopicScroll] = useState({ width: 0, content: 0, offset: 0 });
   const { contentLeft, contentWidth, headerTop, bottomSpace } = useResponsiveLayout();
   const box = (left: number, top: number, width: number, height: number) => ({

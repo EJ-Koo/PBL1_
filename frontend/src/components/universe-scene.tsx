@@ -57,7 +57,7 @@ import {
 } from '@/lib/constellation';
 import { controlsFor, frontView, rotateView, setView, zoomView, type UniverseControls } from '@/lib/universe-controls';
 import { getRotateSensitivity, loadSettings } from '@/lib/settings';
-import { newStarFocus, newStarGlow, type NewStarHighlight } from '@/lib/new-star-highlight';
+import { newStarGlow, unreadStarGlow, type NewStarHighlight } from '@/lib/new-star-highlight';
 import type { StarPopupAnchor } from '@/lib/star-popup-layout';
 import type { DiaryEntry } from '@/store/diary-context';
 
@@ -124,7 +124,7 @@ function createNewStarHaloTexture() {
 
 const NEW_STAR_HALO_TEXTURE = createNewStarHaloTexture();
 
-function NewStarHalo({ radius, startedAt }: { radius: number; startedAt: number }) {
+function NewStarHalo({ radius, startedAt, persistent = false }: { radius: number; startedAt: number; persistent?: boolean }) {
   const sprite = useRef<Sprite>(null);
   const material = useRef<SpriteMaterial>(null);
   const [reducedMotion, setReducedMotion] = useState(true);
@@ -135,7 +135,7 @@ function NewStarHalo({ radius, startedAt }: { radius: number; startedAt: number 
     return () => { alive = false; subscription.remove(); };
   }, []);
   useFrame(() => {
-    const glow = newStarGlow(Date.now() - startedAt, reducedMotion);
+    const glow = persistent ? unreadStarGlow(Date.now() - startedAt, reducedMotion) : newStarGlow(Date.now() - startedAt, reducedMotion);
     sprite.current?.scale.setScalar(radius * 5.4 * glow.scale);
     if (material.current) material.current.opacity = glow.opacity;
   });
@@ -667,7 +667,7 @@ function Planet({
     // 자전축 기울기는 일기마다 고정된 값(감정과 무관). 북극 쪽을 카메라로 13~20도만 기울여
     // 층은 거의 가로로 흐르고, 고리는 정면에서 얇은 타원으로 보인다.
     <group ref={bodyRef} position={position} rotation={[0.22 + r5 * 0.13, 0, (r4 - 0.5) * 0.5]}>
-      {newStar && <NewStarHalo radius={radius} startedAt={newStar.startedAt} />}
+      {unread ? <NewStarHalo radius={radius} startedAt={0} persistent /> : newStar && <NewStarHalo radius={radius} startedAt={newStar.startedAt} />}
       <group ref={spinRef}>
         <mesh
           ref={registerMesh}
@@ -1054,17 +1054,7 @@ export function UniverseScene({
     frontView(controls.current, fittedCameraZ.current / Math.max(framing?.distance ?? 5, 0.1));
   }, [frontViewRequest]);
 
-  const focusedNewStar = useRef<string | null>(null);
-  const newEntry = newStar ? entries.find(entry => entry.id === newStar.id) : undefined;
-  useEffect(() => {
-    if (!newEntry || !framing || focusedNewStar.current === newEntry.id) return;
-    focusedNewStar.current = newEntry.id;
-    const focus = newStarFocus(newEntry.position, framing.center);
-    controls.current.yaw = focus.rotationY;
-    controls.current.pitch = focus.rotationX;
-    controls.current.zoom = Math.max(0.25, Math.min(5, focus.distance / framing.distance));
-    synced.current = false;
-  }, [newEntry, framing, controls]);
+  // New diary markers are visual only; keep the user's current camera and zoom.
 
   // 선택: 웹은 마우스를 올린 행성, 터치는 누른 행성. 누른 강조는 잠깐 보였다가(일기 화면으로 넘어가는 동안) 서서히 꺼진다.
   const [hoverId, setHoverId] = useState<string | null>(null);

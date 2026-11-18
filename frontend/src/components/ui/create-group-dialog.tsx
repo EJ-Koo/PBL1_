@@ -1,5 +1,7 @@
+import { useLanguage } from '@/lib/language';
+import { ScrollView } from '@/components/app-scroll-view';
 import { Text, TextInput } from '@/components/app-text';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SpaceButton, SpaceIcon, SpaceSurface } from './space-ui';
@@ -12,11 +14,12 @@ type Props = {
 };
 
 export function CreateGroupDialog({ visible, scale, name, defaultName, saving, onChangeName, onClose, onCreate }: Props) {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={() => { if (!saving) onClose(); }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.overlay}>
-        <Pressable accessibilityLabel="그룹 생성 닫기" onPress={onClose} disabled={saving} style={StyleSheet.absoluteFill} />
+        <Pressable accessibilityLabel={t("그룹 생성 닫기")} onPress={onClose} disabled={saving} style={StyleSheet.absoluteFill} />
         <ScrollView keyboardShouldPersistTaps="always" style={{ width: '100%', flexGrow: 0 }}
           contentContainerStyle={{ paddingLeft: insets.left + 25 * scale, paddingRight: insets.right + 25 * scale,
             paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }}>
@@ -25,20 +28,20 @@ export function CreateGroupDialog({ visible, scale, name, defaultName, saving, o
               <Text style={[styles.muted, { fontSize: 10 * scale, letterSpacing: 2 }]}>NEW CONSTELLATION</Text>
               <SpaceIcon kind="group" size={36 * scale} />
             </View>
-            <Text style={[styles.title, { fontSize: 23 * scale, lineHeight: 32 * scale }]}>우리의 우주 만들기</Text>
-            <Text style={[styles.muted, { fontSize: 13 * scale, lineHeight: 21 * scale, marginTop: 10 * scale, marginBottom: 24 * scale }]}>함께 쓴 하루가 모여 하나의 우주가 돼요.{'\n'}만든 그룹은 일기의 공유 목록에 바로 나타나요.</Text>
-            <Text style={[styles.text, { fontSize: 13 * scale, marginBottom: 9 * scale }]}>우주의 이름</Text>
-            <TextInput accessibilityLabel="새 그룹 이름" value={name} onChangeText={onChangeName} maxLength={24}
+            <Text style={[styles.title, { fontSize: 23 * scale, lineHeight: 32 * scale }]}>{t("우리의 우주 만들기")}</Text>
+            <Text style={[styles.muted, { fontSize: 13 * scale, lineHeight: 21 * scale, marginTop: 10 * scale, marginBottom: 24 * scale }]}>{t('함께 쓴 하루가 모여 하나의 우주가 돼요.')} {'\n'}{t('만든 그룹은 일기의 공유 목록에 바로 나타나요.')}</Text>
+            <Text style={[styles.text, { fontSize: 13 * scale, marginBottom: 9 * scale }]}>{t("우주의 이름")}</Text>
+            <TextInput accessibilityLabel={t("새 그룹 이름")} value={name} onChangeText={onChangeName} maxLength={24}
               editable={!saving} placeholder={defaultName} placeholderTextColor="#78818d" returnKeyType="done"
               onSubmitEditing={onCreate} style={[styles.input, { fontSize: 16 * scale, padding: 13 * scale }]} />
             <Text style={[styles.muted, { fontSize: 11 * scale, textAlign: 'right', marginTop: 7 * scale }]}>{name.length}/24</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 * scale, marginVertical: 22 * scale }}>
               <SpaceIcon kind="star" size={14 * scale} color="#a39bff" />
-              <Text style={[styles.muted, { fontSize: 12 * scale, lineHeight: 19 * scale, flex: 1 }]}>내 별부터 시작하는 새로운 우주</Text>
+              <Text style={[styles.muted, { fontSize: 12 * scale, lineHeight: 19 * scale, flex: 1 }]}>{t("내 별부터 시작하는 새로운 우주")}</Text>
             </View>
             <View style={{ flexDirection: 'row', gap: 10 * scale }}>
-              <SpaceButton label="취소" scale={scale} disabled={saving} onPress={onClose} style={{ flex: 1 }} />
-              <SpaceButton label={saving ? '만드는 중…' : '우주 만들기'} scale={scale} disabled={saving} onPress={onCreate} primary style={{ flex: 1.5 }} />
+              <SpaceButton label={t("취소")} scale={scale} disabled={saving} onPress={onClose} style={{ flex: 1 }} />
+              <SpaceButton label={t(saving ? '만드는 중…' : '우주 만들기')} scale={scale} disabled={saving} onPress={onCreate} primary style={{ flex: 1.5 }} />
             </View>
           </SpaceSurface>
         </ScrollView>

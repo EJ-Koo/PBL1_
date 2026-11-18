@@ -15,7 +15,7 @@ await db.exec(`create schema auth; create role anon; create role authenticated; 
  create table public.group_members(group_id uuid references public.groups(id),user_id uuid references auth.users(id),joined_at timestamptz default now(),primary key(group_id,user_id));
  create table public.diaries(id uuid primary key,user_id uuid references auth.users(id),visibility text,created_at timestamptz default now());
  create table public.diary_groups(diary_id uuid references public.diaries(id),group_id uuid references public.groups(id),primary key(diary_id,group_id));`);
-const migration=await readFile(new URL('../../migrations/2026-11-17_group_social.sql',import.meta.url),'utf8');
+const migration=(await readFile(new URL('../../migrations/2026-11-17_group_social.sql',import.meta.url),'utf8'))+'\n'+(await readFile(new URL('../../migrations/2026-11-18_group_highlight.sql',import.meta.url),'utf8'));
 await db.exec(migration);
 // Reapplying must be safe and must not reset reads/messages.
 await db.exec(migration);
@@ -30,6 +30,9 @@ ok((await rpc(b,'snapshot')).unread_diary_ids.length===0,'first visit must not h
 await db.query("update group_social_state set initialized_at=now()-interval '1 hour' where group_id=$1 and user_id=$2",[g,b]);
 await db.query("insert into diaries(id,user_id,visibility) values($1,$2,'friends'),($3,$2,'private')",[diary,a,privateDiary]);
 await db.query('insert into diary_groups values($1,$2),($3,$2)',[diary,g,privateDiary]);
+ok((await rpc(a,'snapshot')).unread_diary_ids.includes(diary),'own newly shared diary must highlight even on first group entry');
+await rpc(a,'read_diary',{diary_id:diary});
+ok(!(await rpc(a,'snapshot')).unread_diary_ids.includes(diary),'opening own shared diary clears its marker');
 let snapshot=await rpc(b,'snapshot');
 ok(snapshot.unread_diary_ids.includes(diary),'new shared diary must stay unread');
 ok(!snapshot.diary_ids.includes(privateDiary),'private diary must not be visible');

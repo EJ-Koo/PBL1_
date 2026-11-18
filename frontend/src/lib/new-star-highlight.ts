@@ -20,3 +20,9 @@ export function newStarGlow(elapsedMs: number, reducedMotion: boolean) {
   const pulse = reducedMotion ? 0.5 : (1 - Math.cos(elapsedMs / 1600 * Math.PI * 2)) / 2;
   return { opacity: fade * (0.55 + pulse * 0.35), scale: 1 + pulse * 0.08 };
 }
+
+/** Unread group stars keep the same visible halo until the diary is read. */
+export function unreadStarGlow(elapsedMs: number, reducedMotion: boolean) {
+  const pulse = reducedMotion ? 0.5 : (1 - Math.cos(Math.max(0, elapsedMs) / 1600 * Math.PI * 2)) / 2;
+  return { opacity: 0.55 + pulse * 0.35, scale: 1 + pulse * 0.08 };
+}

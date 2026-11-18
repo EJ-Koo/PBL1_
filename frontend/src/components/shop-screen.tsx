@@ -1,3 +1,5 @@
+import { useLanguage } from '@/lib/language';
+import { ScrollView } from '@/components/app-scroll-view';
 import { CoinIcon } from '@/components/coin-icon';
 import { Text } from '@/components/app-text';
 // [MODIFIED 2026-11-10] 상점 팝업 (fffju 상점 카드 디자인 + 서버 코인·구매·장착).
@@ -11,7 +13,7 @@ import { Text } from '@/components/app-text';
 //      위에 샘플 행성 미리보기(카드를 누르면 그 효과로 바뀜). 소모품: 1개 = 행성 1개.
 //      [구매]로 개수를 늘리고, 남은 개수가 있으면 [적용]으로 원하는 일기 행성에 적용(해제·변경하면 1개가 돌아온다)
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 
 import { SpaceSurface, SpaceIcon } from '@/components/ui/space-ui';
 import { DesignFonts } from '@/constants/ui-design';
@@ -129,6 +131,7 @@ function Card({
   onPress: () => void;
   testID: string;
 }) {
+  const { t } = useLanguage();
   return (
     <Pressable
       disabled={!onSelect}
@@ -136,7 +139,7 @@ function Card({
       accessibilityLabel={onSelect ? `${name} 미리보기` : undefined}
       style={[styles.card, highlighted && styles.cardEquipped, previewing && styles.cardPreviewing]}
       testID={testID}>
-      {badge ? <Text style={styles.badge}>{badge}</Text> : null}
+      {badge ? <Text style={styles.badge}>{t(badge)}</Text> : null}
       <Text style={styles.icon}>{icon}</Text>
       <Text style={styles.name} numberOfLines={1}>
         {name}
@@ -145,7 +148,7 @@ function Card({
         {description}
       </Text>
       {/* 가격 줄은 항상 같은 높이 → 구매 후에도 버튼 위치가 그대로 */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><CoinIcon size={18} /><Text style={styles.price}>{priceText}</Text></View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><CoinIcon size={18} /><Text style={styles.price}>{t(priceText)}</Text></View>
       <View style={styles.buttonRow}>
         <TouchableOpacity
           testID={`${testID}-action`}
@@ -162,7 +165,7 @@ function Card({
           {busy ? (
             <ActivityIndicator size="small" color="#000" />
           ) : (
-            <Text style={[styles.buttonText, action.disabled && styles.buttonTextDisabled]}>{action.label}</Text>
+            <Text style={[styles.buttonText, action.disabled && styles.buttonTextDisabled]}>{t(action.label)}</Text>
           )}
         </TouchableOpacity>
         {secondary ? (
@@ -172,7 +175,7 @@ function Card({
             disabled={disabledAll}
             onPress={secondary.onPress}
             style={[styles.button, styles.buttonHalf, styles.buttonApply]}>
-            <Text style={styles.buttonText}>{secondary.label}</Text>
+            <Text style={styles.buttonText}>{t(secondary.label)}</Text>
           </TouchableOpacity>
         ) : null}
       </View>
@@ -200,6 +203,7 @@ function EffectPreview({ item, visible }: { item: ShopItem | undefined; visible:
 }
 
 export function ShopSheet({ visible, onClose }: { visible: boolean; width: number; onClose: () => void }) {
+  const { t } = useLanguage();
   const { coins, items, loading, error, refresh, purchase, setEquipped, resetAllowed, resetShop } = useShop();
   const { entries } = useDiary();
   const { height, width: viewportWidth } = useWindowDimensions();
@@ -231,15 +235,15 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
     setBusyId(id);
     const result = await task();
     setBusyId(null);
-    if (!result.ok) showMessage('실패', result.error);
+    if (!result.ok) showMessage(t('실패'), result.error);
   };
 
   const onItemPress = (item: ShopItem) => {
     const action = actionFor(item, balance);
     if (action.disabled || action.kind === 'none' || busyId) return;
     if (action.kind === 'buy') {
-      const note = item.slot === PLANET_EFFECT_SLOT ? '\n1개로 행성 1개를 꾸밀 수 있어요.' : '';
-      confirmChoice('구매', `${item.icon} ${item.name}을(를) 🪙 ${item.price}에 살까요?${note}`, '구매', () =>
+      const note = item.slot === PLANET_EFFECT_SLOT ? `\n${t('1개로 행성 1개를 꾸밀 수 있어요.')}` : '';
+      confirmChoice(t('구매'), `${item.icon} ${t('{name}을(를) {price}코인에 살까요?',{name:item.name,price:item.price})}${note}`, t('구매'), () =>
         run(item.id, () => purchase(item.id))
       );
       return;
@@ -250,9 +254,9 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
   const onReset = () => {
     if (busyId) return;
     confirmChoice(
-      '내 상점 초기화 (테스트용)',
-      '코인이 시작 코인으로 돌아가고, 산 아이템과 코인 기록이 모두 지워집니다.',
-      '초기화',
+      t('내 상점 초기화 (테스트용)'),
+      t('코인이 시작 코인으로 돌아가고, 산 아이템과 코인 기록이 모두 지워집니다.'),
+      t('초기화'),
       () => run('__reset__', resetShop)
     );
   };
@@ -261,7 +265,7 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         {/* 창 바깥(어두운 부분)을 누르면 닫힘 */}
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="상점 닫기" testID="shop-backdrop" />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel={t("상점 닫기")} testID="shop-backdrop" />
         <SpaceSurface
           testID="shop-sheet"
           style={[
@@ -276,20 +280,20 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
               <View style={styles.coinPill} testID="shop-coins">
                 <CoinIcon size={25} /><Text style={styles.coinText}>{coins?.toLocaleString() ?? '…'}</Text>
               </View>
-              <TouchableOpacity onPress={onClose} accessibilityLabel="닫기" testID="shop-close" hitSlop={10} style={styles.close}>
+              <TouchableOpacity onPress={onClose} accessibilityLabel={t("닫기")} testID="shop-close" hitSlop={10} style={styles.close}>
                 <Text style={styles.closeText}>✕</Text>
               </TouchableOpacity>
             </View>
           </View>
 
           <View style={styles.tabs}>
-            {TABS.map((t) => (
+            {TABS.map((tabItem) => (
               <TouchableOpacity
-                key={t.id}
-                testID={`shop-tab-${t.id}`}
-                onPress={() => setTabId(t.id)}
-                style={[styles.tab, t.id === tab.id && styles.tabActive]}>
-                <Text style={[styles.tabText, t.id === tab.id && styles.tabTextActive]}>{t.label}</Text>
+                key={tabItem.id}
+                testID={`shop-tab-${tabItem.id}`}
+                onPress={() => setTabId(tabItem.id)}
+                style={[styles.tab, tabItem.id === tab.id && styles.tabActive]}>
+                <Text style={[styles.tabText, tabItem.id === tab.id && styles.tabTextActive]}>{t(tabItem.label)}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -297,7 +301,7 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
           {error ? (
             <TouchableOpacity style={styles.errorBox} onPress={refresh}>
               <Text style={styles.errorText}>{error}</Text>
-              <Text style={styles.errorRetry}>눌러서 다시 시도</Text>
+              <Text style={styles.errorRetry}>{t("눌러서 다시 시도")}</Text>
             </TouchableOpacity>
           ) : null}
           {loading && items.length === 0 ? <ActivityIndicator color="#fff" style={styles.loading} /> : null}
@@ -309,7 +313,7 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
               return (
                 <View key={section.title} testID={`shop-section-${section.title}`}>
                   {index > 0 ? <View style={styles.divider} /> : null}
-                  <Text style={styles.sectionTitle}>{section.title}</Text>
+                  <Text style={styles.sectionTitle}>{t(section.title)}</Text>
                   {section.preview && list.length > 0 ? (
                     <>
                       <EffectPreview
@@ -317,20 +321,20 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
                         visible={visible && decorating === null}
                       />
                       <Text style={styles.previewHint}>
-                        카드를 누르면 미리 볼 수 있어요. 행성 색과 무늬는 그대로, 주변 효과만 더해져요.
+                        {t('카드를 누르면 미리 볼 수 있어요. 행성 색과 무늬는 그대로, 주변 효과만 더해져요.')}
                       </Text>
                     </>
                   ) : null}
                   {list.length === 0 && !section.defaultCard ? (
-                    <Text style={styles.empty}>{section.emptyText}</Text>
+                    <Text style={styles.empty}>{t(section.emptyText??'')}</Text>
                   ) : (
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
                       {section.defaultCard ? (
                         <Card
                           testID={`shop-item-default-${slot}`}
                           icon={section.defaultCard.icon}
-                          name={section.defaultCard.name}
-                          description={section.defaultCard.description}
+                          name={t(section.defaultCard.name)}
+                          description={t(section.defaultCard.description)}
                           priceText="무료"
                           badge={slotInUse ? undefined : '사용 중'}
                           highlighted={!slotInUse}
@@ -357,18 +361,18 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
                             icon={item.icon}
                             name={item.name}
                             description={item.description}
-                            priceText={item.kind === 'equip' && owned ? '보유 중' : `🪙 ${item.price}`}
+                            priceText={item.kind === 'equip' && owned ? '보유 중' : String(item.price)}
                             badge={
                               effect
                                 ? owned
                                   ? left > 0
-                                    ? `남은 ${left}/${item.quantity}개`
+                                    ? t('남은 {left}/{total}개',{left,total:item.quantity})
                                     : '모두 사용 중'
                                   : undefined
                                 : item.equipped
                                   ? '장착 중'
                                   : item.kind === 'consumable' && owned
-                                    ? `보유 ${item.quantity}개`
+                                    ? t('보유 {count}개',{count:item.quantity})
                                     : undefined
                             }
                             secondary={effect && left > 0 ? { label: '적용', onPress: () => setDecorating(effect) } : undefined}
@@ -385,7 +389,7 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
                     </ScrollView>
                   )}
                   {list.length === 0 && section.defaultCard && section.emptyText ? (
-                    <Text style={styles.empty}>{section.emptyText}</Text>
+                    <Text style={styles.empty}>{t(section.emptyText??'')}</Text>
                   ) : null}
                 </View>
               );
@@ -397,11 +401,11 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
                 onPress={onReset}
                 disabled={busyId !== null}
                 testID="shop-reset"
-                accessibilityLabel="내 상점 초기화">
+                accessibilityLabel={t("내 상점 초기화")}>
                 {busyId === '__reset__' ? (
                   <ActivityIndicator size="small" color="#F66C9E" />
                 ) : (
-                  <Text style={styles.resetText}>↺ 내 상점 초기화 (테스트용)</Text>
+                  <Text style={styles.resetText}>{t("↺ 내 상점 초기화 (테스트용)")}</Text>
                 )}
               </TouchableOpacity>
             ) : null}

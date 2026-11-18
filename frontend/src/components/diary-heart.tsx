@@ -1,3 +1,4 @@
+import { useLanguage } from '@/lib/language';
 import {useEffect,useRef,useState} from 'react';
 import {ActivityIndicator,Pressable,View} from 'react-native';
 import {Text} from '@/components/app-text';
@@ -6,6 +7,7 @@ import {getHeart,setHeart,type HeartState} from '@/lib/group-social-api';
 import {useDiary} from '@/store/diary-context';
 
 export function DiaryHeart({groupId,diaryId}:{groupId:string;diaryId:string}){
+ const { t } = useLanguage();
  const {accessToken}=useDiary();const revision=authSession.getRevision();const key=`${revision}:${groupId}:${diaryId}`;
  const [record,setRecord]=useState<{key:string;value:HeartState|null;error:boolean}>({key:'',value:null,error:false});
  const [busy,setBusy]=useState(false),[retry,setRetry]=useState(0);const locked=useRef(false),alive=useRef(true),generation=useRef(0);
@@ -24,11 +26,11 @@ export function DiaryHeart({groupId,diaryId}:{groupId:string;diaryId:string}){
   finally{locked.current=false;if(alive.current)setBusy(false);}
  };
  return <View style={{flex:1,alignItems:'flex-start'}}>
-  <Pressable accessibilityRole="button" accessibilityLabel={error?'하트 다시 불러오기':value?.liked?`하트 취소, ${value.count}개`:`하트 누르기, ${value?.count??'확인 중'}개`}
+  <Pressable accessibilityRole="button" accessibilityLabel={error?t('하트 다시 불러오기'):t(value?.liked?'하트 취소, {count}개':'하트 누르기, {count}개',{count:value?.count??'…'})}
    accessibilityState={{selected:value?.liked??false,busy,disabled:busy||(!value&&!error)}} disabled={busy||(!value&&!error)}
    onPress={()=>{if(error)setRetry(v=>v+1);else void toggle();}} style={{minHeight:40,minWidth:64,flexDirection:'row',alignItems:'center',gap:6,paddingHorizontal:4}}>
    {busy?<ActivityIndicator color="#ffd1dc" size="small"/>:<Text style={{fontSize:22,color:value?.liked?'#ffadc0':'#f3f1f5'}}>{value?.liked?'♥':'♡'}</Text>}
-   <Text style={{color:'#fff',fontSize:12}}>{error?'다시 시도':value?String(value.count):'…'}</Text>
+   <Text style={{color:'#fff',fontSize:12}}>{error?t('다시 시도'):value?String(value.count):'…'}</Text>
   </Pressable>
  </View>;
 }
