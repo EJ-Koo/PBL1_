@@ -68,12 +68,12 @@ type BottomLayout = ReturnType<typeof getBottomNavLayout>;
 
 export function BottomNavFrame({ layout, pressed }: { layout: BottomLayout; pressed?: string | null }) {
   const clipId = 'bottom-stripes-' + useId().replace(/[^a-zA-Z0-9_-]/g, '');
-  const { viewWidth, scale, offset, height, items } = layout;
+  const { viewWidth, viewHeight, scale, offset, height, items } = layout;
   if (scale === 0) return null;
   const stripeWidth = 139 + offset;
   const bands = [21, 617 + offset];
   return (
-    <Svg width="100%" height={height} viewBox={`0 0 ${viewWidth} ${height / scale}`} pointerEvents="none" aria-hidden>
+    <Svg width="100%" height={height} viewBox={`0 0 ${viewWidth} ${viewHeight}`} preserveAspectRatio="xMidYMax meet" pointerEvents="none" aria-hidden>
       <Rect width="100%" height="100%" fill={DesignColors.black} />
       <Defs>
         <ClipPath id={clipId}>
