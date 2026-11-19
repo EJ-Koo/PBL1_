@@ -92,7 +92,7 @@ export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup, onJ
           <View style={{ height: 63 * scale }}>
             <GroupHeaderFrame scale={scale} width={innerWidth} /><GroupProfileControl scale={scale} />
             <Text numberOfLines={1} adjustsFontSizeToFit accessibilityRole="header" style={[styles.positioned, styles.text, {
-              left: 18 * scale, top: 14 * scale, maxWidth: innerWidth - 92 * scale, fontSize: 28 * scale, lineHeight: 36 * scale,
+              left: 18 * scale, top: 14 * scale, maxWidth: innerWidth - 92 * scale, fontFamily: DesignFonts.bold, fontSize: 28 * scale, lineHeight: 36 * scale,
             }]}>OUR SPACE</Text>
           </View>
           <Text style={[styles.text, { fontSize: Math.max(12, 13 * scale), lineHeight: Math.max(20, 20 * scale), marginTop: 10 * scale, paddingHorizontal: 18 * scale, flexShrink: 1 }]}>
