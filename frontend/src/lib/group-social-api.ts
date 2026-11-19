@@ -24,3 +24,7 @@ export const markChatRead = (token: string,id: string,message_id: string) => soc
 export const markDiaryRead = (token: string,id: string,diary: string) => socialRequest(token,`/groups/${id}/diaries/${diary}/read`,'PUT');
 export const getHeart = (token: string,id: string,diary: string) => socialRequest<HeartState>(token,`/groups/${id}/diaries/${diary}/heart`);
 export const setHeart = (token: string,id: string,diary: string,liked: boolean) => socialRequest<HeartState>(token,`/groups/${id}/diaries/${diary}/heart`,'PUT',{liked});
+
+export type PushDeliveryStatus = { registered: boolean; recent_notifications: number; pending: number; sending: number; sent: number; failed: number; max_attempts: number };
+export type PushDiagnostics = { permission: string; subscription: boolean; key_matches: boolean | null; server: PushDeliveryStatus | null };
+export const pushDeliveryStatus = (token: string, id: string) => socialRequest<PushDeliveryStatus>(token, `/me/group-push/status?device_id=${encodeURIComponent(id)}`);

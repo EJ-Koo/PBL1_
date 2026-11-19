@@ -10,12 +10,13 @@ import { chatMessages, markChatRead, sendChat, type ChatMessage } from '@/lib/gr
 import { mergeChat } from '@/lib/group-chat';
 import { useDiary } from '@/store/diary-context';
 
-export function GroupChatDock({ groupId, bottom, left, width, unread, onRead, initialExpanded = false, onExpandedChange }: {groupId:string;bottom:number;left:number;width:number;unread:number;onRead:()=>void;initialExpanded?:boolean;onExpandedChange?:(expanded:boolean)=>void}) {
+export function GroupChatDock({ groupId, bottom, left, width, unread, onRead, initialExpanded = false, expanded: controlledExpanded, onExpandedChange }: {groupId:string;bottom:number;left:number;width:number;unread:number;onRead:()=>void;initialExpanded?:boolean;expanded?:boolean;onExpandedChange?:(expanded:boolean)=>void}) {
   const { t, language } = useLanguage();
   const {accessToken,profile}=useDiary();
   const revision=authSession.getRevision();
   const {height}=useWindowDimensions();
-  const [expanded,setExpanded]=useState(initialExpanded);
+  const [localExpanded,setExpanded]=useState(initialExpanded);
+  const expanded=controlledExpanded??localExpanded;
   const changeExpanded=(next:boolean)=>{setExpanded(next);onExpandedChange?.(next);};
   const [messages,setMessages]=useState<ChatMessage[]>([]);
   const [body,setBody]=useState('');
@@ -62,8 +63,9 @@ export function GroupChatDock({ groupId, bottom, left, width, unread, onRead, in
     finally {pollLock.current=false;if(alive.current)setLoading(false);}
   },[accessToken,groupId,revision,read,messages.length,expanded,t]);
   useEffect(()=>{
+    if(!expanded)return;
     const initial=setTimeout(()=>void load(),0);
-    const timer=setInterval(()=>{if(AppState.currentState!=='background')void load();},expanded?3000:10000);
+    const timer=setInterval(()=>{if(AppState.currentState!=='background')void load();},3000);
     return()=>{clearTimeout(initial);clearInterval(timer);};
   },[expanded,load]);
   const send=async()=>{
@@ -76,20 +78,12 @@ export function GroupChatDock({ groupId, bottom, left, width, unread, onRead, in
       if(!alive.current || revision!==authSession.getRevision())return;
       setBody('');retry.current=null;nearBottom.current=true;
       await load();
-    }catch(reason){if(alive.current && revision===authSession.getRevision())setError(reason instanceof Error?reason.message:t('전송하지 못했어요. 다시 시도해주세요.'));}
+    }catch(reason){if(alive.current && revision===authSession.getRevision()){setError(reason instanceof Error?reason.message:t('전송하지 못했어요. 다시 시도해주세요.'));changeExpanded(true);}}
     finally{lock.current=false;if(alive.current)setBusy(false);}
   };
   return <View style={[styles.dock,{left,width,bottom:Math.max(bottom,keyboard?keyboard+12:0)}]} testID="group-chat">
-    <Pressable accessibilityRole="button" accessibilityLabel={t(expanded?'그룹 채팅 접기':'그룹 채팅 펼치기')} onPress={()=>{changeExpanded(!expanded);if(expanded)Keyboard.dismiss();}} style={styles.heading}>
-      <Text style={styles.label}>{t('그룹 채팅')}{unread>0?` · ${t('미확인 {count}개',{count:unread})}`:''}</Text><Text style={styles.label}>{expanded?'⌄':'⌃'}</Text>
-    </Pressable>
-    {!expanded && <Pressable accessibilityRole="button" accessibilityLabel={t("마지막 메시지 보기")} onPress={()=>changeExpanded(true)} style={styles.preview}>
-      {messages.length>0?<View style={styles.message}>
-        <Avatar uri={messages.at(-1)!.avatar_url} size={28}/><View style={{flex:1,minWidth:0}}>
-          <Text style={styles.name} numberOfLines={1}>{messages.at(-1)!.sender_id===profile?.user_id?t('나'):messages.at(-1)!.nickname}</Text>
-          <Text style={styles.body} numberOfLines={1}>{messages.at(-1)!.body}</Text>
-        </View>
-      </View>:<Text style={styles.hint}>{t(error?'채팅을 불러오지 못했어요. 눌러서 다시 시도':loading?'채팅을 불러오는 중…':'첫 이야기를 나눠보세요.')}</Text>}
+    {expanded && <Pressable accessibilityRole="button" accessibilityLabel={t('그룹 채팅 접기')} onPress={()=>{changeExpanded(false);Keyboard.dismiss();}} style={styles.heading}>
+      <Text style={styles.label}>{t('그룹 채팅')}{unread>0?` · ${t('미확인 {count}개',{count:unread})}`:''}</Text><Text style={styles.label}>⌄</Text>
     </Pressable>}
     {expanded && <>
       <ScrollView ref={scroll} maintainVisibleContentPosition={{minIndexForVisible:0}} style={{height:Math.max(92,Math.min(208,height*.28))}} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.messages}
@@ -109,8 +103,12 @@ export function GroupChatDock({ groupId, bottom, left, width, unread, onRead, in
       {error && <Pressable onPress={()=>void load()}><Text style={styles.error}>{error} · {t('다시 시도')}</Text></Pressable>}
     </>}
     <View style={styles.composer}>
+      {!expanded && <Pressable accessibilityRole="button" accessibilityLabel={t('그룹 채팅 펼치기')} onPress={()=>changeExpanded(true)} style={styles.expand}>
+        <Text style={styles.label}>⌃</Text>
+        {unread>0&&<View style={styles.unreadDot}/>}
+      </Pressable>}
       <TextInput accessibilityLabel={t("그룹 채팅 메시지")} style={styles.input} placeholder={t("입력하세요…")} placeholderTextColor="#bfc0c9" value={body} onChangeText={setBody} maxLength={2000}
-        onFocus={()=>changeExpanded(true)} editable={!busy} returnKeyType="send" onSubmitEditing={()=>void send()}/>
+        editable={!busy} returnKeyType="send" onSubmitEditing={()=>void send()}/>
       <Pressable accessibilityRole="button" accessibilityLabel={t("메시지 보내기")} disabled={busy||!body.trim()} onPress={()=>void send()} style={styles.send}>
         {busy?<ActivityIndicator color="#fff" size="small"/>:<Text style={{color:body.trim()?'#fff':'#777',fontSize:26}}>➤</Text>}
       </Pressable>
@@ -120,9 +118,9 @@ export function GroupChatDock({ groupId, bottom, left, width, unread, onRead, in
 const styles=StyleSheet.create({
  dock:{position:'absolute',borderWidth:1,borderColor:'#a8a9b4',backgroundColor:'rgba(82,84,94,0.85)'},
  heading:{minHeight:32,paddingHorizontal:12,flexDirection:'row',alignItems:'center',justifyContent:'space-between'},label:{color:'#f3f3f8',fontSize:11},
- preview:{minHeight:64,paddingHorizontal:12,paddingVertical:10,justifyContent:'center'},
  messages:{padding:12,gap:14},message:{flexDirection:'row',gap:10,alignItems:'flex-start'},name:{color:'#e4e4eb',fontSize:10,marginBottom:3},time:{color:'#c5c5cf',fontSize:9},body:{color:'#fff',fontSize:12,lineHeight:19},
  hint:{color:'#dddde8',fontSize:11,padding:10,textAlign:'center'},error:{color:'#ffd3d8',fontSize:11,padding:10},
+ expand:{width:36,minHeight:44,alignItems:'center',justifyContent:'center'},unreadDot:{position:'absolute',right:5,top:8,width:5,height:5,borderRadius:3,backgroundColor:'#ffdf8e'},
  composer:{flexDirection:'row',alignItems:'center',borderTopWidth:1,borderColor:'#b8b8c2',backgroundColor:'rgba(0,0,0,0.85)',minHeight:44},
  input:{flex:1,minWidth:0,paddingHorizontal:12,paddingVertical:12,color:'#fff',fontSize:12},send:{width:46,minHeight:44,alignItems:'center',justifyContent:'center'},
 });

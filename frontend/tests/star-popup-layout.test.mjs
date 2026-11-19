@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getStarPopupLayout } from '../src/lib/star-popup-layout.ts';
+import { getStarPopupLayout, starPopupMinimumHeight } from '../src/lib/star-popup-layout.ts';
 
 const viewport = { width: 393, height: 852, topInset: 138, bottomInset: 100 };
 const anchor = { id: 'diary', x: 196, y: 490, radius: 24, visible: true };
@@ -58,5 +58,21 @@ test('stars behind screen chrome keep the diary body clear of the header and nav
     const bodyTop = layout.top + (layout.above ? 0 : layout.tailHeight);
     assert.ok(bodyTop >= viewport.topInset);
     assert.ok(bodyTop + layout.bodyHeight <= viewport.height - viewport.bottomInset);
+  }
+});
+
+test('group author and action controls leave two text lines even at extreme zoom and larger text size', () => {
+  for (const fontScale of [1, 1.4]) {
+    for (const screen of [{width:393,height:852,topInset:138,bottomInset:164},{width:1280,height:900,topInset:140,bottomInset:180}]) {
+      const minBodyHeight=starPopupMinimumHeight(Math.min(440,screen.width-32),true,true,fontScale);
+      for (const radius of [10,100,400,1000]) {
+        const layout=getStarPopupLayout({...anchor,x:screen.width/2,y:screen.height/2,radius},{...screen,minBodyHeight});
+        assert.ok(layout);
+        assert.ok(layout.bodyHeight>=minBodyHeight);
+        const bodyTop=layout.top+(layout.above?0:layout.tailHeight);
+        assert.ok(bodyTop>=screen.topInset);
+        assert.ok(bodyTop+layout.bodyHeight<=screen.height-screen.bottomInset);
+      }
+    }
   }
 });

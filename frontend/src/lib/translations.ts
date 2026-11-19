@@ -180,7 +180,26 @@ export const ENGLISH: Readonly<Record<string, string>> = {
   "퀘스트 초기화": "Reset quest",
   "일기와 코인은 유지됩니다. 초기화 후 새 일기를 작성하면 다시 5코인을 받습니다.": "Keep diaries and coins. Writing a new diary after reset earns another 5 coins.",
   "보상 {reward}코인": "Reward: {reward} coins",
-  "반복 테스트: 관리자 설정에서 ‘상점·퀘스트 개발용 초기화 허용’을 켜면 초기화 버튼이 표시됩니다.": "For repeated testing, enable shop/quest development resets in admin settings."
+  "반복 테스트: 관리자 설정에서 ‘상점·퀘스트 개발용 초기화 허용’을 켜면 초기화 버튼이 표시됩니다.": "For repeated testing, enable shop/quest development resets in admin settings.",
+  "알림 상태 확인": "Check notification status",
+  "알림 다시 연결": "Reconnect notifications",
+  "확인 중…": "Checking…",
+  "알림 상태": "Notification status",
+  "알림 상태를 확인하지 못했어요.": "Could not check notification status.",
+  "브라우저/기기 권한: {value}": "Browser/device permission: {value}",
+  "이 기기의 구독: {value}": "This device subscription: {value}",
+  "서버 등록: {value}": "Server registration: {value}",
+  "푸시 키 일치: {value}": "Push key match: {value}",
+  "있음": "Yes",
+  "없음": "No",
+  "일치": "Match",
+  "불일치": "Mismatch",
+  "최근 알림 {count}개 · 대기 {pending} · 처리 중 {sending} · 전달 {sent} · 실패 {failed} · 최대 시도 {attempts}": "Recent alerts: {count} · Pending: {pending} · Sending: {sending} · Accepted: {sent} · Failed: {failed} · Max attempts: {attempts}",
+  "아래 알림 다시 연결을 누른 뒤 다른 계정으로 새 채팅을 보내주세요.": "Reconnect notifications below, then send a fresh message from another account.",
+  "worker가 이 기기의 대기열을 처리하지 않았어요. worker의 DB 연결과 실행 로그를 확인해주세요.": "The worker has not processed this device's queue. Check its database connection and runtime logs.",
+  "발송 재시도 또는 실패가 있어요. worker 실행 로그의 Group push failed 코드를 확인해주세요.": "Delivery has retries or failures. Check Group push failed codes in worker runtime logs.",
+  "푸시 서비스에는 전달됐어요. 운영체제 알림 허용과 방해금지 설정을 확인해주세요.": "The push service accepted delivery. Check operating system notification permissions and Do Not Disturb.",
+  "본인이 보낸 채팅은 본인에게 알림이 오지 않아요. 같은 그룹의 다른 계정으로 새 채팅을 보내 테스트해주세요.": "You do not receive alerts for your own messages. Test with a fresh message from another account in the same group."
 };
 
 export function translate(language: Language, source: string, values: Record<string, string | number> = {}) {

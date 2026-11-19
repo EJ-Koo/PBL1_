@@ -14,7 +14,7 @@ import {useResponsiveLayout} from '@/hooks/use-responsive-layout';
 import {type ApiGroup} from '@/lib/api';
 import {authSession} from '@/lib/auth-session';
 import {markDiaryRead} from '@/lib/group-social-api';
-import {enableGroupPush,disableGroupPush} from '@/lib/group-push';
+import {enableGroupPush,disableGroupPush,inspectGroupPush} from '@/lib/group-push';
 import {savedPush} from '@/lib/push-device';
 import {confirmChoice,showNotice} from '@/lib/notice';
 import {useDiary,type DiaryEntry} from '@/store/diary-context';
@@ -28,7 +28,9 @@ export function GroupExperience({group,entries,loading,error,onReload,onBack,onL
  const {accessToken,profile}=useDiary();const revision=authSession.getRevision();
  const {width,height}=useWindowDimensions();const layout=useResponsiveLayout();
  const [chatExpanded,setChatExpanded]=useState(initialChat);
+ const chatOpen=chatExpanded&&!selection.id;
  const [panel,setPanel]=useState<'members'|'quest'|null>(null);
+ const [checkingPush,setCheckingPush]=useState(false);
  const [pushBusy,setPushBusy]=useState(false),[pushEnabled,setPushEnabled]=useState(false);
  const [readError,setReadError]=useState<string|null>(null);
  const {data,error:socialError,refresh,forgetUnread}=useGroupSocial(group.id);
@@ -43,12 +45,32 @@ export function GroupExperience({group,entries,loading,error,onReload,onBack,onL
   try{await markDiaryRead(accessToken,group.id,id);if(alive.current&&revision===authSession.getRevision()){forgetUnread(id);setReadError(null);}}
   catch{if(alive.current&&revision===authSession.getRevision())setReadError(t('읽음 표시를 저장하지 못했어요. 별을 다시 열어주세요.'));}
  },[accessToken,group.id,revision,forgetUnread,t]);
- const push=async()=>{
+ const push=async(reconnect=false)=>{
   if(pushBusy||!accessToken||!profile?.user_id)return;setPushBusy(true);
-  try{if(pushEnabled)await disableGroupPush(accessToken,profile.user_id);else await enableGroupPush(accessToken,profile.user_id);
-   if(alive.current&&revision===authSession.getRevision())setPushEnabled(!pushEnabled);}
+  try{if(pushEnabled&&!reconnect)await disableGroupPush(accessToken,profile.user_id);else await enableGroupPush(accessToken,profile.user_id);
+   if(alive.current&&revision===authSession.getRevision())setPushEnabled(reconnect||!pushEnabled);}
   catch(reason){if(alive.current&&revision===authSession.getRevision())showNotice(t('그룹 알림'),reason instanceof Error?reason.message:t('알림을 연결하지 못했어요.'));}
   finally{if(alive.current)setPushBusy(false);}
+ };
+ const checkPush=async()=>{
+  if(checkingPush||!accessToken||!profile?.user_id)return;setCheckingPush(true);
+  try{
+   const status=await inspectGroupPush(accessToken,profile.user_id);
+   if(!alive.current||revision!==authSession.getRevision())return;
+   const server=status.server;
+   const lines=[t('브라우저/기기 권한: {value}',{value:status.permission}),t('이 기기의 구독: {value}',{value:t(status.subscription?'있음':'없음')}),
+    t('서버 등록: {value}',{value:t(server?.registered?'있음':'없음')})];
+   if(status.key_matches!==null)lines.push(t('푸시 키 일치: {value}',{value:t(status.key_matches?'일치':'불일치')}));
+   if(server)lines.push(t('최근 알림 {count}개 · 대기 {pending} · 처리 중 {sending} · 전달 {sent} · 실패 {failed} · 최대 시도 {attempts}',
+    {count:server.recent_notifications,pending:server.pending,sending:server.sending,sent:server.sent,failed:server.failed,attempts:server.max_attempts}));
+   if(!status.subscription||!server?.registered||status.key_matches===false)lines.push(t('아래 알림 다시 연결을 누른 뒤 다른 계정으로 새 채팅을 보내주세요.'));
+   else if(server.pending>0&&server.max_attempts===0)lines.push(t('worker가 이 기기의 대기열을 처리하지 않았어요. worker의 DB 연결과 실행 로그를 확인해주세요.'));
+   else if(server.failed>0||server.pending>0&&server.max_attempts>0)lines.push(t('발송 재시도 또는 실패가 있어요. worker 실행 로그의 Group push failed 코드를 확인해주세요.'));
+   else if(server.sent>0)lines.push(t('푸시 서비스에는 전달됐어요. 운영체제 알림 허용과 방해금지 설정을 확인해주세요.'));
+   lines.push(t('본인이 보낸 채팅은 본인에게 알림이 오지 않아요. 같은 그룹의 다른 계정으로 새 채팅을 보내 테스트해주세요.'));
+   showNotice(t('알림 상태'),lines.join('\n\n'));
+  }catch(reason){if(alive.current&&revision===authSession.getRevision())showNotice(t('알림 상태'),reason instanceof Error?reason.message:t('알림 상태를 확인하지 못했어요.'));}
+  finally{if(alive.current)setCheckingPush(false);}
  };
  const members=data?.members??group.members.map(item=>({user_id:item.user_id,nickname:item.nickname??'멤버',bio:'',avatar_url:null}));
  const panelWidth=Math.min(300,width-32),top=layout.headerTop+72*layout.scale;
@@ -59,7 +81,7 @@ export function GroupExperience({group,entries,loading,error,onReload,onBack,onL
  return <View style={styles.screen} testID="group-experience">
   <DiaryUniverse groupId={group.id} sceneKey={`${revision}:group-${group.id}`} entries={entries} backgroundStarScale={1.4}
     selection={selection} unreadIds={data?.unread_diary_ids??[]} onDiaryRead={read}
-    popupInsets={{top:top+12,bottom:chatBottom+(chatExpanded?Math.min(208,height*.28)+100:150)}}/>
+    popupInsets={{top:top+12,bottom:chatBottom+(chatOpen?Math.min(208,height*.28)+100:60)}}/>
   {(loading||error||entries.length===0)&&<View pointerEvents={error?'auto':'none'} style={styles.empty}>
    <Text style={styles.text}>{error??t(loading?'그룹의 별을 불러오는 중…':'아직 이 그룹에 공유된 별이 없어요.')}</Text>
    {error&&<SpaceButton label={t("다시 불러오기")} onPress={onReload}/>}
@@ -78,7 +100,7 @@ export function GroupExperience({group,entries,loading,error,onReload,onBack,onL
    </View>
   </View>
   {readError&&<Text accessibilityRole="alert" style={[styles.readError,{top}]}>{readError}</Text>}
-  <GroupChatDock key={group.id} groupId={group.id} bottom={chatBottom} left={chatLeft} width={chatWidth} unread={data?.chat_unread_count??0} onRead={refresh} initialExpanded={initialChat} onExpandedChange={setChatExpanded}/>
+  <GroupChatDock key={group.id} groupId={group.id} bottom={chatBottom} left={chatLeft} width={chatWidth} unread={data?.chat_unread_count??0} onRead={refresh} initialExpanded={initialChat} expanded={chatOpen} onExpandedChange={expanded=>{if(expanded)selection.onChange(null);setChatExpanded(expanded);}}/>
   <View pointerEvents="none" style={{position:'absolute',bottom:layout.navBottom,left:layout.chromeLeft,width:layout.chromeWidth,height:24}}>
    <Svg width="100%" height={24} viewBox="0 0 800 24" preserveAspectRatio="none"><Path d="M0 2H800 M0 22H800 M220 20L238 4H302V20Z M312 4H488V20H312Z M498 4H562L580 20H498Z" stroke="#d6d7df" fill="#393c47"/>
     <Path d="M5 18L18 6M20 18L33 6M35 18L48 6M50 18L63 6 M737 6L750 18M752 6L765 18M767 6L780 18M782 6L795 18" stroke="#e5e6ec" strokeWidth={4}/></Svg>
@@ -96,7 +118,11 @@ export function GroupExperience({group,entries,loading,error,onReload,onBack,onL
          <Text style={styles.bio} numberOfLines={2}>{member.bio||t('함께 별을 기록하는 멤버')}</Text></View>
        </View>)}
        {socialError&&<Pressable onPress={refresh}><Text style={styles.warning}>{t("추가 정보를 불러오지 못했어요. 다시 시도")}</Text></Pressable>}
-       <SpaceButton label={t(pushBusy?'연결 중…':pushEnabled?'그룹 알림 끄기':'그룹 알림 받기')} onPress={()=>void push()} disabled={pushBusy}/>
+       <SpaceButton label={t(pushBusy?'연결 중…':pushEnabled?'그룹 알림 끄기':'그룹 알림 받기')} onPress={()=>void push()} disabled={pushBusy||checkingPush}/>
+       {pushEnabled&&<>
+        <SpaceButton label={t(checkingPush?'확인 중…':'알림 상태 확인')} onPress={()=>void checkPush()} disabled={pushBusy||checkingPush}/>
+        <SpaceButton label={t('알림 다시 연결')} onPress={()=>void push(true)} disabled={pushBusy||checkingPush}/>
+       </>}
        <Pressable accessibilityRole="button" disabled={leaving} onPress={()=>confirmChoice(t('그룹 나가기'),t('이 그룹의 공유 우주와 채팅에서 나갈까요?'),t('나가기'),()=>{void onLeave();})} style={styles.leave}><Text style={styles.muted}>{t(leaving?'나가는 중…':'그룹 나가기')}</Text></Pressable>
       </>:data?<>
        <Text style={styles.text}>{t(data.quest.title)}</Text><Text style={styles.bio}>{t("오늘 그룹 멤버가 각자 일기를 공유하면 완료돼요.")}</Text>

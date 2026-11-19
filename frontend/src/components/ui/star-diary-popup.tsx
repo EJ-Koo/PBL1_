@@ -1,3 +1,4 @@
+import { useFontScale } from '@/hooks/use-font-scale';
 import { useLanguage } from '@/lib/language';
 import { ScrollView } from '@/components/app-scroll-view';
 import { DiaryHeart } from '@/components/diary-heart';
@@ -7,7 +8,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 
 import { DesignFonts } from '@/constants/ui-design';
 import { Text } from '@/components/app-text';
-import { getStarPopupLayout, type StarPopupAnchor } from '@/lib/star-popup-layout';
+import { getStarPopupLayout, starPopupMinimumHeight, type StarPopupAnchor } from '@/lib/star-popup-layout';
 import type { DiaryEntry } from '@/store/diary-context';
 
 type Props = {
@@ -49,6 +50,7 @@ function AuthorAvatar({ author, size }: { author: NonNullable<Props['author']>; 
 
 export function StarDiaryPopup({ entry, anchor, viewport, editable, owned, loading, error, onRetry, author, onClose, onEdit, onDecorate, groupId }: Props) {
   const { t } = useLanguage();
+  const fontScale = useFontScale();
   useEffect(() => {
     if (Platform.OS === 'web') {
       const onKeyDown = (event: KeyboardEvent) => {
@@ -64,7 +66,7 @@ export function StarDiaryPopup({ entry, anchor, viewport, editable, owned, loadi
     return () => subscription.remove();
   }, [onClose]);
 
-  const layout = getStarPopupLayout(anchor, viewport);
+  const layout = getStarPopupLayout(anchor, {...viewport,minBodyHeight:starPopupMinimumHeight(Math.min(440,viewport.width-32),!!author,!!(owned||groupId),fontScale)});
   if (!anchor.visible || !layout) return null;
   const { left, top, width, bodyHeight, tailHeight, tailX, tailBaseX, above } = layout;
   const height = bodyHeight + tailHeight;
@@ -99,7 +101,7 @@ export function StarDiaryPopup({ entry, anchor, viewport, editable, owned, loadi
       )}
       <View style={[styles.body, { top: above ? 0 : tailHeight, height: bodyHeight },
         ]}>
-        <View style={[styles.header, author && styles.authorHeader, compactAuthor && styles.compactAuthorHeader, author && { paddingLeft: avatarSize - 12, minHeight: avatarSize + 12 }]}>
+        <View style={[styles.header, author && styles.authorHeader, compactAuthor && styles.compactAuthorHeader, author && { paddingLeft: avatarSize - 12, minHeight: Math.max(avatarSize + 12, (compactAuthor ? 40 : 32) * fontScale + 8) }]}>
           {author && <Text style={[styles.nickname, compactAuthor && styles.compactNickname]} numberOfLines={1}
             accessibilityRole="header" testID="star-diary-author">{author.nickname}</Text>}
           <Text style={[author ? styles.authorDate : styles.date, compactAuthor && styles.compactAuthorDate]} numberOfLines={1} adjustsFontSizeToFit
@@ -138,12 +140,12 @@ export function StarDiaryPopup({ entry, anchor, viewport, editable, owned, loadi
 const styles = StyleSheet.create({
   popup: { position: 'absolute' },
   body: { position: 'absolute', left: 1, right: 1, paddingHorizontal: 18 },
-  header: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#D9D9D9', minHeight: 54 },
+  header: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#D9D9D9', minHeight: 54 },
   authorHeader: { minHeight: 66, alignItems: 'flex-end', gap: 8, paddingBottom: 8 },
   nickname: { flexGrow: 1, flexShrink: 1, flexBasis: 0, color: '#FFF', fontFamily: DesignFonts.bold, fontSize: 26, lineHeight: 32 },
   authorDate: { color: '#FFF', fontFamily: DesignFonts.regular, fontSize: 10, lineHeight: 16, maxWidth: '52%', marginBottom: 2 },
   compactAuthorHeader: { flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-end', gap: 0, paddingBottom: 6 },
-  compactNickname: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', height: 28, fontSize: 21, lineHeight: 28, paddingRight: 20 },
+  compactNickname: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', minHeight: 28, fontSize: 21, lineHeight: 28, paddingRight: 20 },
   compactAuthorDate: { alignSelf: 'flex-end', maxWidth: '100%', fontSize: 9, lineHeight: 12, marginBottom: 0 },
   authorClose: { position: 'absolute', top: 0, right: -8, width: 32, height: 32, alignItems: 'center' },
   avatar: { borderWidth: 2, borderColor: '#FFF', backgroundColor: '#000', overflow: 'hidden' },
@@ -151,12 +153,12 @@ const styles = StyleSheet.create({
   date: { color: '#FFF', fontFamily: DesignFonts.regular, fontSize: 21, flex: 1, letterSpacing: -0.8 },
   close: { width: 36, height: 44, alignItems: 'flex-end', justifyContent: 'center' },
   closeText: { color: '#EEE', fontSize: 26, lineHeight: 30 },
-  scroll: { flex: 1 },
+  scroll: { flex: 1, minHeight: 48 },
   content: { paddingTop: 14, paddingBottom: 12, gap: 14 },
   text: { color: '#FFF', fontSize: 16, lineHeight: 24 },
   photos: { gap: 10, paddingBottom: 6 },
   photo: { width: 160, height: 120, resizeMode: 'cover' },
-  actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 18, minHeight: 40 },
+  actions: { flexShrink: 0, flexWrap: 'wrap', flexDirection: 'row', justifyContent: 'flex-end', gap: 18, minHeight: 40 },
   action: { minHeight: 40, justifyContent: 'center' },
   actionText: { color: '#F2F2F2', fontSize: 12 },
 });
