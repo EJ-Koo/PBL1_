@@ -37,12 +37,13 @@ import {
   BAND_TEXELS,
   PATTERN_STYLE,
   PLANET_BASE_RADIUS,
+  capRadiiByNeighbors,
   QUALITY_SETTINGS,
   choosePlanetQuality,
   harmonizeAccent,
   planetBandStrip,
   planetPalette,
-  planetScaleForText,
+  planetRadiusForText,
   seededRandoms,
   type PlanetQuality,
   type PlanetVisual,
@@ -940,6 +941,12 @@ export function UniverseScene({
   // 화면마다 하나(그룹 우주 화면과 섞이지 않게). 값은 effect·useFrame 안에서만 바꾼다.
   const runtimeRef = useRef<ConstellationRuntime>(createRuntime());
   const entryById = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
+  // [2026-11-18] 행성 반지름: 일기 분량으로 정하되, 원래 좌표에서 가장 가까운 행성과 겹치지 않게 화면에서만 줄인다
+  const radiusById = useMemo(() => {
+    const capped = capRadiiByNeighbors(entries.map((e) => e.position), entries.map((e) => planetRadiusForText(e.text)));
+    return new Map(entries.map((e, i) => [e.id, capped[i]]));
+  }, [entries]);
+  const radiusOf = (id: string) => radiusById.get(id) ?? PLANET_BASE_RADIUS;
   const origins = useMemo(() => new Map(entries.map((e) => [e.id, new Vector3(...e.position)])), [entries]);
   useEffect(() => {
     runtimeRef.current.origin = (id) => origins.get(id);
@@ -1000,7 +1007,7 @@ export function UniverseScene({
     // 별자리 평면은 다른 행성들보다 카메라 쪽에 둔다(가려지지 않게). 너무 멀리 나오지 않게 무리 크기로 제한.
     const frontZ = entries.reduce((m, e) => (inSet.has(e.id) ? m : Math.max(m, e.position[2] - center[2])), 0);
     const planeZ = Math.min(Math.max(frontZ + CONSTELLATION_CONFIG.frontMargin, 0), (framing?.spread ?? 3) * 1.5);
-    const radii = members.map((id) => PLANET_BASE_RADIUS * planetScaleForText(entryById.get(id)!.text));
+    const radii = members.map((id) => radiusOf(id));
     const layout = layoutConstellation(
       template,
       radii,
@@ -1201,7 +1208,7 @@ export function UniverseScene({
       state.camera.updateMatrixWorld();
       mesh.getWorldPosition(projectedCenter);
       projectedEdge.copy(projectedCenter);
-      projectedEdge.y += PLANET_BASE_RADIUS * planetScaleForText(selectedEntry.text) * 1.06;
+      projectedEdge.y += radiusOf(selectedEntry.id) * 1.06;
       projectedCenter.project(state.camera);
       projectedEdge.project(state.camera);
       const anchor: StarPopupAnchor = {
@@ -1239,7 +1246,7 @@ export function UniverseScene({
               key={entry.id}
               id={entry.id}
               position={entry.position}
-              radius={PLANET_BASE_RADIUS * planetScaleForText(entry.text)}
+              radius={radiusOf(entry.id)}
               visual={entry.planet}
               brightness={entry.brightness}
               quality={quality}

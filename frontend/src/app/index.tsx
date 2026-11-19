@@ -201,19 +201,24 @@ export default function HomeScreen() {
   const panelBox = responsive.wide
     ? { left: responsive.chromeLeft + 12, width: Math.min(400 * rScale, responsive.chromeWidth * 0.42) }
     : { left: responsive.contentLeft + 12, width: Math.min(responsive.contentWidth, 460 * rScale) - 24 };
+  // [2026-11-18] 전환 버튼은 하단바 바로 위(별자리 보기 중에는 패널 바로 위)
+  const navTop = responsive.navBottom + responsive.navHeight + 10;
+  const toggleHeight = 32 * rScale;
+  const toggleBottom = constellationOn ? navTop + panelHeight + 8 : navTop;
   const constellationInsets = useMemo(() => {
     const h = Math.max(responsive.height, 1);
     const w = Math.max(windowWidth, 1);
-    const top = responsive.headerTop + 75 * rScale + 8 + 32 * rScale + 12;
+    const top = responsive.headerTop + 75 * rScale + 12;
     const nav = responsive.navBottom + responsive.navHeight + 12;
     if (responsive.wide) {
+      // 넓은 화면: 패널·전환 버튼은 왼쪽 열에 있고 별자리는 오른쪽 영역을 쓴다
       const left = panelBox.left + panelBox.width + 16;
       return { top: Math.min(top / h, 0.45), bottom: Math.min(nav / h, 0.4), left: Math.min(left / w, 0.5), right: 0.03 };
     }
-    const bottom = nav + 10 + panelHeight;
-    return { top: Math.min(top / h, 0.45), bottom: Math.min(bottom / h, 0.6), left: 0.04, right: 0.04 };
+    const bottom = nav + 10 + panelHeight + 8 + toggleHeight;
+    return { top: Math.min(top / h, 0.45), bottom: Math.min(bottom / h, 0.62), left: 0.04, right: 0.04 };
   }, [responsive.height, responsive.headerTop, responsive.navBottom, responsive.navHeight, responsive.wide, rScale,
-    panelHeight, windowWidth, panelBox.left, panelBox.width]);
+    panelHeight, windowWidth, panelBox.left, panelBox.width, toggleHeight]);
   const constellationRequest: ConstellationRequest | null = useMemo(
     () =>
       activeTemplate && constellationMembers.length === activeTemplate.requiredPlanets
@@ -406,11 +411,15 @@ export default function HomeScreen() {
             }}
           />
 
-          {/* 별자리 보기 전환 (HUD 바로 아래 가운데) */}
+          {/* 별자리 보기 전환 — [2026-11-18] HUD 아래에서 하단바 바로 위로 옮겼다. 별자리 패널이 열리면 패널 바로 위에 붙는다. */}
           {entries.length > 0 && (
             <View
               pointerEvents="box-none"
-              style={[styles.constellationToggleRow, { top: responsive.headerTop + 75 * rScale + 8 }]}>
+              style={[
+                styles.constellationToggleRow,
+                { bottom: toggleBottom },
+                constellationOn ? { left: panelBox.left, width: panelBox.width } : { left: 0, right: 0 },
+              ]}>
               <ConstellationModeToggle scale={rScale} active={constellationOn} onChange={setConstellationMode} />
             </View>
           )}
@@ -627,7 +636,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   emptyText: { color: '#A4B0BE', fontSize: 15, textAlign: 'center', lineHeight: 22 },
-  constellationToggleRow: { position: 'absolute', left: 0, right: 0, alignItems: 'center', zIndex: 9 },
+  constellationToggleRow: { position: 'absolute', alignItems: 'center', zIndex: 9 },
   constellationPanelWrap: { position: 'absolute', zIndex: 15 },
 
   topBar: {
