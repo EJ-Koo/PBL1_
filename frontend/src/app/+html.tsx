@@ -1,5 +1,7 @@
-import type { PropsWithChildren } from 'react';
+import { createElement, type PropsWithChildren } from 'react';
 import { ScrollViewStyleReset } from 'expo-router/html';
+import { WEB_SESSION_KEY } from '@/lib/session-core';
+import { CURSOR_CACHE_PREFIX } from '@/lib/cursor-items';
 import { Helmet } from 'expo-router/vendor/react-helmet-async/lib';
 
 const TITLE = '오늘의 별일';
@@ -40,6 +42,7 @@ export default function RootHtml({ children }: PropsWithChildren) {
         <meta name="twitter:image" content={IMAGE_URL} />
         <meta name="twitter:image:alt" content="오늘의 별일 행성 로고" />
         <link rel="apple-touch-icon" href="/share-planet-v1.png" />
+        <script type="module" src="/stardust-cursor-trail.js" />
         <ScrollViewStyleReset />
         <style>{`
           [data-app-scroll-axis="vertical"] { scrollbar-gutter: stable; }
@@ -49,7 +52,12 @@ export default function RootHtml({ children }: PropsWithChildren) {
           [data-app-scroll-axis]::-webkit-scrollbar-track { background: transparent; }
         `}</style>
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        {createElement('stardust-cursor-trail', {
+          hidden: true, 'data-session-key': WEB_SESSION_KEY, 'data-cache-prefix': CURSOR_CACHE_PREFIX,
+        })}
+      </body>
     </html>
   );
 }

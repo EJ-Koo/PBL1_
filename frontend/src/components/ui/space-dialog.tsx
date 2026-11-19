@@ -1,5 +1,6 @@
 import { useId } from 'react';
-import { Pressable, StyleSheet, Text as NativeText, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Text } from '@/components/app-text';
 import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 
 export function SpaceDialogFrame({ footer = false }: { footer?: boolean }) {
@@ -22,6 +23,6 @@ export function AngularButton({ label, primary = false, disabled = false, onPres
       <Defs><LinearGradient id={`dialog-${id}`} x1="0" y1="0" x2="0" y2="1"><Stop offset="0" stopColor="#fff" /><Stop offset="1" stopColor="#bfc2cc" /></LinearGradient></Defs>
       <Path d="M14 1H173L179 8V34L165 47H1V15Z" fill={primary ? `url(#dialog-${id})` : '#101219'} stroke="#e5e6ed" strokeWidth={1} />
     </Svg></View>
-    <NativeText style={{ color: primary ? '#11141b' : '#f1f2f7', fontSize: 16, fontWeight: primary ? '700' : '400' }}>{label}{primary ? '   »' : ''}</NativeText>
+    <Text style={{ color: primary ? '#11141b' : '#f1f2f7', fontSize: 16, fontWeight: primary ? '700' : '400' }}>{label}{primary ? '   »' : ''}</Text>
   </Pressable>;
 }

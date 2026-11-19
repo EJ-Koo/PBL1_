@@ -1,5 +1,5 @@
 // [ADDED 2026-11-07] 코인 · 상점 상태. 값은 전부 서버(Supabase)에 저장되고, 여기서는 화면용으로 들고만 있다.
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import {
   apiGetWallet,
@@ -11,6 +11,9 @@ import {
   type ItemEffect,
   type ShopItem,
 } from '@/lib/shop-api';
+import { authSession } from '@/lib/auth-session';
+import { readStarterChoice, saveStarterChoice, syncStarterChoice } from '@/lib/starter-cursor';
+import { STARTER_CURSOR_ID, equippedCursor, starterItem, withEquipment } from '@/lib/cursor-items';
 import { asSpecialType } from '@/lib/special-planet';
 import { visibleShopItems } from '@/lib/shop-catalog';
 import { useDiary } from '@/store/diary-context';
@@ -47,7 +50,7 @@ const ShopContext = createContext<ShopContextValue | null>(null);
 const message = (err: unknown, fallback: string) => (err instanceof Error ? err.message : fallback);
 
 export function ShopProvider({ children }: { children: ReactNode }) {
-  const { accessToken, entries, setEntryEffect } = useDiary();
+  const { accessToken, isRestoring, entries, setEntryEffect } = useDiary();
   // 받은 값에 "어느 로그인의 값인지"를 같이 저장해, 로그아웃·계정 변경 시 이전 계정 값이 보이지 않게 한다.
   const [state, setState] = useState<{ token: string | null; coins: number | null; items: ShopItem[]; resetAllowed: boolean }>({
     token: null,
@@ -58,16 +61,29 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<{ token: string | null; message: string } | null>(null);
 
-  const fetchAll = useCallback(async () => {
-    if (!accessToken) return;
-    try {
-      const [wallet, list] = await Promise.all([apiGetWallet(accessToken), apiListShopItems(accessToken)]);
-      setState({ token: accessToken, coins: wallet.coins, items: list, resetAllowed: wallet.reset_allowed });
-      setError(null);
-    } catch (err) {
-      setError({ token: accessToken, message: message(err, '상점을 불러오지 못했습니다.') });
-    }
-  }, [accessToken]);
+  const [starter, setStarter] = useState<Awaited<ReturnType<typeof readStarterChoice>> | null>(null);
+  const owner = authSession.getSnapshot().session?.user_id;
+  const catalogRequest = useRef(0);
+  const fetchAll = useCallback((signal?: AbortSignal) => {
+    if (!accessToken || !owner || authSession.getSnapshot().session?.access_token !== accessToken) return;
+    const request = ++catalogRequest.current;
+    const currentRequest = () => !signal?.aborted && request === catalogRequest.current
+      && authSession.getSnapshot().session?.access_token === accessToken;
+    const choice = readStarterChoice(owner).catch(() => ({ owner, enabled: true, pending: false }));
+    void choice.then(value => { if (currentRequest()) setStarter(value); });
+    return Promise.all([apiGetWallet(accessToken), apiListShopItems(accessToken), choice])
+      .then(async ([wallet, list, saved]) => {
+        const items = await syncStarterChoice(accessToken, list, saved, currentRequest);
+        if (!currentRequest()) return;
+        if (saved.pending && list.some(item => item.id === STARTER_CURSOR_ID && item.quantity > 0)) {
+          setStarter({ ...saved, pending: false });
+        }
+        setState({ token: accessToken, coins: wallet.coins, items, resetAllowed: wallet.reset_allowed });
+        setError(null);
+      }).catch(err => {
+        if (currentRequest()) setError({ token: accessToken, message: message(err, '상점을 불러오지 못했습니다.') });
+      });
+  }, [accessToken, owner]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -77,33 +93,46 @@ export function ShopProvider({ children }: { children: ReactNode }) {
 
   // 로그인하면 불러온다 (응답이 온 뒤에만 상태를 바꾼다).
   useEffect(() => {
-    if (!accessToken) return;
-    let alive = true;
-    Promise.all([apiGetWallet(accessToken), apiListShopItems(accessToken)])
-      .then(([wallet, list]) => {
-        if (alive) setState({ token: accessToken, coins: wallet.coins, items: list, resetAllowed: wallet.reset_allowed });
-      })
-      .catch((err) => {
-        if (alive) setError({ token: accessToken, message: message(err, '상점을 불러오지 못했습니다.') });
-      });
+    const controller = new AbortController();
+    const load = () => { void fetchAll(controller.signal); };
+    load();
+    if (typeof document !== 'undefined') window.addEventListener('online', load);
     return () => {
-      alive = false;
+      controller.abort();
+      if (typeof document !== 'undefined') window.removeEventListener('online', load);
     };
-  }, [accessToken]);
+  }, [fetchAll]);
 
   const current = state.token !== null && state.token === accessToken;
   const coins = current ? state.coins : null;
-  const items = useMemo(() => current ? visibleShopItems(state.items) : EMPTY, [current, state.items]);
-  const setCoins = (value: number) => setState((prev) => ({ ...prev, coins: value }));
-  const setItems = (fn: (prev: ShopItem[]) => ShopItem[]) => setState((prev) => ({ ...prev, items: fn(prev.items) }));
+  const catalog = current ? state.items : EMPTY;
+  const hasServerStarter = catalog.some(item => item.id === STARTER_CURSOR_ID && item.quantity > 0);
+  const localChoice = starter?.owner === owner ? starter : null;
+  const items = useMemo(() => {
+    const visible = visibleShopItems(catalog);
+    if (!owner || hasServerStarter) return visible;
+    const paidEquipped = visible.some(item => item.slot === 'cursor' && item.equipped && item.quantity > 0);
+    return [starterItem((localChoice?.enabled ?? true) && !paidEquipped),
+      ...visible.filter(item => item.id !== STARTER_CURSOR_ID)];
+  }, [catalog, hasServerStarter, localChoice, owner]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined' || isRestoring) return;
+    // Before the catalog arrives the document restores this account's cached appearance.
+    const selection = current || localChoice?.pending ? { owner, effect: equippedCursor(items) } : { owner };
+    document.querySelector('stardust-cursor-trail')?.setAttribute('selection', JSON.stringify(selection));
+  }, [owner, current, isRestoring, items, localChoice]);
 
   const purchase = useCallback(
     async (itemId: string): Promise<ShopResult> => {
       if (!accessToken) return { ok: false, error: '로그인이 필요합니다.' };
       try {
         const result = await apiPurchaseItem(accessToken, itemId);
-        setCoins(result.coins);
-        setItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, quantity: result.quantity } : i)));
+        if (authSession.getSnapshot().session?.access_token === accessToken) catalogRequest.current++;
+        setState(prev => prev.token !== accessToken ? prev : {
+          ...prev, coins: result.coins,
+          items: prev.items.map(i => i.id === itemId ? { ...i, quantity: result.quantity } : i),
+        });
         return { ok: true };
       } catch (err) {
         // 가격이 바뀌었거나 판매가 끝났을 수 있으니 최신 상태로 다시 맞춘다.
@@ -116,25 +145,34 @@ export function ShopProvider({ children }: { children: ReactNode }) {
 
   const setEquipped = useCallback(
     async (itemId: string, equipped: boolean): Promise<ShopResult> => {
-      if (!accessToken) return { ok: false, error: '로그인이 필요합니다.' };
+      if (!accessToken || !owner) return { ok: false, error: '로그인이 필요합니다.' };
       try {
-        await apiSetEquipped(accessToken, itemId, equipped);
-        setItems((prev) => {
-          const slot = prev.find((i) => i.id === itemId)?.slot;
-          return prev.map((i) => {
-            if (i.id === itemId) return { ...i, equipped };
-            // 같은 칸(예: 배경)은 하나만 장착된다 — 서버와 같은 규칙
-            if (equipped && slot && i.slot === slot) return { ...i, equipped: false };
-            return i;
-          });
-        });
+        const item = items.find(i => i.id === itemId);
+        if (!hasServerStarter && itemId === STARTER_CURSOR_ID) {
+          const paid = items.find(i => i.slot === 'cursor' && i.id !== STARTER_CURSOR_ID && i.equipped);
+          if (equipped && paid) await apiSetEquipped(accessToken, paid.id, false);
+          await saveStarterChoice(owner, equipped);
+          setStarter({ owner, enabled: equipped, pending: true });
+          if (paid && equipped) setState(prev => prev.token !== accessToken ? prev
+            : { ...prev, items: withEquipment(prev.items, paid.id, false) });
+        } else {
+          await apiSetEquipped(accessToken, itemId, equipped);
+          if (!hasServerStarter && item?.slot === 'cursor') {
+            await saveStarterChoice(owner, equipped ? null : false);
+            setStarter({ owner, enabled: false, pending: !equipped });
+          }
+          setState(prev => prev.token !== accessToken ? prev
+            : { ...prev, items: withEquipment(prev.items, itemId, equipped) });
+        }
+        if (authSession.getSnapshot().session?.access_token === accessToken) catalogRequest.current++;
+        if (!current && itemId === STARTER_CURSOR_ID) void fetchAll();
         return { ok: true };
       } catch (err) {
         refresh();
         return { ok: false, error: message(err, '장착에 실패했습니다.') };
       }
     },
-    [accessToken, refresh]
+    [accessToken, refresh, owner, items, hasServerStarter, current, fetchAll]
   );
 
   const applyPlanetEffect = useCallback(

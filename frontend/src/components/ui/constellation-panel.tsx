@@ -1,13 +1,14 @@
 import { ScrollView } from '@/components/app-scroll-view';
 // [NEW FILE 2026-11-12] 별자리 보기 UI: [나의 우주 | 별자리 보기] 전환 버튼 + 아래쪽 별자리 정보 패널.
-// 홈 HUD와 같은 디자인 언어(얇은 흰 선, 모서리를 깎은 틀, 반투명 회색, Inter 글꼴)를 쓴다.
+// 홈 HUD와 같은 디자인 언어(얇은 흰 선, 모서리를 깎은 틀, 반투명 회색, 공통 글꼴)를 쓴다.
 //  - 주제 칩: 주제별 일기 수
 //  - 레벨 카드 3장: 모양 미리보기(잠긴 단계는 흐린 실루엣 + 자물쇠), 해금 여부, 필요한 일기 수
 //  - 이 별자리의 기록: 별자리를 이룬 일기(날짜). 누르면 기존 일기 상세 화면
 //  - 접기: 별자리를 크게 보고 싶을 때 한 줄로 접는다
 //  - [2026-11-15] Level 4 나만의 별자리 카드(LLM 개인화 생성): 잠김 → 생성하기 → 만드는 중(서버 실제 단계) → 완성/실패
 import { useState, type ReactNode } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View, type LayoutChangeEvent } from 'react-native';
+import { ActivityIndicator, StyleSheet, TouchableOpacity, View, type LayoutChangeEvent } from 'react-native';
+import { Text } from '@/components/app-text';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 
 import { DesignFonts, DesignPaint, grayAlpha, whiteAlpha } from '@/constants/ui-design';
@@ -43,7 +44,7 @@ function ChamferFrame({ cut = 10, fill = grayAlpha(0.14), stroke = whiteAlpha(0.
   );
 }
 
-/** 상단 전환 버튼: [나의 우주] [별자리 보기] */
+/** 하단바 위 전환 버튼: [나의 우주] [별자리 보기] */
 export function ConstellationModeToggle({
   scale,
   active,

@@ -57,19 +57,19 @@ export const DesignPaint = {
 } as const;
 
 export const DesignFonts = {
-  regular: 'Inter_400Regular',
-  bold: 'Inter_700Bold',
+  regular: 'Orbitron-Regular',
+  bold: 'Orbitron-Bold',
 } as const;
 
-// Opacity falloff for the existing, data-colored stars in group previews.
-export const GroupStarGlowStops = [
-  { offset: 0, opacity: 1 },
-  { offset: 0.16, opacity: 0.98 },
-  { offset: 0.38, opacity: 0.70 },
-  { offset: 0.65, opacity: 0.15 },
-  { offset: 0.90, opacity: 0.02 },
-  { offset: 1, opacity: 0 },
-] as const;
+export const KoreanFonts = {
+  regular: 'S-CoreDream-4Regular',
+  bold: 'S-CoreDream-6Bold',
+} as const;
+
+export const WebFonts = {
+  regular: `${DesignFonts.regular}, ${KoreanFonts.regular}, sans-serif`,
+  bold: `${DesignFonts.bold}, ${KoreanFonts.bold}, sans-serif`,
+} as const;
 
 // Presentation values measured from the quest mockup; no live progress source
 // exists in the current project. The middle bar occupies 58 of its 172dp track.

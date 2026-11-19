@@ -4,7 +4,7 @@ import { CoinIcon } from '@/components/coin-icon';
 import { Text } from '@/components/app-text';
 // [MODIFIED 2026-11-10] 상점 팝업 (fffju 상점 카드 디자인 + 서버 코인·구매·장착).
 //  - 화면 가운데 뜨는 창 (2026-11-10 아래 → 가운데로 변경). ✕ 버튼, 창 바깥 누르기, 안드로이드 뒤로가기로 닫힘
-//  - 탭: 배경(이펙트 줄 / 테마 줄) · 음악 · 소모품
+//  - 탭: 배경(이펙트 줄 / 테마 줄) · 음악 · 커서 · 소모품
 //  - 각 줄은 가로로 넘겨 보는 카드 목록. 산 것은 장착/해제, 안 산 것은 구매
 //  - 어느 탭·줄에 들어갈지는 아이템의 slot 으로 정한다 → 관리자 화면에서 slot 만 맞추면 새 아이템이 바로 나타남
 //      slot=effect → 배경 탭 '이펙트' 줄 / slot=background → 배경 탭 '테마' 줄
@@ -23,11 +23,12 @@ import { PlanetPreview } from '@/components/universe-scene';
 import { showMessage } from '@/lib/feedback';
 import { confirmChoice } from '@/lib/notice';
 import type { ShopItem } from '@/lib/shop-api';
+import { STARTER_CURSOR_ID, cursorEffect } from '@/lib/cursor-items';
 import { PLANET_EFFECT_SLOT, SAMPLE_PLANET, effectOfItem, type SpecialType } from '@/lib/special-planet';
 import { useDiary } from '@/store/diary-context';
 import { useShop } from '@/store/shop-context';
 
-const KNOWN_SLOTS = ['effect', 'background', 'music', PLANET_EFFECT_SLOT];
+const KNOWN_SLOTS = ['effect', 'background', 'music', 'cursor', PLANET_EFFECT_SLOT];
 
 type DefaultCard = { name: string; icon: string; description: string };
 type Section = {
@@ -68,6 +69,15 @@ const TABS: Tab[] = [
     ],
   },
   {
+    id: 'cursor',
+    label: '커서',
+    sections: [{
+      title: '커서 효과',
+      match: (item) => item.kind === 'equip' && item.slot === 'cursor' && cursorEffect(item.effect) !== null,
+      emptyText: '커서 상품을 불러올 수 없어요.',
+    }],
+  },
+  {
     id: 'consumable',
     label: '소모품',
     sections: [
@@ -90,7 +100,7 @@ function actionFor(item: ShopItem, coins: number): Action {
   if (item.kind === 'equip' && owned) {
     return item.equipped
       ? { label: '해제', kind: 'unequip', disabled: false }
-      : { label: '장착', kind: 'equip', disabled: false };
+      : { label: item.slot === 'cursor' ? '적용' : '장착', kind: 'equip', disabled: false };
   }
   if (!item.on_sale) return { label: '판매 종료', kind: 'none', disabled: true };
   if (coins < item.price) return { label: '코인 부족', kind: 'none', disabled: true };
@@ -291,6 +301,8 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
               <TouchableOpacity
                 key={tabItem.id}
                 testID={`shop-tab-${tabItem.id}`}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: tabItem.id === tab.id }}
                 onPress={() => setTabId(tabItem.id)}
                 style={[styles.tab, tabItem.id === tab.id && styles.tabActive]}>
                 <Text style={[styles.tabText, tabItem.id === tab.id && styles.tabTextActive]}>{t(tabItem.label)}</Text>
@@ -304,7 +316,7 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
               <Text style={styles.errorRetry}>{t("눌러서 다시 시도")}</Text>
             </TouchableOpacity>
           ) : null}
-          {loading && items.length === 0 ? <ActivityIndicator color="#fff" style={styles.loading} /> : null}
+          {loading && coins === null ? <ActivityIndicator color="#fff" style={styles.loading} /> : null}
 
           <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
             {sections.map(({ section, list }, index) => {
@@ -359,9 +371,9 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
                             key={item.id}
                             testID={`shop-item-${item.id}`}
                             icon={item.icon}
-                            name={item.name}
-                            description={item.description}
-                            priceText={item.kind === 'equip' && owned ? '보유 중' : String(item.price)}
+                            name={item.id === STARTER_CURSOR_ID ? t(item.name) : item.name}
+                            description={item.id === STARTER_CURSOR_ID ? t(item.description) : item.description}
+                            priceText={item.id === STARTER_CURSOR_ID ? '기본 제공' : item.kind === 'equip' && owned ? '보유 중' : String(item.price)}
                             badge={
                               effect
                                 ? owned

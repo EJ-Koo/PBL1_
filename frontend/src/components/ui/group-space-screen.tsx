@@ -3,30 +3,23 @@ import { ScrollView } from '@/components/app-scroll-view';
 import { GroupProfileControl } from './group-profile-control';
 import { Text } from '@/components/app-text';
 import { Image } from 'expo-image';
-import { useId } from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
-import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
+import { PlanetFieldPreview } from '@/components/universe-scene';
+import type { DiaryEntry } from '@/store/diary-context';
 
 import { GroupMemberStars } from './group-member-stars';
 import type { MemberStar } from '@/lib/group-attendance';
 
 import { GroupAddIcon, GroupCardFrame, GroupHeaderFrame, GroupLabelFrame } from './group-decoration';
 
-import { DesignColors, DesignFonts, DesignPaint, GroupStarGlowStops } from '@/constants/ui-design';
+import { DesignColors, DesignFonts, DesignPaint } from '@/constants/ui-design';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
-
-type PreviewStar = {
-  color: string;
-  size: number;
-  previewX?: string;
-  previewY?: string;
-};
 
 // 서버 데이터(ApiGroup)를 index.tsx에서 이 뷰모델로 매핑해서 넘긴다.
 type GroupData = {
   id: string;
   name: string;
-  stars: PreviewStar[];
+  stars: DiaryEntry[];
   members: MemberStar[];
 };
 
@@ -41,8 +34,7 @@ type Props = {
 // 카드 고정 높이(fffju는 멤버 출석 수에 따라 가변이었으나, 서버에 교차 출석 데이터가 없어 고정).
 const CARD_HEIGHT = 249;
 
-function GroupPreview({ stars, scale }: { stars: PreviewStar[]; scale: number }) {
-  const gradientId = useId().replace(/[^a-zA-Z0-9_-]/g, '');
+function GroupPreview({ stars }: { stars: DiaryEntry[] }) {
   return (
     <>
       <Image
@@ -51,26 +43,7 @@ function GroupPreview({ stars, scale }: { stars: PreviewStar[]; scale: number })
         style={StyleSheet.absoluteFill}
       />
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        <Svg width={329 * scale} height={186 * scale} viewBox="0 0 329 186" pointerEvents="none">
-          <Defs>
-            {stars.map((star, i) => (
-              <RadialGradient key={i} id={`${gradientId}-${i}`} cx="50%" cy="50%" r="50%">
-                {GroupStarGlowStops.map((stop) => (
-                  <Stop key={stop.offset} offset={stop.offset} stopColor={star.color} stopOpacity={stop.opacity} />
-                ))}
-              </RadialGradient>
-            ))}
-          </Defs>
-          {stars.map((star, i) => (
-            <Circle
-              key={i}
-              cx={star.previewX || `${25 + ((i * 30) % 55)}%`}
-              cy={star.previewY || `${30 + ((i * 25) % 50)}%`}
-              r={(star.size / 0.36) * 23}
-              fill={`url(#${gradientId}-${i})`}
-            />
-          ))}
-        </Svg>
+        <PlanetFieldPreview entries={stars} />
       </View>
     </>
   );
@@ -92,7 +65,7 @@ export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup, onJ
           <View style={{ height: 63 * scale }}>
             <GroupHeaderFrame scale={scale} width={innerWidth} /><GroupProfileControl scale={scale} />
             <Text numberOfLines={1} adjustsFontSizeToFit accessibilityRole="header" style={[styles.positioned, styles.text, {
-              left: 18 * scale, top: 14 * scale, maxWidth: innerWidth - 92 * scale, fontSize: 28 * scale, lineHeight: 36 * scale,
+              left: 18 * scale, top: 14 * scale, maxWidth: innerWidth - 92 * scale, fontFamily: DesignFonts.bold, fontSize: 28 * scale, lineHeight: 36 * scale,
             }]}>OUR SPACE</Text>
           </View>
           <Text style={[styles.text, { fontSize: Math.max(12, 13 * scale), lineHeight: Math.max(20, 20 * scale), marginTop: 10 * scale, paddingHorizontal: 18 * scale, flexShrink: 1 }]}>
@@ -121,7 +94,7 @@ export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup, onJ
                 <View style={[styles.positioned, styles.preview, {
                   left: (first ? 16 : 15) * s, top: 11 * s, width: 329 * s, height: 186 * s, borderRadius: 11 * s,
                 }]}>
-                  <GroupPreview stars={group.stars} scale={s} />
+                  <GroupPreview stars={group.stars} />
                 </View>
                 <View style={StyleSheet.absoluteFill} pointerEvents="none">
                   <GroupLabelFrame scale={s} first={first} height={cardHeight} />

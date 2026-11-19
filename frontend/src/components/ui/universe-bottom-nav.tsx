@@ -1,43 +1,40 @@
 import { useLanguage } from '@/lib/language';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Text } from '@/components/app-text';
+import { useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
-import { getBottomNavLayout } from '@/lib/responsive-layout';
 
 import { BottomNavFrame } from './design-decoration';
 
 type Props = {
-  scale: number;
   activeScreen: string;
   onDiary: () => void;
   onHome: () => void;
   onGroup: () => void;
 };
 
-export function UniverseBottomNav({ scale, activeScreen, onDiary, onHome, onGroup }: Props) {
+export function UniverseBottomNav({ activeScreen, onDiary, onHome, onGroup }: Props) {
   const { t } = useLanguage();
-  const { navLeft, navWidth, navBottom, navHeight } = useResponsiveLayout();
-  const { items } = getBottomNavLayout(scale > 0 ? navWidth / scale : 393);
-  const actions = [onDiary, onHome, onGroup];
+  const { navLeft, navWidth, navBottom, navLayout } = useResponsiveLayout();
+  const [pressed, setPressed] = useState<string | null>(null);
+  const actions = { diary: onDiary, home: onHome, group: onGroup };
+  if (navWidth <= 0) return null;
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.container, { left: navLeft, bottom: navBottom, width: navWidth, height: navHeight }]}>
-      <BottomNavFrame scale={scale} width={navWidth} />
-      {items.map((item, index) => (
-        <TouchableOpacity key={item.id} accessibilityRole="button" accessibilityLabel={t(item.label)}
-          accessibilityState={{ selected: activeScreen === item.id }} onPress={actions[index]} hitSlop={{ left: 2, right: 2 }}
-          style={[styles.button, { left: item.x * scale, top: Math.max(0, item.y * scale - Math.max(0, 44 - item.height * scale) / 2),
-            width: item.width * scale, height: Math.max(44, item.height * scale), borderWidth: 1, borderColor: '#dfe2e9', backgroundColor: activeScreen === item.id ? '#474a52' : '#0a0b0e' }]}>
-          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}
-            style={{ color: '#f1f2f6', fontSize: 12 * scale, width: '100%', textAlign: 'center', fontWeight: activeScreen === item.id ? '700' : '400' }}>{t(item.label)}</Text>
-        </TouchableOpacity>
+      style={[styles.container, { left: navLeft, width: navWidth, height: navLayout.height + navBottom }]}>
+      <BottomNavFrame layout={navLayout} pressed={pressed} />
+      {navLayout.items.map(item => (
+        <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={t(item.label)}
+          aria-current={activeScreen === item.id ? 'page' : undefined}
+          accessibilityState={{ selected: activeScreen === item.id }} onPress={actions[item.id]}
+          onPressIn={() => setPressed(item.id)} onPressOut={() => setPressed(null)}
+          style={{ position: 'absolute', left: item.hitLeft, top: navLayout.hitTop,
+            width: item.hitWidth, height: navLayout.hitHeight }} />
       ))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { position: 'absolute', zIndex: 20 },
-  button: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
+  container: { position: 'absolute', bottom: 0, zIndex: 20, backgroundColor: '#000' },
 });

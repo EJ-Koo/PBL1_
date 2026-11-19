@@ -1,3 +1,5 @@
+export const WEB_SESSION_KEY = 'star2day:session:v1';
+
 export type UserSession = {
   access_token: string;
   refresh_token: string;

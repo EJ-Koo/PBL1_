@@ -54,7 +54,8 @@ export default function AdminDashboardScreen() {
       router.replace('/admin/login');
       return;
     }
-    loadData();
+    const initial = setTimeout(() => { void loadData(); }, 0);
+    return () => clearTimeout(initial);
   }, [isAdminLoggedIn, loadData]);
 
   const handleLogout = () => {

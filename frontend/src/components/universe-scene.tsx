@@ -44,6 +44,7 @@ import {
   planetBandStrip,
   planetPalette,
   planetRadiusForText,
+  planetScaleForText,
   seededRandoms,
   type PlanetQuality,
   type PlanetVisual,
@@ -1336,6 +1337,7 @@ export function PlanetPreview({
   radius = PLANET_BASE_RADIUS,
   effect,
   quality = 'medium',
+  zoom = 1,
 }: {
   /** 행성 고정 난수(무늬 배치)의 기준. 실제 일기 id를 주면 우주 화면과 같은 모습이 된다. */
   id: string;
@@ -1343,11 +1345,12 @@ export function PlanetPreview({
   radius?: number;
   effect: SpecialType | null;
   quality?: PlanetQuality;
+  zoom?: number;
 }) {
   // 행성 크기와 상관없이 화면을 비슷하게 채우도록 카메라 거리를 반지름에 맞춘다(성운 판·궤도까지 보이게)
   const distance = radius * 5.2;
   return (
-    <Canvas style={{ flex: 1 }} camera={{ fov: CAMERA_FOV, position: [0, radius * 0.9, distance] }}>
+    <Canvas style={{ flex: 1 }} camera={{ fov: CAMERA_FOV, position: [0, radius * 0.9, distance], zoom }}>
       <PreviewSpin>
         <Planet
           id={id}
@@ -1362,4 +1365,28 @@ export function PlanetPreview({
       </PreviewSpin>
     </Canvas>
   );
+}
+
+/** Static group thumbnails use the same surface colors and patterns as the universe. */
+function PlanetField({ entries }: { entries: DiaryEntry[] }) {
+  const viewport = useThree(state => state.viewport);
+  const unit = Math.min(viewport.width / 329, viewport.height / 186);
+  return <>
+    {entries.map(entry => <Planet key={entry.id} id={entry.id}
+      position={[
+        Math.max(-1, Math.min(1, entry.position[0] / 12)) * viewport.width * 0.4,
+        Math.max(-1, Math.min(1, entry.position[1] / 12)) * viewport.height * 0.4,
+        0,
+      ]}
+      radius={10 * planetScaleForText(entry.text) * unit} visual={entry.planet} brightness={entry.brightness}
+      quality="low" shared={PREVIEW_UNIFORMS} />)}
+  </>;
+}
+
+export function PlanetFieldPreview({ entries }: { entries: DiaryEntry[] }) {
+  if (!entries.length) return null;
+  return <Canvas style={{ flex: 1 }} frameloop="demand"
+    camera={{ fov: CAMERA_FOV, position: [0, 0, 8] }}>
+    <PlanetField entries={entries} />
+  </Canvas>;
 }
