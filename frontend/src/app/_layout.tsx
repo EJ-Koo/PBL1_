@@ -7,8 +7,7 @@ import { useEffect } from 'react';
 import { loadSettings } from '@/lib/settings';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
-import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
-import { Inter_700Bold } from '@expo-google-fonts/inter/700Bold';
+import { DesignFonts, KoreanFonts } from '@/constants/ui-design';
 
 import { AdminProvider } from '@/store/admin-context';
 import { DiaryProvider } from '@/store/diary-context';
@@ -18,8 +17,12 @@ import { NoticeDialogHost } from '@/components/notice-dialog-host';
 
 export default function RootLayout() {
   useEffect(() => { void loadSettings(); void loadLanguage(); }, []);
-  // fffju 디자인 글꼴(Inter). 불러오기에 실패해도 기본 글꼴로 화면은 띄운다.
-  const [fontsLoaded, fontError] = useFonts({ Inter_400Regular, Inter_700Bold });
+  const [fontsLoaded, fontError] = useFonts({
+    [DesignFonts.regular]: require('../../assets/fonts/Orbitron-Regular.ttf'),
+    [DesignFonts.bold]: require('../../assets/fonts/Orbitron-Bold.ttf'),
+    [KoreanFonts.regular]: require('../../assets/fonts/SCDream4.otf'),
+    [KoreanFonts.bold]: require('../../assets/fonts/SCDream6.otf'),
+  });
   if (!fontsLoaded && !fontError) return null;
 
   return (

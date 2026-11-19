@@ -70,7 +70,7 @@ export default function HomeScreen() {
   const { frameWidth } = useDesignFrame();
   const { refresh: refreshQuest, rewardEvent, clearReward } = useQuest();
   // fffju 반응형 레이아웃: 전체 뷰포트로 그리는 화면(홈 HUD·하단바·그룹)은 이 scale을 쓴다.
-  // 아직 520 프레임을 쓰는 화면(일기 작성·상점)은 useDesignFrame(frameWidth/scale)을 유지.
+  // 상점은 별도의 최대 프레임 폭을 사용한다.
   const responsive = useResponsiveLayout();
   const { scale: rScale, headerTop } = responsive;
 
@@ -451,7 +451,7 @@ export default function HomeScreen() {
 
       {/* ===== 왼쪽: 일기 작성 — 다른 탭에 갔다 와도 쓰던 내용이 남도록 화면을 숨기기만 한다 ===== */}
       <View style={[styles.fill, screen !== 'diary' && styles.hidden]}>
-        <DiaryComposer scale={rScale} onBack={() => setScreen('home')} onSaved={id => { if (id) setNewStar({ id, startedAt: Date.now() }); setScreen('home'); }} />
+        <DiaryComposer onBack={() => setScreen('home')} onSaved={id => { if (id) setNewStar({ id, startedAt: Date.now() }); setScreen('home'); }} />
       </View>
 
       {/* ===== 오른쪽: 그룹 우주 (반응형 그리드 — 전체 뷰포트, useResponsiveLayout 사용) ===== */}
@@ -504,7 +504,6 @@ export default function HomeScreen() {
       {/* ===== 공통: 하단 네비게이션 (fffju 반응형 — 전체 뷰포트) ===== */}
       {rewardEvent && <QuestRewardAnimation key={rewardEvent.id} event={rewardEvent} onDone={clearReward} />}
       <UniverseBottomNav
-        scale={rScale}
         activeScreen={screen}
         onDiary={() => setScreen('diary')}
         onHome={() => setScreen('home')}

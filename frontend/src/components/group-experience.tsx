@@ -7,7 +7,7 @@ import {Text} from '@/components/app-text';
 import {DiaryUniverse} from '@/components/diary-universe';
 import {GroupChatDock} from '@/components/group-chat-dock';
 import {Avatar} from '@/components/ui/group-profile-control';
-import {HomeHudFrame,QuestFrame} from '@/components/ui/design-decoration';
+import {BottomNavFrame,HomeHudFrame,QuestFrame} from '@/components/ui/design-decoration';
 import {SpaceButton,SpaceSurface} from '@/components/ui/space-ui';
 import {useGroupSocial} from '@/hooks/use-group-social';
 import {useResponsiveLayout} from '@/hooks/use-responsive-layout';
@@ -79,9 +79,8 @@ export function GroupExperience({group,entries,loading,error,onReload,onBack,onL
   </View>
   {readError&&<Text accessibilityRole="alert" style={[styles.readError,{top}]}>{readError}</Text>}
   <GroupChatDock key={group.id} groupId={group.id} bottom={chatBottom} left={chatLeft} width={chatWidth} unread={data?.chat_unread_count??0} onRead={refresh} initialExpanded={initialChat} onExpandedChange={setChatExpanded}/>
-  <View pointerEvents="none" style={{position:'absolute',bottom:layout.navBottom,left:layout.chromeLeft,width:layout.chromeWidth,height:24}}>
-   <Svg width="100%" height={24} viewBox="0 0 800 24" preserveAspectRatio="none"><Path d="M0 2H800 M0 22H800 M220 20L238 4H302V20Z M312 4H488V20H312Z M498 4H562L580 20H498Z" stroke="#d6d7df" fill="#393c47"/>
-    <Path d="M5 18L18 6M20 18L33 6M35 18L48 6M50 18L63 6 M737 6L750 18M752 6L765 18M767 6L780 18M782 6L795 18" stroke="#e5e6ec" strokeWidth={4}/></Svg>
+  <View pointerEvents="none" style={{position:'absolute',bottom:0,left:layout.navLeft,width:layout.navWidth,height:layout.navHeight+layout.navBottom,backgroundColor:'#000'}}>
+   <BottomNavFrame layout={layout.navLayout}/>
   </View>
   {panel&&<>
    <Pressable style={[StyleSheet.absoluteFill,{zIndex:5}]} accessibilityLabel={t("그룹 패널 닫기")} onPress={()=>setPanel(null)}/>

@@ -57,8 +57,18 @@ export const DesignPaint = {
 } as const;
 
 export const DesignFonts = {
-  regular: 'Inter_400Regular',
-  bold: 'Inter_700Bold',
+  regular: 'Orbitron-Regular',
+  bold: 'Orbitron-Bold',
+} as const;
+
+export const KoreanFonts = {
+  regular: 'S-CoreDream-4Regular',
+  bold: 'S-CoreDream-6Bold',
+} as const;
+
+export const WebFonts = {
+  regular: `${DesignFonts.regular}, ${KoreanFonts.regular}, sans-serif`,
+  bold: `${DesignFonts.bold}, ${KoreanFonts.bold}, sans-serif`,
 } as const;
 
 // Opacity falloff for the existing, data-colored stars in group previews.

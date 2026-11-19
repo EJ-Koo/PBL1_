@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useSyncExternalStore } from 'react';
 import { getCurrentDialog, getServerDialog, settleDialog, subscribeDialogs } from '@/lib/dialog-queue';
+import { WebFonts } from '@/constants/ui-design';
 
 export function NoticeDialogHost() {
   const current = useSyncExternalStore(subscribeDialogs, getCurrentDialog, getServerDialog);
@@ -21,14 +22,14 @@ export function NoticeDialogHost() {
       .space-notice { position:fixed; inset:0; margin:auto; box-sizing:border-box;
         width:min(420px, calc(100vw - 32px)); max-height:calc(100dvh - 32px); overflow:auto;
         padding:28px; border:1px solid #9ba6b8; border-radius:8px; background:#0c1018;
-        color:#f4f6fa; box-shadow:0 24px 100px #000b; font-family:Inter_400Regular, sans-serif; }
+        color:#f4f6fa; box-shadow:0 24px 100px #000b; font-family:${WebFonts.regular}; }
       .space-notice::backdrop { background:#000a; backdrop-filter:blur(5px); }
-      .space-notice h2 { margin:0 0 14px; font-size:21px; line-height:1.4; }
+      .space-notice h2 { margin:0 0 14px; font-family:${WebFonts.bold}; font-weight:normal; font-size:21px; line-height:1.4; }
       .space-notice p { margin:0; color:#bfc7d3; white-space:pre-wrap; overflow-wrap:anywhere; font-size:14px; line-height:1.8; }
       .space-notice-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:28px; }
       .space-notice button { min-height:44px; min-width:88px; padding:10px 20px; border:1px solid #758092;
         border-radius:4px; background:transparent; color:#fff; font:inherit; font-size:14px; cursor:pointer; }
-      .space-notice button:last-child { background:#edf0f5; color:#10151d; border-color:#edf0f5; font-weight:700; }
+      .space-notice button:last-child { background:#edf0f5; color:#10151d; border-color:#edf0f5; font-family:${WebFonts.bold}; }
       .space-notice button:focus-visible { outline:2px solid #b2c9ff; outline-offset:4px; }
       .space-notice button:hover { filter:brightness(.88); }
     `}</style>
