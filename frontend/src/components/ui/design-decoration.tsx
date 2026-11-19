@@ -73,7 +73,7 @@ export function BottomNavFrame({ layout, pressed }: { layout: BottomLayout; pres
   const stripeWidth = 139 + offset;
   const bands = [21, 617 + offset];
   return (
-    <Svg width="100%" height={height} viewBox={`0 0 ${viewWidth} ${height / scale}`} pointerEvents="none" accessible={false}>
+    <Svg width="100%" height={height} viewBox={`0 0 ${viewWidth} ${height / scale}`} pointerEvents="none" aria-hidden>
       <Rect width="100%" height="100%" fill={DesignColors.black} />
       <Defs>
         <ClipPath id={clipId}>

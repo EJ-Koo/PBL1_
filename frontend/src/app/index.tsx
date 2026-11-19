@@ -467,13 +467,7 @@ export default function HomeScreen() {
               id: g.id,
               name: g.name,
               members: getMemberStars(g, entries, today),
-              stars: groupEntries(g.diary_ids).map((e) => ({
-                color: e.color,
-                size: 0.36,
-                // 카드 미리보기 위치: 3D 위치(x, y)를 카드 안 비율로 옮긴다 (별 배치 반경 최대 약 12).
-                previewX: `${Math.round(50 + Math.max(-1, Math.min(1, e.position[0] / 12)) * 40)}%`,
-                previewY: `${Math.round(50 - Math.max(-1, Math.min(1, e.position[1] / 12)) * 40)}%`,
-              })),
+              stars: groupEntries(g.diary_ids),
             }))}
             onSelectGroup={(g) => { setSharedDiaryId(null); setActiveGroupId(g.id); }}
             onAddGroup={() => setCreateGroupVisible(true)}

@@ -5,12 +5,13 @@ import { ActivityIndicator, AppState, Keyboard, Platform, Pressable, StyleSheet,
 import * as Crypto from 'expo-crypto';
 import { Text, TextInput } from '@/components/app-text';
 import { Avatar } from '@/components/ui/group-profile-control';
+import { GroupChatChevron, GroupSendIcon } from '@/components/ui/group-universe-decoration';
 import { authSession } from '@/lib/auth-session';
 import { chatMessages, markChatRead, sendChat, type ChatMessage } from '@/lib/group-social-api';
 import { mergeChat } from '@/lib/group-chat';
 import { useDiary } from '@/store/diary-context';
 
-export function GroupChatDock({ groupId, bottom, left, width, unread, onRead, initialExpanded = false, onExpandedChange }: {groupId:string;bottom:number;left:number;width:number;unread:number;onRead:()=>void;initialExpanded?:boolean;onExpandedChange?:(expanded:boolean)=>void}) {
+export function GroupChatDock({ groupId, bottom, left, width, unread, onRead, initialExpanded = false, onExpandedChange, scale = 1 }: {groupId:string;bottom:number;left:number;width:number;unread:number;onRead:()=>void;initialExpanded?:boolean;onExpandedChange?:(expanded:boolean)=>void;scale?:number}) {
   const { t, language } = useLanguage();
   const {accessToken,profile}=useDiary();
   const revision=authSession.getRevision();
@@ -80,49 +81,40 @@ export function GroupChatDock({ groupId, bottom, left, width, unread, onRead, in
     finally{lock.current=false;if(alive.current)setBusy(false);}
   };
   return <View style={[styles.dock,{left,width,bottom:Math.max(bottom,keyboard?keyboard+12:0)}]} testID="group-chat">
-    <Pressable accessibilityRole="button" accessibilityLabel={t(expanded?'그룹 채팅 접기':'그룹 채팅 펼치기')} onPress={()=>{changeExpanded(!expanded);if(expanded)Keyboard.dismiss();}} style={styles.heading}>
-      <Text style={styles.label}>{t('그룹 채팅')}{unread>0?` · ${t('미확인 {count}개',{count:unread})}`:''}</Text><Text style={styles.label}>{expanded?'⌄':'⌃'}</Text>
-    </Pressable>
-    {!expanded && <Pressable accessibilityRole="button" accessibilityLabel={t("마지막 메시지 보기")} onPress={()=>changeExpanded(true)} style={styles.preview}>
-      {messages.length>0?<View style={styles.message}>
-        <Avatar uri={messages.at(-1)!.avatar_url} size={28}/><View style={{flex:1,minWidth:0}}>
-          <Text style={styles.name} numberOfLines={1}>{messages.at(-1)!.sender_id===profile?.user_id?t('나'):messages.at(-1)!.nickname}</Text>
-          <Text style={styles.body} numberOfLines={1}>{messages.at(-1)!.body}</Text>
-        </View>
-      </View>:<Text style={styles.hint}>{t(error?'채팅을 불러오지 못했어요. 눌러서 다시 시도':loading?'채팅을 불러오는 중…':'첫 이야기를 나눠보세요.')}</Text>}
-    </Pressable>}
-    {expanded && <>
-      <ScrollView ref={scroll} maintainVisibleContentPosition={{minIndexForVisible:0}} style={{height:Math.max(92,Math.min(208,height*.28))}} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.messages}
+    {expanded && <View style={styles.history} testID="group-chat-history">
+      <ScrollView ref={scroll} maintainVisibleContentPosition={{minIndexForVisible:0}} style={{height:Math.max(72,Math.min(176*scale,height*.24))}} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={[styles.messages,{padding:12*scale,gap:16*scale}]}
         onScroll={event=>{const {layoutMeasurement,contentOffset,contentSize}=event.nativeEvent;nearBottom.current=layoutMeasurement.height+contentOffset.y>=contentSize.height-30;
           if(nearBottom.current && messages.length){void read(messages.at(-1)!.id).catch(()=>{});setHasNew(false);}}} scrollEventThrottle={100}
         onContentSizeChange={()=>{if(nearBottom.current)scroll.current?.scrollToEnd({animated:false});}}>
         {more && <Pressable disabled={loading} onPress={()=>{nearBottom.current=false;setLoading(true);void load(messages[0]?.id);}}><Text style={styles.hint}>{t("이전 대화 더 보기")}</Text></Pressable>}
-        {!messages.length && !error && <Text style={styles.hint}>{t("첫 이야기를 나눠보세요.")}</Text>}
-        {messages.map(message=><View key={message.id} style={styles.message}>
-          <Avatar uri={message.avatar_url} size={28}/><View style={{flex:1,minWidth:0}}>
-            <Text style={styles.name}>{message.sender_id===profile?.user_id?t('나'):message.nickname} <Text style={styles.time}>{new Date(message.created_at).toLocaleTimeString(language==='en'?'en-US':'ko-KR',{hour:'2-digit',minute:'2-digit'})}</Text></Text>
-            <Text style={styles.body} selectable>{message.body}</Text>
-          </View>
+        {!messages.length && !error && <Text style={styles.hint}>{t(loading?'채팅을 불러오는 중…':'첫 이야기를 나눠보세요.')}</Text>}
+        {messages.map(message=><View key={message.id} style={[styles.message,{gap:18*scale}]}
+          accessibilityLabel={`${message.sender_id===profile?.user_id?t('나'):message.nickname}, ${new Date(message.created_at).toLocaleTimeString(language==='en'?'en-US':'ko-KR',{hour:'2-digit',minute:'2-digit'})}`}>
+          {message.avatar_url?<Avatar uri={message.avatar_url} size={40*scale}/>:<View style={{width:40*scale,height:40*scale,borderRadius:20*scale,backgroundColor:'#d9d9d9'}}/>}
+          <Text style={[styles.body,{fontSize:13*scale,lineHeight:21*scale}]} selectable>{message.body}</Text>
         </View>)}
       </ScrollView>
       {hasNew && <Pressable onPress={()=>{nearBottom.current=true;scroll.current?.scrollToEnd({animated:true});if(messages.length)void read(messages.at(-1)!.id).catch(()=>{});setHasNew(false);}}><Text style={styles.hint}>{t("새 메시지 ↓")}</Text></Pressable>}
-      {error && <Pressable onPress={()=>void load()}><Text style={styles.error}>{error} · {t('다시 시도')}</Text></Pressable>}
-    </>}
-    <View style={styles.composer}>
-      <TextInput accessibilityLabel={t("그룹 채팅 메시지")} style={styles.input} placeholder={t("입력하세요…")} placeholderTextColor="#bfc0c9" value={body} onChangeText={setBody} maxLength={2000}
-        onFocus={()=>changeExpanded(true)} editable={!busy} returnKeyType="send" onSubmitEditing={()=>void send()}/>
-      <Pressable accessibilityRole="button" accessibilityLabel={t("메시지 보내기")} disabled={busy||!body.trim()} onPress={()=>void send()} style={styles.send}>
-        {busy?<ActivityIndicator color="#fff" size="small"/>:<Text style={{color:body.trim()?'#fff':'#777',fontSize:26}}>➤</Text>}
+    </View>}
+    <Pressable accessibilityRole="button" accessibilityLabel={`${t(expanded?'그룹 채팅 접기':'그룹 채팅 펼치기')}${unread>0?` · ${t('미확인 {count}개',{count:unread})}`:''}`}
+      accessibilityState={{expanded}} onPress={()=>{changeExpanded(!expanded);if(expanded)Keyboard.dismiss();}} style={[styles.toggle,{top:expanded?0:-32}]}>
+      <GroupChatChevron expanded={expanded} size={12*scale}/>
+      {unread>0&&!expanded&&<View style={styles.unread}/>}
+    </Pressable>
+    {error && <Pressable accessibilityRole="button" onPress={()=>void load()} style={styles.errorPanel}><Text style={styles.error}>{error} · {t('다시 시도')}</Text></Pressable>}
+    <View style={[styles.composer,{minHeight:56*scale}]}>
+      <TextInput accessibilityLabel={t("그룹 채팅 메시지")} style={[styles.input,{paddingHorizontal:24*scale,fontSize:13*scale}]} placeholder={t("입력하세요")} placeholderTextColor="#fff" value={body} onChangeText={setBody} maxLength={2000}
+        underlineColorAndroid="transparent" onFocus={()=>changeExpanded(true)} editable={!busy} returnKeyType="send" onSubmitEditing={()=>void send()}/>
+      <Pressable accessibilityRole="button" accessibilityLabel={t("메시지 보내기")} accessibilityState={{disabled:busy||!body.trim(),busy}} disabled={busy||!body.trim()} onPress={()=>void send()} style={[styles.send,{width:48*scale}]}>
+        {busy?<ActivityIndicator color="#fff" size="small"/>:<GroupSendIcon size={27*scale}/>}
       </Pressable>
     </View>
   </View>;
 }
 const styles=StyleSheet.create({
- dock:{position:'absolute',borderWidth:1,borderColor:'#a8a9b4',backgroundColor:'rgba(82,84,94,0.85)'},
- heading:{minHeight:32,paddingHorizontal:12,flexDirection:'row',alignItems:'center',justifyContent:'space-between'},label:{color:'#f3f3f8',fontSize:11},
- preview:{minHeight:64,paddingHorizontal:12,paddingVertical:10,justifyContent:'center'},
- messages:{padding:12,gap:14},message:{flexDirection:'row',gap:10,alignItems:'flex-start'},name:{color:'#e4e4eb',fontSize:10,marginBottom:3},time:{color:'#c5c5cf',fontSize:9},body:{color:'#fff',fontSize:12,lineHeight:19},
+ dock:{position:'absolute'},history:{backgroundColor:'rgba(217,217,217,0.38)'},toggle:{position:'absolute',right:2,width:32,height:32,alignItems:'center',justifyContent:'center',zIndex:1},unread:{position:'absolute',right:3,top:3,width:5,height:5,borderRadius:3,backgroundColor:'#fff'},
+ messages:{padding:14,gap:16},message:{flexDirection:'row',gap:18,alignItems:'center',minHeight:40},body:{flex:1,minWidth:0,color:'#fff',fontSize:13,lineHeight:21,paddingRight:10},
  hint:{color:'#dddde8',fontSize:11,padding:10,textAlign:'center'},error:{color:'#ffd3d8',fontSize:11,padding:10},
- composer:{flexDirection:'row',alignItems:'center',borderTopWidth:1,borderColor:'#b8b8c2',backgroundColor:'rgba(0,0,0,0.85)',minHeight:44},
- input:{flex:1,minWidth:0,paddingHorizontal:12,paddingVertical:12,color:'#fff',fontSize:12},send:{width:46,minHeight:44,alignItems:'center',justifyContent:'center'},
+ errorPanel:{backgroundColor:'rgba(0,0,0,0.8)'},composer:{flexDirection:'row',alignItems:'center',borderWidth:1,borderColor:'#eee',backgroundColor:'rgba(0,0,0,0.12)',minHeight:44},
+ input:{flex:1,minWidth:0,minHeight:44,paddingVertical:16,color:'#fff'},send:{minWidth:44,minHeight:44,alignItems:'center',justifyContent:'center'},
 });

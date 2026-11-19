@@ -58,7 +58,7 @@ export function DiaryUniverse({ entries, sceneKey, groupId, selection, newStar, 
     : entry;
   const readable = !!anchor && anchor.id === selectedId && anchor.visible && !!getStarPopupLayout(anchor, {
     ...size, topInset: popupInsets?.top ?? headerTop + 84 * scale, bottomInset: popupInsets?.bottom ?? (groupId ? 20 : bottomSpace),
-  });
+  }, groupId ? 'group' : 'personal');
   useEffect(() => {
     // A successful fetch alone is not a read: an off-screen/hidden popup must stay unread.
     if(groupId && readable && verified?.diary && selectedId && onDiaryRead) void onDiaryRead(selectedId);

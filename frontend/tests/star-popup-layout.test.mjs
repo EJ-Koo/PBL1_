@@ -60,3 +60,30 @@ test('stars behind screen chrome keep the diary body clear of the header and nav
     assert.ok(bodyTop + layout.bodyHeight <= viewport.height - viewport.bottomInset);
   }
 });
+
+test('group diaries use a compact card with space for the overlapping profile', () => {
+  const layout = getStarPopupLayout(anchor, viewport, 'group');
+  assert.ok(layout.width < 260);
+  assert.ok(layout.bodyHeight >= 120 && layout.bodyHeight <= 150);
+  assert.equal(layout.tailHeight, 20);
+  assert.equal(layout.left + layout.tailX, anchor.x);
+  assert.ok(layout.left - 32 >= 16);
+});
+
+test('group cards keep the profile and body visible at either edge and above expanded chat', () => {
+  for (const width of [320, 393, 1440]) {
+    const screen = { width, height: 852, topInset: 138, bottomInset: 340 };
+    for (const x of [4, width / 2, width - 4]) {
+      for (const y of [150, 350, 780]) {
+        const layout = getStarPopupLayout({ ...anchor, x, y }, screen, 'group');
+        assert.ok(layout);
+        const bodyTop = layout.top + (layout.above ? 0 : layout.tailHeight);
+        assert.ok(layout.left - 32 >= 16);
+        assert.ok(layout.left + layout.width <= width - 16);
+        assert.ok(bodyTop >= screen.topInset);
+        assert.ok(bodyTop + layout.bodyHeight <= screen.height - screen.bottomInset);
+        assert.equal(layout.left + layout.tailX, x);
+      }
+    }
+  }
+});
