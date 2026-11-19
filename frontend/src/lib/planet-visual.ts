@@ -38,30 +38,17 @@ export type PlanetVisual = {
 };
 
 // ---------------------------------------------------------------- 크기 (일기 분량)
-/**
- * 기본 표시 반지름. 배율(0.8~1.3)을 곱한 최대 반지름 0.39 × 2 = 0.78이 AI 배치의 최소 간격(min_dist 0.8)보다 작아
- * 큰 행성 둘이 3D 공간에서 서로 파고들지 않는다(0.35였을 때는 0.91이라 가능했다). 좌표는 바꾸지 않는다.
- */
-export const PLANET_BASE_RADIUS = 0.3;
-export const PLANET_SCALE_MIN = 0.8;
-export const PLANET_SCALE_MAX = 1.3;
-/** 이 글자 수(공백 제외) 이상이면 최대 크기. */
-export const PLANET_CHARS_FOR_MAX = 600;
-const PLANET_CHARS_CURVE = 50;
-
-export function countCharsNoSpace(text: string): number {
-  return Array.from(text.replace(/\s+/g, '')).length;
-}
-
-/**
- * 공백 제외 글자 수 → 크기 배율(0.8~1.3). 로그 곡선이라 짧은 일기에서는 빠르게, 긴 일기에서는 천천히 커진다.
- * 예: 0자 0.80 · 50자 0.94 · 200자 1.11 · 600자 이상 1.30
- */
-export function planetScaleForText(text: string): number {
-  const n = Math.min(countCharsNoSpace(text), PLANET_CHARS_FOR_MAX);
-  const ratio = Math.log1p(n / PLANET_CHARS_CURVE) / Math.log1p(PLANET_CHARS_FOR_MAX / PLANET_CHARS_CURVE);
-  return PLANET_SCALE_MIN + (PLANET_SCALE_MAX - PLANET_SCALE_MIN) * ratio;
-}
+// [2026-11-18] 크기 규칙은 planet-size.ts 로 옮겼다(배율 범위를 넓히고 이웃과 겹치지 않게 줄이는 함수 추가).
+export {
+  PLANET_BASE_RADIUS,
+  PLANET_CHARS_FOR_MAX,
+  PLANET_SCALE_MAX,
+  PLANET_SCALE_MIN,
+  capRadiiByNeighbors,
+  countCharsNoSpace,
+  planetRadiusForText,
+  planetScaleForText,
+} from './planet-size';
 
 // ---------------------------------------------------------------- AI 분석이 없을 때
 /** AI 분석 전(또는 AI 서비스 없음) 행성. 감정 색처럼 보이지 않도록 무채색 달빛 톤으로 그린다. */
