@@ -19,7 +19,6 @@ import {
   ShaderMaterial,
   Vector2,
   Vector3,
-  ZeroFactor,
   type Mesh,
   type Points,
 } from 'three';
@@ -145,6 +144,8 @@ const LINE_FRAGMENT_SHADER = `
     float alpha = (core + halo) * (shimmer + head) * uOpacity;
     gl_FragColor = vec4(uColor * alpha, 1.0);
     #include <colorspace_fragment>
+    // 빛의 세기만큼 캔버스 알파도 올린다(빈 우주 위에서도 선이 보이도록).
+    gl_FragColor.a = max(max(gl_FragColor.r, gl_FragColor.g), gl_FragColor.b);
   }
 `;
 
@@ -198,12 +199,14 @@ export function ConstellationLines({ runtimeRef }: { runtimeRef: RuntimeRef }) {
         fragmentShader: LINE_FRAGMENT_SHADER,
         transparent: true,
         depthWrite: false,
-        // 색만 더한다(투명 캔버스에서 검은 테두리가 생기지 않게, 대기막과 같은 방식)
+        // 색을 더하고, 알파도 빛 세기만큼 더한다(셰이더에서 a = 가장 밝은 색 성분).
+        // [2026-11-19] 예전에는 알파를 더하지 않아(ZeroFactor) 빈 우주(알파 0) 위의 선이 '알파 0인데 색은 있는' 픽셀이 됐다.
+        // 이런 픽셀은 브라우저·GPU에 따라 화면 합성 때 버려져서, 선이 행성 위를 지나는 부분만 보이고 끊겨 보였다.
         blending: CustomBlending,
         blendEquation: AddEquation,
         blendSrc: OneFactor,
         blendDst: OneFactor,
-        blendSrcAlpha: ZeroFactor,
+        blendSrcAlpha: OneFactor,
         blendDstAlpha: OneFactor,
       }),
     []
@@ -306,6 +309,8 @@ const TRAIL_FRAGMENT_SHADER = `
     if (a < 0.003) discard;
     gl_FragColor = vec4(uColor * a, 1.0);
     #include <colorspace_fragment>
+    // 빛의 세기만큼 캔버스 알파도 올린다(빈 우주 위에서도 선이 보이도록).
+    gl_FragColor.a = max(max(gl_FragColor.r, gl_FragColor.g), gl_FragColor.b);
   }
 `;
 
@@ -333,7 +338,7 @@ export function ConstellationTrails({ runtimeRef, maxPlanets }: { runtimeRef: Ru
         blendEquation: AddEquation,
         blendSrc: OneFactor,
         blendDst: OneFactor,
-        blendSrcAlpha: ZeroFactor,
+        blendSrcAlpha: OneFactor, // 선과 같은 이유로 알파도 더한다
         blendDstAlpha: OneFactor,
       }),
     []
