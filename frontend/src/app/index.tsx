@@ -14,7 +14,7 @@ import { Text } from '@/components/app-text';
 //  - 서버 기능이 아직 없는 테마·소리·알림은 화면만 보여주고 반응하지 않는다(나중에 하나씩 연결).
 //  - [MODIFIED 2026-11-07] 코인·상점은 서버 연결(useShop). HUD 코인을 누르면 상점, 장착한 배경·혜성이 나의 우주에 보인다.
 //  - 폰은 fffju 배율 그대로, 웹·PC는 폭 최대 520px 가운데 정렬(useDesignFrame).
-//  - [ADDED 2026-11-12] 별자리 보기: HUD 아래 [나의 우주 | 별자리 보기] 전환, 아래쪽 별자리 정보 패널.
+//  - 별자리 보기: 하단바 위 [나의 우주 | 별자리 보기] 전환, 그 위에 별자리 정보 패널.
 //    별자리는 화면 표시만 바꾼다(행성 원래 좌표·DB는 그대로). 규칙: lib/constellation.ts
 //  - [ADDED 2026-11-15] Level 4 나만의 별자리: 같은 주제 일기 30개 이상이면 동의 후 서버(LLM)가 만든다.
 //    만든 결과는 서버에 저장되고, 볼 때는 저장된 좌표만 불러와 기존 별자리 애니메이션으로 그린다.
@@ -73,6 +73,9 @@ export default function HomeScreen() {
   // 상점은 별도의 최대 프레임 폭을 사용한다.
   const responsive = useResponsiveLayout();
   const { scale: rScale, headerTop } = responsive;
+  const constellationToggleHeight = 32 * rScale;
+  const constellationToggleBottom = responsive.navBottom + responsive.navHeight + 12 * rScale;
+  const constellationPanelBottom = constellationToggleBottom + constellationToggleHeight + 10 * rScale;
 
   const [screen, setScreen] = useState<Screen>('home');
   const [newStar, setNewStar] = useState<NewStarHighlight | null>(null);
@@ -204,16 +207,16 @@ export default function HomeScreen() {
   const constellationInsets = useMemo(() => {
     const h = Math.max(responsive.height, 1);
     const w = Math.max(windowWidth, 1);
-    const top = responsive.headerTop + 75 * rScale + 8 + 32 * rScale + 12;
-    const nav = responsive.navBottom + responsive.navHeight + 12;
+    const top = responsive.headerTop + 75 * rScale + 12;
+    const toggleTopInset = constellationToggleBottom + constellationToggleHeight + 12;
     if (responsive.wide) {
       const left = panelBox.left + panelBox.width + 16;
-      return { top: Math.min(top / h, 0.45), bottom: Math.min(nav / h, 0.4), left: Math.min(left / w, 0.5), right: 0.03 };
+      return { top: Math.min(top / h, 0.45), bottom: Math.min(toggleTopInset / h, 0.4), left: Math.min(left / w, 0.5), right: 0.03 };
     }
-    const bottom = nav + 10 + panelHeight;
+    const bottom = constellationPanelBottom + panelHeight + 12;
     return { top: Math.min(top / h, 0.45), bottom: Math.min(bottom / h, 0.6), left: 0.04, right: 0.04 };
-  }, [responsive.height, responsive.headerTop, responsive.navBottom, responsive.navHeight, responsive.wide, rScale,
-    panelHeight, windowWidth, panelBox.left, panelBox.width]);
+  }, [responsive.height, responsive.headerTop, responsive.wide, rScale, constellationToggleBottom,
+    constellationToggleHeight, constellationPanelBottom, panelHeight, windowWidth, panelBox.left, panelBox.width]);
   const constellationRequest: ConstellationRequest | null = useMemo(
     () =>
       activeTemplate && constellationMembers.length === activeTemplate.requiredPlanets
@@ -376,6 +379,7 @@ export default function HomeScreen() {
             onNewStarFound={() => setNewStar(null)}
             constellation={constellationRequest}
             frontViewRequest={frontViewRequest}
+            popupInsets={{ top: headerTop + 84 * rScale, bottom: constellationToggleBottom + constellationToggleHeight + 12 }}
           />
 
           {entries.length === 0 && (
@@ -406,23 +410,23 @@ export default function HomeScreen() {
             }}
           />
 
-          {/* 별자리 보기 전환 (HUD 바로 아래 가운데) */}
+          {/* 별자리 보기 전환 (하단바 바로 위 가운데) */}
           {entries.length > 0 && (
             <View
               pointerEvents="box-none"
-              style={[styles.constellationToggleRow, { top: responsive.headerTop + 75 * rScale + 8 }]}>
+              style={[styles.constellationToggleRow, { bottom: constellationToggleBottom }]}>
               <ConstellationModeToggle scale={rScale} active={constellationOn} onChange={setConstellationMode} />
             </View>
           )}
 
-          {/* 별자리 정보 패널 (하단바 위) */}
+          {/* 별자리 정보 패널 (전환 탭 위) */}
           {constellationOn && (
             <View
               pointerEvents="box-none"
               style={[
                 styles.constellationPanelWrap,
                 {
-                  bottom: responsive.navBottom + responsive.navHeight + 10,
+                  bottom: constellationPanelBottom,
                   left: panelBox.left,
                   width: panelBox.width,
                 },

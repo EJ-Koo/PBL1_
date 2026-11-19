@@ -44,7 +44,7 @@ function ChamferFrame({ cut = 10, fill = grayAlpha(0.14), stroke = whiteAlpha(0.
   );
 }
 
-/** 상단 전환 버튼: [나의 우주] [별자리 보기] */
+/** 하단바 위 전환 버튼: [나의 우주] [별자리 보기] */
 export function ConstellationModeToggle({
   scale,
   active,
