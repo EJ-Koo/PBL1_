@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, BackHandler, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 
@@ -135,8 +134,8 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   const panelHeight = Math.max(120, Math.min(488 * s, height - panelTop - chatBottom - 72 * s));
 
   return <View style={styles.screen} testID="group-experience">
-    <Image source={require('../../assets/images/night-sky.png')} contentFit="cover" style={StyleSheet.absoluteFill} pointerEvents="none" />
-    <DiaryUniverse groupId={group.id} sceneKey={`${revision}:group-${group.id}`} entries={entries} backgroundStarScale={1.4}
+    {/* [2026-11-19] 홈 우주처럼 배경 사진(night-sky.png)을 빼고 단색(#000)+3D 배경 별 한 겹만 보이게 함 */}
+    <DiaryUniverse groupId={group.id} sceneKey={`${revision}:group-${group.id}`} entries={entries} backgroundStarScale={1}
       selection={selection} unreadIds={data?.unread_diary_ids ?? []} onDiaryRead={read}
       popupInsets={{ top: controlsTop + 52 * s, bottom: chatBottom + 68 * s + (chatOpen ? chatHistoryHeight : 20*s) }} />
     {(loading || error || entries.length === 0) && <View pointerEvents={error ? 'auto' : 'none'} style={styles.empty}>
