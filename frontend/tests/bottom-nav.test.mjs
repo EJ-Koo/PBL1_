@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { getBottomNavLayout, getResponsiveLayout } from '../src/lib/responsive-layout.ts';
 
-test('the panels match the reference at 774px', () => {
-  const { items, scale } = getBottomNavLayout(774);
-  assert.equal(scale, 1);
+test('the smaller panels keep the reference proportions and stay centered at 774px', () => {
+  const { items, scale, offset } = getBottomNavLayout(774);
+  assert.equal(scale, 0.85);
   assert.deepEqual(items.map(({ id, x, width }) => [id, x, width]), [
-    ['diary', 181, 95], ['home', 290, 196], ['group', 500, 95],
+    ['diary', 181 + offset, 95], ['home', 290 + offset, 196], ['group', 500 + offset, 95],
   ]);
 });
 
@@ -16,12 +16,12 @@ test('touch targets cover the artwork without overlapping across viewport sizes 
     [844, 390, 47, 21], [1024, 768, 0, 20], [1280, 720, 0, 0], [1920, 1080, 0, 0],
   ]) {
     const layout = getResponsiveLayout(width, height, { left: side, right: side, top: 0, bottom });
-    const { items, scale, hitTop, hitHeight } = layout.navLayout;
+    const { items, scale, artworkTop, hitTop, hitHeight } = layout.navLayout;
     assert.equal(layout.navLeft, side);
     assert.equal(layout.navWidth, width - 2 * side);
     assert.equal(layout.navBottom, bottom);
     assert(hitHeight >= 44 && hitTop >= 0 && hitTop + hitHeight <= layout.navHeight);
-    assert(hitTop <= 45.5 * scale && hitTop + hitHeight >= 87.5 * scale);
+    assert(hitTop <= artworkTop + 45.5 * scale && hitTop + hitHeight >= artworkTop + 87.5 * scale);
     let previousRight = 0;
     for (const item of items) {
       const right = item.hitLeft + item.hitWidth;

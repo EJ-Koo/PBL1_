@@ -44,12 +44,15 @@ const navPanels = [
 ] as const;
 
 export function getBottomNavLayout(width: number) {
-  const scale = Math.min(Math.max(0, width) / 774, 1.15);
+  const scale = Math.min(Math.max(0, width) / 774, 1.15) * 0.85;
   const viewWidth = scale > 0 ? width / scale : 774;
   const offset = (viewWidth - 774) / 2;
-  const height = Math.max(44, 128 * scale);
+  const viewHeight = 120;
+  const height = Math.max(44, viewHeight * scale);
+  // Match the bottom-aligned artwork when the minimum touch height adds space.
+  const artworkTop = height - viewHeight * scale;
   const hitHeight = Math.max(44, 42 * scale);
-  const hitTop = Math.min(height - hitHeight, Math.max(0, 66.5 * scale - hitHeight / 2));
+  const hitTop = Math.min(height - hitHeight, Math.max(0, artworkTop + 66.5 * scale - hitHeight / 2));
   const items = navPanels.map(panel => {
     const x = offset + panel.x;
     const panelWidth = panel.width * scale;
@@ -59,5 +62,5 @@ export function getBottomNavLayout(width: number) {
       : panel.id === 'home' ? (x + panel.width / 2) * scale - hitWidth / 2 : x * scale;
     return { ...panel, x, hitLeft: Math.max(0, Math.min(width - hitWidth, hitLeft)), hitWidth };
   });
-  return { viewWidth, scale, offset, height, hitHeight, hitTop, items };
+  return { viewWidth, viewHeight, scale, offset, height, artworkTop, hitHeight, hitTop, items };
 }

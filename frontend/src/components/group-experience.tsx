@@ -6,7 +6,7 @@ import { ScrollView } from '@/components/app-scroll-view';
 import { Text } from '@/components/app-text';
 import { DiaryUniverse } from '@/components/diary-universe';
 import { GroupChatDock } from '@/components/group-chat-dock';
-import { BottomNavFrame, QuestFrame } from '@/components/ui/design-decoration';
+import { QuestFrame } from '@/components/ui/design-decoration';
 import { Avatar } from '@/components/ui/group-profile-control';
 import { GroupPanelFrame, GroupUniverseHeaderFrame, GroupUniverseIcon } from '@/components/ui/group-universe-decoration';
 import { SpaceButton } from '@/components/ui/space-ui';
@@ -107,7 +107,7 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   const panelWidth = Math.min(236 * s, layout.chromeWidth - 24 * s);
   const chatWidth = Math.min(460, layout.chromeWidth - 68 * s);
   const chatLeft = layout.chromeLeft + (layout.chromeWidth - chatWidth) / 2;
-  const chatBottom = layout.navBottom + layout.navHeight + 24 * s;
+  const chatBottom = layout.navBottom + 24 * s;
   const chatHistoryHeight = Math.max(72, Math.min(176 * s, height * 0.24));
   const panelHeight = Math.max(120, Math.min(488 * s, height - panelTop - chatBottom - 72 * s));
 
@@ -147,9 +147,6 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
     {readError && <Text accessibilityRole="alert" style={[styles.readError, { top: panelTop }]}>{readError}</Text>}
     <GroupChatDock key={group.id} groupId={group.id} bottom={chatBottom} left={chatLeft} width={chatWidth} scale={s}
       unread={data?.chat_unread_count ?? 0} onRead={refresh} initialExpanded={initialChat} onExpandedChange={setChatExpanded} />
-    <View pointerEvents="none" style={{ position: 'absolute', bottom: layout.navBottom, left: layout.navLeft, width: layout.navWidth, height: layout.navHeight }}>
-      <BottomNavFrame layout={layout.navLayout} />
-    </View>
 
     {panel && <>
       <Pressable style={styles.backdrop} accessibilityRole="button" accessibilityLabel={t('그룹 패널 닫기')} onPress={() => setPanel(null)} />
