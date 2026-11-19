@@ -93,7 +93,7 @@ export function StarDiaryPopup({ entry, anchor, viewport, editable, owned, loadi
       <Svg width={width + Math.max(0, -tailX + 2) + Math.max(0, tailX - width + 2)} height={height}
         viewBox={`${-Math.max(0, -tailX + 2)} 0 ${width + Math.max(0, -tailX + 2) + Math.max(0, tailX - width + 2)} ${height}`}
         style={{ position: 'absolute', left: -Math.max(0, -tailX + 2), top: 0 }} pointerEvents="none">
-        <Path d={outline} fill="#D9D9D9" fillOpacity={groupId ? 0.26 : 0.5} stroke={groupId ? '#fff' : '#D9D9D9'} strokeWidth={groupId ? 1.5 : 2} />
+        <Path d={outline} fill="#5E5E69" fillOpacity={0.9} stroke={groupId ? '#fff' : '#D9D9D9'} strokeWidth={groupId ? 1.5 : 2} />
       </Svg>
       {author && (
         <View pointerEvents="none" style={{ position: 'absolute', zIndex: 1, left: groupId ? -32 : -10, top: (above ? 0 : tailHeight) + (groupId ? 0 : 12) }}>

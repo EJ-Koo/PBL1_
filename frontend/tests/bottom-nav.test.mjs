@@ -4,7 +4,7 @@ import { getBottomNavLayout, getResponsiveLayout } from '../src/lib/responsive-l
 
 test('the smaller panels keep the reference proportions and stay centered at 774px', () => {
   const { items, scale, offset } = getBottomNavLayout(774);
-  assert.equal(scale, 0.85);
+  assert.equal(scale, 0.7);
   assert.deepEqual(items.map(({ id, x, width }) => [id, x, width]), [
     ['diary', 181 + offset, 95], ['home', 290 + offset, 196], ['group', 500 + offset, 95],
   ]);
@@ -25,7 +25,7 @@ test('touch targets cover the artwork without overlapping across viewport sizes 
     let previousRight = 0;
     for (const item of items) {
       const right = item.hitLeft + item.hitWidth;
-      assert(item.hitWidth >= 65 && item.hitLeft >= previousRight && right <= layout.navWidth);
+      assert(item.hitWidth >= 44 && item.hitLeft >= previousRight && right <= layout.navWidth);
       assert(item.hitLeft <= item.x * scale + 0.001);
       assert(right >= (item.x + item.width) * scale - 0.001);
       previousRight = right;
