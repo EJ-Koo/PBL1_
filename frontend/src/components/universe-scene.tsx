@@ -1329,6 +1329,7 @@ export function PlanetPreview({
   radius = PLANET_BASE_RADIUS,
   effect,
   quality = 'medium',
+  zoom = 1,
 }: {
   /** 행성 고정 난수(무늬 배치)의 기준. 실제 일기 id를 주면 우주 화면과 같은 모습이 된다. */
   id: string;
@@ -1336,11 +1337,12 @@ export function PlanetPreview({
   radius?: number;
   effect: SpecialType | null;
   quality?: PlanetQuality;
+  zoom?: number;
 }) {
   // 행성 크기와 상관없이 화면을 비슷하게 채우도록 카메라 거리를 반지름에 맞춘다(성운 판·궤도까지 보이게)
   const distance = radius * 5.2;
   return (
-    <Canvas style={{ flex: 1 }} camera={{ fov: CAMERA_FOV, position: [0, radius * 0.9, distance] }}>
+    <Canvas style={{ flex: 1 }} camera={{ fov: CAMERA_FOV, position: [0, radius * 0.9, distance], zoom }}>
       <PreviewSpin>
         <Planet
           id={id}
