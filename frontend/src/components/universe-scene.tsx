@@ -54,12 +54,12 @@ import {
   SURFACE_OVERLAY_MAX,
   SURFACE_STYLE_SETTINGS,
   SURFACE_TIERS,
-  surfaceTiers,
   surfaceToDraw,
   type SurfaceStyle,
   type SurfaceTier,
 } from '@/lib/surface-style';
 import { buildSurfaceFragmentShader } from '@/lib/surface-shader';
+import { decorationTiers } from '@/lib/decoration-lod';
 import {
   CONSTELLATION_CONFIG,
   arriveDuration,
@@ -1237,20 +1237,35 @@ export function UniverseScene({
             return { id: e.id, d: tmp.distanceTo(state.camera.position) };
           })
           .sort((a, b) => a.d - b.d);
-      const ranked = rank(specialEntries);
-      const maxNear = SPECIAL_EFFECT_SETTINGS.maxNear[quality];
       // [2026-11-12] 별자리 전환 중(여러 행성이 움직이는 동안)에는 입자·애니메이션을 잠시 멈춘다(효과의 바탕 층은 그대로 보임)
       const moving = runtimeRef.current.tracks.size > 0;
+      // [2026-11-22] 꾸민 행성은 상점·꾸미기 미리보기와 같은 최고 단계로(기기별 상한까지, decoration-lod.ts).
+      // 별자리 밖으로 어둡게 한 행성·전환 중에는 0(기존 별자리 가독성·성능 규칙 우선).
+      const dimmedOf = (list: DiaryEntry[]) =>
+        constellation ? new Set(list.filter((e) => !memberSet.has(e.id)).map((e) => e.id)) : undefined;
       EFFECT_TIERS.clear();
-      ranked.forEach((r, i) => {
-        const tier: EffectTier = !moving && i < maxNear && r.d < SPECIAL_EFFECT_SETTINGS.nearDistance ? 1 : 0;
-        EFFECT_TIERS.set(r.id, tier);
-      });
-      // [2026-11-21] 표면 스타일 단계: 별자리 밖(어둡게 한) 행성·전환 중에는 0(기존 가독성·성능 규칙 우선)
+      if (specialEntries.length) {
+        const tiers = decorationTiers(rank(specialEntries), {
+          matchPreview: SPECIAL_EFFECT_SETTINGS.matchPreview,
+          maxFull: SPECIAL_EFFECT_SETTINGS.maxFull[quality],
+          maxNear: SPECIAL_EFFECT_SETTINGS.maxNear[quality],
+          nearDistance: SPECIAL_EFFECT_SETTINGS.nearDistance,
+          moving,
+          dimmed: dimmedOf(specialEntries),
+        });
+        for (const [id, tier] of tiers) EFFECT_TIERS.set(id, tier as EffectTier);
+      }
       SURFACE_TIERS.clear();
       if (surfaceEntries.length) {
-        const dimmed = constellation ? new Set(surfaceEntries.filter((e) => !memberSet.has(e.id)).map((e) => e.id)) : undefined;
-        for (const [id, tier] of surfaceTiers(rank(surfaceEntries), quality, { moving, dimmed })) SURFACE_TIERS.set(id, tier);
+        const tiers = decorationTiers(rank(surfaceEntries), {
+          matchPreview: SURFACE_STYLE_SETTINGS.matchPreview,
+          maxFull: SURFACE_STYLE_SETTINGS.maxFull[quality],
+          maxNear: SURFACE_STYLE_SETTINGS.maxNear[quality],
+          nearDistance: SURFACE_STYLE_SETTINGS.nearDistance,
+          moving,
+          dimmed: dimmedOf(surfaceEntries),
+        });
+        for (const [id, tier] of tiers) SURFACE_TIERS.set(id, tier);
       }
     }
     const smoothing = 1 - Math.exp(-delta * 9);
@@ -1526,6 +1541,8 @@ function BenchmarkScene({
   tier,
   count,
   effects,
+  surfaces,
+  full,
   onResult,
 }: {
   visual: PlanetVisual;
@@ -1534,6 +1551,10 @@ function BenchmarkScene({
   count: number;
   /** [2026-11-21] 행성 i 의 효과 = effects[i % 길이]. 단계는 우주 화면 규칙처럼: 1개 선택(2), 가까운 6개(1), 나머지 멀리(0) */
   effects?: (SpecialType | null)[];
+  /** [2026-11-22] 행성 i 의 표면 = surfaces[i % 길이](없으면 surface) */
+  surfaces?: (SurfaceStyle | null)[];
+  /** [2026-11-22] 미리보기와 같게: 꾸민 행성 모두 최고 단계(상한 maxFull.high 를 넘는 행성은 가까이 단계) */
+  full?: boolean;
   onResult: (r: BenchmarkResult) => void;
 }) {
   const viewport = useThree((s) => s.viewport);
@@ -1582,10 +1603,10 @@ function BenchmarkScene({
           radius={cell * 0.38}
           visual={visual}
           quality="high"
-          surface={surface}
-          surfaceTier={tier}
+          surface={surfaces ? surfaces[i % surfaces.length] : surface}
+          surfaceTier={full ? (i < SURFACE_STYLE_SETTINGS.maxFull.high ? 2 : 1) : tier}
           special={effects ? effectToDraw(effects[i % effects.length]) : null}
-          effectTier={i === 0 ? 2 : i <= 6 ? 1 : 0}
+          effectTier={full ? (i < SPECIAL_EFFECT_SETTINGS.maxFull.high ? 2 : 1) : i === 0 ? 2 : i <= 6 ? 1 : 0}
           shared={PREVIEW_UNIFORMS}
         />
       ))}
@@ -1599,6 +1620,8 @@ export function SurfaceBenchmark(props: {
   tier: SurfaceTier;
   count: number;
   effects?: (SpecialType | null)[];
+  surfaces?: (SurfaceStyle | null)[];
+  full?: boolean;
   onResult: (r: BenchmarkResult) => void;
 }) {
   return (

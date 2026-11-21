@@ -98,6 +98,9 @@ export const SURFACE_STYLE_SETTINGS = {
   } as Record<SurfaceStyle, boolean>,
   maxNear: { low: 3, medium: 6, high: 10 } as Record<PlanetQuality, number>,
   nearDistance: 9,
+  /** [2026-11-22] 우주에서도 미리보기와 똑같이(최고 단계). false 면 거리별 단계. 상한을 넘는 행성은 '가까이' 단계. */
+  matchPreview: true,
+  maxFull: { low: 8, medium: 24, high: 40 } as Record<PlanetQuality, number>,
 };
 
 /** 표면 단계: 0 멀리(광택만), 1 가까이(무늬·움직임), 2 선택(전부) */
@@ -120,27 +123,4 @@ export function surfaceOfItem(item: { slot: string | null; effect?: { type?: unk
 export function surfaceToDraw(surface: SurfaceStyle | null | undefined): SurfaceStyle | null {
   if (!SURFACE_STYLE_SETTINGS.enabled || !surface) return null;
   return surface in SURFACE_STYLES && SURFACE_STYLE_SETTINGS.styles[surface] ? surface : null;
-}
-
-/**
- * 표면 단계 정하기(순수 함수, 테스트용). ranked = 카메라에서 가까운 순서로 정렬한 표면 스타일 행성.
- * dimmed = 별자리 보기에서 어둡게 한 행성(항상 0). moving = 별자리 전환 중(모두 0).
- */
-export function surfaceTiers(
-  ranked: readonly { id: string; d: number }[],
-  quality: PlanetQuality,
-  opts: { moving?: boolean; dimmed?: ReadonlySet<string> } = {}
-): Map<string, SurfaceTier> {
-  const out = new Map<string, SurfaceTier>();
-  let near = 0;
-  for (const r of ranked) {
-    const ok =
-      !opts.moving &&
-      !opts.dimmed?.has(r.id) &&
-      near < SURFACE_STYLE_SETTINGS.maxNear[quality] &&
-      r.d < SURFACE_STYLE_SETTINGS.nearDistance;
-    if (ok) near++;
-    out.set(r.id, ok ? 1 : 0);
-  }
-  return out;
 }
