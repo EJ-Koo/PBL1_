@@ -56,7 +56,7 @@ export function PlanetDetailView({ entry, owned, editable, previewVisible, group
         <View style={styles.planetHeader}>
           <View style={styles.planet} pointerEvents="none" testID="planet-detail-preview">
             <View style={styles.planetCanvas}>
-              {previewVisible && !decorating && <PlanetPreview id={entry.id} visual={entry.planet} effect={entry.effect}
+              {previewVisible && !decorating && <PlanetPreview id={entry.id} visual={entry.planet} effect={entry.effect} surface={entry.surface}
                 radius={PLANET_BASE_RADIUS * planetScaleForText(entry.text)} quality="high" zoom={effect ? 1 : 1.4} />}
             </View>
             <View style={StyleSheet.absoluteFill}><PlanetDetailFrame kind="planet" /></View>

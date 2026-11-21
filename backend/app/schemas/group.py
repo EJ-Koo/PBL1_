@@ -43,3 +43,5 @@ class GroupStarEntry(BaseModel):
     brightness: float
     planet: dict | None = None
     effect: str | None = None
+    # [2026-11-21] 작성자가 적용한 표면 스타일. 없으면 null = 기본 표면(추가만, 기존 칸은 그대로)
+    surface: str | None = None

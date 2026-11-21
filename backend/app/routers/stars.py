@@ -6,7 +6,7 @@ from app import ai_client
 from app.config import settings
 from app.db import supabase
 from app.dependencies import get_current_user_id
-from app.routers.shop import applied_effects
+from app.routers.shop import applied_effects, applied_surfaces
 from app.routers.diaries import is_missing_column, mark_topic_column_missing, topic_column_ready
 from app.schemas.diary import Topic
 from app.schemas.star import Star
@@ -73,6 +73,13 @@ def list_stars(user_id: str = Depends(get_current_user_id)):
         if mine:
             row["effect"] = mine["effect"]
             row["effect_item_id"] = mine["item_id"]
+    # [2026-11-21] 표면 스타일(planet_surfaces). 효과와 따로 붙는다. 없으면 null = 기본 표면(기존과 같음).
+    surfaces = applied_surfaces(user_id)
+    for row in rows:
+        mine = surfaces.get(str(row["diary_id"]))
+        if mine:
+            row["surface"] = mine["surface"]
+            row["surface_item_id"] = mine["item_id"]
 
     # [2026-11-12] 별자리: 일기 주제(선택). [2026-11-13] DB 우선, 없으면 AI 서비스 저장소로 보충
     _attach_topics(user_id, rows)

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from app import ai_client
 from app.db import supabase
 from app.dependencies import get_current_user_id
-from app.routers.shop import applied_effects
+from app.routers.shop import applied_effects, applied_surfaces
 from app.schemas.group import Group, GroupCreate, GroupJoin, GroupMember, GroupStarEntry
 
 router = APIRouter(prefix="/groups", tags=["groups"])
@@ -226,8 +226,10 @@ def group_stars(group_id: str, user_id: str = Depends(get_current_user_id)):
     nick = _nicknames(author_ids)
     # 효과(상점에서 산 특수 행성)는 작성자별 조회라 작성자마다 불러 합친다.
     effects: dict[str, dict] = {}
+    surfaces: dict[str, dict] = {}
     for a in author_ids:
         effects.update(applied_effects(a))
+        surfaces.update(applied_surfaces(a))
     # 행성 외형(AI 감정 분석)은 list_stars와 동일하게 서비스가 있을 때만 붙인다.
     contents = [(r.get("diaries") or {}).get("content") for r in star_rows]
     known = [i for i, c in enumerate(contents) if c]
@@ -240,6 +242,7 @@ def group_stars(group_id: str, user_id: str = Depends(get_current_user_id)):
     for i, r in enumerate(star_rows):
         d = r.get("diaries") or {}
         eff = effects.get(str(r["diary_id"]))
+        surf = surfaces.get(str(r["diary_id"]))
         out.append(
             GroupStarEntry(
                 diary_id=str(r["diary_id"]),
@@ -254,6 +257,7 @@ def group_stars(group_id: str, user_id: str = Depends(get_current_user_id)):
                 brightness=r["brightness"],
                 planet=planet_by_index.get(i),
                 effect=eff["effect"] if eff else None,
+                surface=surf["surface"] if surf else None,
             )
         )
     return out
