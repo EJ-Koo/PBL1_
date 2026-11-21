@@ -6,6 +6,9 @@ import { Text } from '@/components/app-text';
 //  - 효과는 소모품: 1개 = 행성 1개. 남은 개수가 없으면 미리보기만 되고 버튼이 '구매'로 바뀐다.
 //    해제하거나 다른 효과로 바꾸면 그 1개는 다시 남은 개수로 돌아온다. 적용·해제 권한과 개수는 서버가 다시 확인한다.
 //  - 행성 본체(감정 색·무늬·크기·위치)는 바뀌지 않는다. 효과는 바깥에만 더해진다.
+// [MODIFIED 2026-11-21] 두 카테고리: '표면'(Surface Style, 행성 표면 재질) · '효과'(Special Effect, 행성 주변).
+//  - 행성 하나에 표면 하나 + 효과 하나를 따로 고른다. 미리보기에는 둘 다 함께 보인다.
+//  - 구매·남은 개수·적용·해제 규칙은 두 카테고리가 같다(서버 표만 따로: planet_surfaces / planet_effects).
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 
@@ -15,6 +18,7 @@ import { confirmChoice } from '@/lib/notice';
 import { PLANET_BASE_RADIUS, planetScaleForText } from '@/lib/planet-visual';
 import type { ShopItem } from '@/lib/shop-api';
 import { EFFECT_LABELS, SPECIAL_TYPES, effectOfItem, type SpecialType } from '@/lib/special-planet';
+import { SURFACE_STYLES, SURFACE_STYLE_IDS, surfaceOfItem, type SurfaceStyle } from '@/lib/surface-style';
 import { useDiary, type DiaryEntry } from '@/store/diary-context';
 import { useShop } from '@/store/shop-context';
 
@@ -25,6 +29,50 @@ type Props = {
   diaryId?: string | null;
   /** 방법 A: 이 효과를 고른 채로 연다(행성 고르기부터) */
   effect?: SpecialType | null;
+  /** [2026-11-21] 방법 A: 이 표면을 고른 채로 연다(행성 고르기부터, '표면' 카테고리) */
+  surface?: SurfaceStyle | null;
+};
+
+type Category = 'surface' | 'effect';
+
+/** 카테고리별 차이(종류 목록·아이템 판별·현재 값·문구)만 모아 둔다. 나머지 흐름은 같다. */
+type Kind<T extends string> = {
+  category: Category;
+  types: readonly T[];
+  ofItem: (item: ShopItem) => T | null;
+  current: (e: DiaryEntry) => T | null;
+  fallbackName: (t: T) => string;
+  fallbackIcon: (t: T) => string;
+  noun: string;
+  noneLabel: string;
+  noneStatus: string;
+  hint: string;
+};
+
+const EFFECT_KIND: Kind<SpecialType> = {
+  category: 'effect',
+  types: SPECIAL_TYPES,
+  ofItem: effectOfItem,
+  current: (e) => e.effect,
+  fallbackName: (t) => EFFECT_LABELS[t].name,
+  fallbackIcon: (t) => EFFECT_LABELS[t].icon,
+  noun: '효과',
+  noneLabel: '효과 없음',
+  noneStatus: '기본 행성',
+  hint: '효과 1개로 행성 1개를 꾸밀 수 있어요. 해제하거나 다른 효과로 바꾸면 그 1개는 다시 쓸 수 있어요. 행성의 색과 무늬는 그대로예요.',
+};
+
+const SURFACE_KIND: Kind<SurfaceStyle> = {
+  category: 'surface',
+  types: SURFACE_STYLE_IDS,
+  ofItem: surfaceOfItem,
+  current: (e) => e.surface,
+  fallbackName: (t) => SURFACE_STYLES[t].name,
+  fallbackIcon: (t) => SURFACE_STYLES[t].icon,
+  noun: '표면',
+  noneLabel: '기본 표면',
+  noneStatus: '기본',
+  hint: '표면 1개로 행성 1개를 꾸밀 수 있어요. 감정으로 정해진 색·무늬·크기는 그대로이고, 표면 재질(광택·빛결)만 바뀌어요.',
 };
 
 export function dateLabel(createdAt: number) {
@@ -32,56 +80,62 @@ export function dateLabel(createdAt: number) {
   return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`;
 }
 
-function effectName(type: SpecialType, item?: ShopItem) {
-  return item?.name ?? EFFECT_LABELS[type].name;
-}
-
-function effectIcon(type: SpecialType, item?: ShopItem) {
-  return item?.icon ?? EFFECT_LABELS[type].icon;
-}
-
-export function PlanetDecorator({ visible, onClose, diaryId = null, effect = null }: Props) {
+export function PlanetDecorator({ visible, onClose, diaryId = null, effect = null, surface = null }: Props) {
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
-      {/* 열 때마다 처음 상태(고른 행성·효과)로 시작하도록 key 로 새로 만든다 */}
-      {visible ? <DecoratorSheet key={`${diaryId}-${effect}`} onClose={onClose} diaryId={diaryId} effect={effect} /> : null}
+      {/* 열 때마다 처음 상태(고른 행성·효과·표면)로 시작하도록 key 로 새로 만든다 */}
+      {visible ? (
+        <DecoratorSheet key={`${diaryId}-${effect}-${surface}`} onClose={onClose} diaryId={diaryId} effect={effect} surface={surface} />
+      ) : null}
     </Modal>
   );
 }
 
-function DecoratorSheet({ onClose, diaryId, effect }: Omit<Props, 'visible'>) {
-  const { width, height } = useWindowDimensions();
+/** 카테고리 하나의 상태: 종류 → 상점 아이템, 남은 개수, 고른 값 */
+function useKindState<T extends string>(kind: Kind<T>, entry: DiaryEntry | undefined, initial: T | null) {
   const { entries } = useDiary();
-  const { coins, items, error, refresh, purchase, applyPlanetEffect } = useShop();
-  const [pickedId, setPickedId] = useState<string | null>(diaryId ?? null);
-  const entry = pickedId ? entries.find((e) => e.id === pickedId) : undefined;
-  // 고른 효과(미리보기). undefined = 아직 안 고름 → 행성의 현재 효과
-  const [chosen, setChosen] = useState<SpecialType | null | undefined>(effect ?? undefined);
-  const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  // 효과 종류 → 상점 아이템(이름·아이콘·가격·보유). 서버에 없는 효과는 고를 수 없다.
+  const { items } = useShop();
+  // 고른 값(미리보기). undefined = 아직 안 고름 → 행성의 현재 값
+  const [chosen, setChosen] = useState<T | null | undefined>(initial ?? undefined);
+  // 종류 → 상점 아이템(이름·아이콘·가격·보유). 서버에 없는 종류는 고를 수 없다.
   const itemByType = useMemo(() => {
-    const map = new Map<SpecialType, ShopItem>();
+    const map = new Map<T, ShopItem>();
     for (const item of items) {
-      const type = effectOfItem(item);
+      const type = kind.ofItem(item);
       if (type && !map.has(type)) map.set(type, item);
     }
     return map;
-  }, [items]);
-  const types = SPECIAL_TYPES.filter((t) => itemByType.has(t));
+  }, [items, kind]);
+  const types = kind.types.filter((t) => itemByType.has(t));
+  const current = entry ? kind.current(entry) : null;
+  const selected = chosen === undefined ? current : chosen;
+  // 남은 개수 = 산 개수 − 지금 적용 중인 행성 수(내 행성 목록 기준, 적용·해제 즉시 반영)
+  const inUse = (t: T) => entries.filter((e) => kind.current(e) === t).length;
+  const quantity = (t: T) => itemByType.get(t)?.quantity ?? 0;
+  const left = (t: T) => Math.max(quantity(t) - inUse(t), 0);
+  // 이 행성에 적용할 수 있는지: 이미 이 행성에 있거나 남은 개수가 있을 때
+  const canApply = (t: T) => t === current || left(t) > 0;
+  const name = (t: T) => itemByType.get(t)?.name ?? kind.fallbackName(t);
+  const icon = (t: T) => itemByType.get(t)?.icon ?? kind.fallbackIcon(t);
+  return { kind, itemByType, types, current, selected, setChosen, quantity, left, canApply, name, icon };
+}
+
+type KindState<T extends string> = ReturnType<typeof useKindState<T>>;
+
+function DecoratorSheet({ onClose, diaryId, effect, surface }: Omit<Props, 'visible'>) {
+  const { width, height } = useWindowDimensions();
+  const { entries } = useDiary();
+  const { coins, error, refresh, purchase, applyPlanetEffect, applyPlanetSurface } = useShop();
+  const [pickedId, setPickedId] = useState<string | null>(diaryId ?? null);
+  const entry = pickedId ? entries.find((e) => e.id === pickedId) : undefined;
+  const [category, setCategory] = useState<Category>(surface ? 'surface' : 'effect');
+  const fx = useKindState(EFFECT_KIND, entry, effect ?? null);
+  const sf = useKindState(SURFACE_KIND, entry, surface ?? null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const sheetWidth = Math.min(width - 24, 496);
   const sheetHeight = Math.min(height * 0.84, 740);
-  const current = entry?.effect ?? null;
-  const selected = chosen === undefined ? current : chosen;
-  const selectedItem = selected ? itemByType.get(selected) : undefined;
-  // 남은 개수 = 산 개수 − 지금 적용 중인 행성 수(내 행성 목록 기준, 적용·해제 즉시 반영)
-  const inUse = (t: SpecialType) => entries.filter((e) => e.effect === t).length;
-  const quantity = (t: SpecialType) => itemByType.get(t)?.quantity ?? 0;
-  const left = (t: SpecialType) => Math.max(quantity(t) - inUse(t), 0);
-  // 이 행성에 적용할 수 있는지: 이미 이 행성에 있거나 남은 개수가 있을 때
-  const canApply = (t: SpecialType) => t === current || left(t) > 0;
 
   const run = async (task: () => Promise<{ ok: true } | { ok: false; error: string }>, done: string) => {
     setBusy(true);
@@ -92,40 +146,19 @@ function DecoratorSheet({ onClose, diaryId, effect }: Omit<Props, 'visible'>) {
     else showMessage('실패', result.error);
   };
 
-  const apply = (type: SpecialType | null) => {
-    if (!entry || busy) return;
-    const item = type ? itemByType.get(type) : undefined;
-    run(
-      () => applyPlanetEffect(entry.id, item?.id ?? null),
-      type ? `${effectIcon(type, item)} ${effectName(type, item)}를 적용했어요.` : '효과를 해제했어요. 기본 행성으로 돌아갔어요.'
-    );
-  };
-
-  const buy = (type: SpecialType) => {
-    const item = itemByType.get(type);
-    if (!item || busy) return;
+  const buy = (item: ShopItem) => {
+    if (busy) return;
     confirmChoice('구매', `${item.icon} ${item.name}을(를) 🪙 ${item.price}에 살까요?\n1개로 행성 1개를 꾸밀 수 있어요.`, '구매', () =>
       run(() => purchase(item.id), `${item.icon} ${item.name} 1개를 샀어요. 이제 이 행성에 적용할 수 있어요.`)
     );
   };
 
-  // 아래 큰 버튼 하나: 고른 효과·현재 효과·보유 여부에 따라 바뀐다
-  let primary: { label: string; disabled: boolean; ghost?: boolean; onPress: () => void };
-  if (selected && !canApply(selected)) {
-    const price = selectedItem?.price ?? 0;
-    const enough = (coins ?? 0) >= price;
-    primary = selectedItem?.on_sale === false
-      ? { label: '판매 종료된 효과예요', disabled: true, onPress: () => {} }
-      : { label: enough ? `🪙 ${price}에 구매하기` : '코인 부족', disabled: !enough, onPress: () => buy(selected) };
-  } else if (selected === current) {
-    primary = { label: current ? '적용 중' : '기본 행성 (효과 없음)', disabled: true, onPress: () => {} };
-  } else if (!selected) {
-    primary = { label: '효과 해제', disabled: false, ghost: true, onPress: () => apply(null) };
-  } else {
-    primary = { label: current ? '이 효과로 변경하기' : '적용하기', disabled: false, onPress: () => apply(selected) };
-  }
-
   const sorted = useMemo(() => [...entries].sort((a, b) => b.createdAt - a.createdAt), [entries]);
+  const listTarget = surface
+    ? { icon: sf.icon(surface), name: sf.name(surface) }
+    : effect
+      ? { icon: fx.icon(effect), name: fx.name(effect) }
+      : null;
 
   return (
     <View style={styles.backdrop}>
@@ -139,7 +172,8 @@ function DecoratorSheet({ onClose, diaryId, effect }: Omit<Props, 'visible'>) {
                 onPress={() => {
                   setPickedId(null);
                   setNotice(null);
-                  setChosen(effect ?? undefined);
+                  fx.setChosen(effect ?? undefined);
+                  sf.setChosen(surface ?? undefined);
                 }}
                 hitSlop={10}>
                 <Text style={styles.backText}>‹ 행성 목록</Text>
@@ -165,7 +199,7 @@ function DecoratorSheet({ onClose, diaryId, effect }: Omit<Props, 'visible'>) {
         ) : null}
 
         {!entry ? (
-          <PlanetList entries={sorted} effect={effect ?? null} itemByType={itemByType} onPick={(id) => setPickedId(id)} />
+          <PlanetList entries={sorted} target={listTarget} fx={fx} sf={sf} onPick={(id) => setPickedId(id)} />
         ) : (
           <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
             <View style={styles.preview} testID="decorator-preview">
@@ -173,7 +207,8 @@ function DecoratorSheet({ onClose, diaryId, effect }: Omit<Props, 'visible'>) {
                 id={entry.id}
                 visual={entry.planet}
                 radius={PLANET_BASE_RADIUS * planetScaleForText(entry.text)}
-                effect={selected}
+                effect={fx.selected}
+                surface={sf.selected}
               />
               <Text style={styles.previewTag} pointerEvents="none">
                 미리보기
@@ -186,82 +221,64 @@ function DecoratorSheet({ onClose, diaryId, effect }: Omit<Props, 'visible'>) {
               {entry.text}
             </Text>
             <Text style={styles.currentLine} testID="decorator-current">
-              현재 효과:{' '}
-              <Text style={styles.currentValue}>
-                {current ? `${effectIcon(current, itemByType.get(current))} ${effectName(current, itemByType.get(current))}` : '없음 (기본 행성)'}
-              </Text>
+              현재 표면:{' '}
+              <Text style={styles.currentValue}>{sf.current ? `${sf.icon(sf.current)} ${sf.name(sf.current)}` : '기본 표면'}</Text>
+              {'  ·  '}효과:{' '}
+              <Text style={styles.currentValue}>{fx.current ? `${fx.icon(fx.current)} ${fx.name(fx.current)}` : '없음'}</Text>
             </Text>
 
             <View style={styles.divider} />
-            <Text style={styles.sectionTitle}>효과 고르기</Text>
-            {types.length === 0 && !error ? <Text style={styles.empty}>상점에 행성 효과가 아직 없어요.</Text> : null}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-              <EffectChip
-                testID="decorator-effect-none"
-                icon="🪐"
-                name="효과 없음"
-                status={current === null ? '사용 중' : '기본 행성'}
-                selected={selected === null}
-                onPress={() => setChosen(null)}
+            <View style={styles.categoryRow}>
+              {(['surface', 'effect'] as const).map((c) => (
+                <TouchableOpacity
+                  key={c}
+                  testID={`decorator-category-${c}`}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: category === c }}
+                  onPress={() => {
+                    setCategory(c);
+                    setNotice(null);
+                  }}
+                  style={[styles.category, category === c && styles.categoryActive]}>
+                  <Text style={[styles.categoryText, category === c && styles.categoryTextActive]}>
+                    {c === 'surface' ? '표면 (행성 표면)' : '효과 (행성 주변)'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {category === 'surface' ? (
+              <KindPanel
+                state={sf}
+                coins={coins}
+                busy={busy}
+                notice={notice}
+                onBuy={buy}
+                onApply={(t) => {
+                  if (busy) return;
+                  const item = t ? sf.itemByType.get(t) : undefined;
+                  run(
+                    () => applyPlanetSurface(entry.id, item?.id ?? null),
+                    t ? `${sf.icon(t)} ${sf.name(t)}을(를) 적용했어요.` : '표면을 해제했어요. 기본 표면으로 돌아갔어요.'
+                  );
+                }}
               />
-              {types.map((t) => {
-                const item = itemByType.get(t);
-                return (
-                  <EffectChip
-                    key={t}
-                    testID={`decorator-effect-${t}`}
-                    icon={effectIcon(t, item)}
-                    name={effectName(t, item)}
-                    status={
-                      current === t
-                        ? '적용 중'
-                        : left(t) > 0
-                          ? `남은 ${left(t)}개`
-                          : quantity(t) > 0
-                            ? '모두 사용 중'
-                            : `🔒 🪙 ${item?.price ?? ''}`
-                    }
-                    locked={!canApply(t)}
-                    selected={selected === t}
-                    onPress={() => setChosen(t)}
-                  />
-                );
-              })}
-            </ScrollView>
-            {selected && !canApply(selected) ? (
-              <Text style={styles.hint} testID="decorator-hint">
-                {quantity(selected) > 0
-                  ? `가진 ${effectName(selected, selectedItem)} ${quantity(selected)}개를 모두 다른 행성에 쓰고 있어요. 하나 더 사면 이 행성에도 적용할 수 있어요.`
-                  : '아직 가지고 있지 않은 효과예요. 미리보기만 할 수 있어요.'}
-              </Text>
             ) : (
-              <Text style={styles.hint} testID="decorator-hint">
-                효과 1개로 행성 1개를 꾸밀 수 있어요. 해제하거나 다른 효과로 바꾸면 그 1개는 다시 쓸 수 있어요. 행성의 색과 무늬는 그대로예요.
-              </Text>
+              <KindPanel
+                state={fx}
+                coins={coins}
+                busy={busy}
+                notice={notice}
+                onBuy={buy}
+                onApply={(t) => {
+                  if (busy) return;
+                  const item = t ? fx.itemByType.get(t) : undefined;
+                  run(
+                    () => applyPlanetEffect(entry.id, item?.id ?? null),
+                    t ? `${fx.icon(t)} ${fx.name(t)}를 적용했어요.` : '효과를 해제했어요. 기본 행성으로 돌아갔어요.'
+                  );
+                }}
+              />
             )}
-
-            <TouchableOpacity
-              testID="decorator-primary"
-              accessibilityLabel={primary.label}
-              disabled={primary.disabled || busy}
-              onPress={primary.onPress}
-              style={[styles.button, primary.ghost && styles.buttonGhost, primary.disabled && styles.buttonDisabled]}>
-              {busy ? (
-                <ActivityIndicator size="small" color="#000" />
-              ) : (
-                <Text style={[styles.buttonText, primary.disabled && styles.buttonTextDisabled]}>{primary.label}</Text>
-              )}
-            </TouchableOpacity>
-            {current && selected !== null && !busy ? (
-              <TouchableOpacity testID="decorator-remove" onPress={() => apply(null)} style={styles.removeLink} hitSlop={8}>
-                <Text style={styles.removeText}>효과 해제</Text>
-              </TouchableOpacity>
-            ) : null}
-            {notice ? (
-              <Text style={styles.notice} testID="decorator-notice">
-                ✓ {notice}
-              </Text>
-            ) : null}
           </ScrollView>
         )}
       </View>
@@ -269,43 +286,167 @@ function DecoratorSheet({ onClose, diaryId, effect }: Omit<Props, 'visible'>) {
   );
 }
 
+/** 한 카테고리(표면 또는 효과)의 고르기 줄 + 안내 + 큰 버튼 */
+function KindPanel<T extends string>({
+  state,
+  coins,
+  busy,
+  notice,
+  onApply,
+  onBuy,
+}: {
+  state: KindState<T>;
+  coins: number | null;
+  busy: boolean;
+  notice: string | null;
+  onApply: (t: T | null) => void;
+  onBuy: (item: ShopItem) => void;
+}) {
+  const { kind, types, current, selected, setChosen, quantity, left, canApply, name, icon, itemByType } = state;
+  const { error } = useShop();
+  const selectedItem = selected ? itemByType.get(selected) : undefined;
+
+  // 아래 큰 버튼 하나: 고른 값·현재 값·보유 여부에 따라 바뀐다
+  let primary: { label: string; disabled: boolean; ghost?: boolean; onPress: () => void };
+  if (selected && !canApply(selected)) {
+    const price = selectedItem?.price ?? 0;
+    const enough = (coins ?? 0) >= price;
+    primary =
+      selectedItem?.on_sale === false
+        ? { label: `판매 종료된 ${kind.noun}이에요`, disabled: true, onPress: () => {} }
+        : {
+            label: enough ? `🪙 ${price}에 구매하기` : '코인 부족',
+            disabled: !enough,
+            onPress: () => {
+              if (selectedItem) onBuy(selectedItem);
+            },
+          };
+  } else if (selected === current) {
+    primary = { label: current ? '적용 중' : `${kind.noneLabel} 사용 중`, disabled: true, onPress: () => {} };
+  } else if (!selected) {
+    primary = { label: `${kind.noun} 해제`, disabled: false, ghost: true, onPress: () => onApply(null) };
+  } else {
+    primary = { label: current ? `이 ${kind.noun}으로 변경하기` : '적용하기', disabled: false, onPress: () => onApply(selected) };
+  }
+
+  return (
+    <View testID={`decorator-panel-${kind.category}`}>
+      {types.length === 0 && !error ? <Text style={styles.empty}>상점에 행성 {kind.noun}이 아직 없어요.</Text> : null}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        <EffectChip
+          testID={`decorator-${kind.category}-none`}
+          icon="🪐"
+          name={kind.noneLabel}
+          status={current === null ? '사용 중' : kind.noneStatus}
+          selected={selected === null}
+          onPress={() => setChosen(null)}
+        />
+        {types.map((t) => {
+          const item = itemByType.get(t);
+          return (
+            <EffectChip
+              key={t}
+              testID={`decorator-${kind.category}-${t}`}
+              icon={icon(t)}
+              name={name(t)}
+              status={
+                current === t
+                  ? '적용 중'
+                  : left(t) > 0
+                    ? `남은 ${left(t)}개`
+                    : quantity(t) > 0
+                      ? '모두 사용 중'
+                      : `🔒 🪙 ${item?.price ?? ''}`
+              }
+              locked={!canApply(t)}
+              selected={selected === t}
+              onPress={() => setChosen(t)}
+            />
+          );
+        })}
+      </ScrollView>
+      {selected && !canApply(selected) ? (
+        <Text style={styles.hint} testID="decorator-hint">
+          {quantity(selected) > 0
+            ? `가진 ${name(selected)} ${quantity(selected)}개를 모두 다른 행성에 쓰고 있어요. 하나 더 사면 이 행성에도 적용할 수 있어요.`
+            : `아직 가지고 있지 않은 ${kind.noun}이에요. 미리보기만 할 수 있어요.`}
+        </Text>
+      ) : (
+        <Text style={styles.hint} testID="decorator-hint">
+          {kind.hint}
+        </Text>
+      )}
+
+      <TouchableOpacity
+        testID="decorator-primary"
+        accessibilityLabel={primary.label}
+        disabled={primary.disabled || busy}
+        onPress={primary.onPress}
+        style={[styles.button, primary.ghost && styles.buttonGhost, primary.disabled && styles.buttonDisabled]}>
+        {busy ? (
+          <ActivityIndicator size="small" color="#000" />
+        ) : (
+          <Text style={[styles.buttonText, primary.disabled && styles.buttonTextDisabled]}>{primary.label}</Text>
+        )}
+      </TouchableOpacity>
+      {current && selected !== null && !busy ? (
+        <TouchableOpacity testID="decorator-remove" onPress={() => onApply(null)} style={styles.removeLink} hitSlop={8}>
+          <Text style={styles.removeText}>{kind.noun} 해제</Text>
+        </TouchableOpacity>
+      ) : null}
+      {notice ? (
+        <Text style={styles.notice} testID="decorator-notice">
+          ✓ {notice}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 function PlanetList({
   entries,
-  effect,
-  itemByType,
+  target,
+  fx,
+  sf,
   onPick,
 }: {
   entries: DiaryEntry[];
-  effect: SpecialType | null;
-  itemByType: Map<SpecialType, ShopItem>;
+  target: { icon: string; name: string } | null;
+  fx: KindState<SpecialType>;
+  sf: KindState<SurfaceStyle>;
   onPick: (id: string) => void;
 }) {
-  const item = effect ? itemByType.get(effect) : undefined;
   return (
     <ScrollView style={styles.body} showsVerticalScrollIndicator={false} testID="decorator-list">
       <Text style={styles.sectionTitle}>
-        {effect ? `${effectIcon(effect, item)} ${effectName(effect, item)}를 적용할 행성을 골라 주세요` : '꾸밀 행성을 골라 주세요'}
+        {target ? `${target.icon} ${target.name}을(를) 적용할 행성을 골라 주세요` : '꾸밀 행성을 골라 주세요'}
       </Text>
       {entries.length === 0 ? <Text style={styles.empty}>아직 일기가 없어요. 일기를 쓰면 행성이 생겨요.</Text> : null}
-      {entries.map((e) => (
-        <TouchableOpacity
-          key={e.id}
-          testID={`decorator-planet-${e.id}`}
-          style={styles.planetRow}
-          onPress={() => onPick(e.id)}
-          accessibilityLabel={`${dateLabel(e.createdAt)} 행성 고르기`}>
-          <View style={[styles.dot, { backgroundColor: e.color }]} />
-          <View style={styles.planetRowText}>
-            <Text style={styles.planetDate}>{dateLabel(e.createdAt)}</Text>
-            <Text style={styles.planetSnippet} numberOfLines={1}>
-              {e.text}
+      {entries.map((e) => {
+        const parts = [
+          e.surface ? `${sf.icon(e.surface)} ${SURFACE_STYLES[e.surface].name}` : '',
+          e.effect ? `${fx.icon(e.effect)} ${EFFECT_LABELS[e.effect].name.replace(' 효과', '')}` : '',
+        ].filter(Boolean);
+        return (
+          <TouchableOpacity
+            key={e.id}
+            testID={`decorator-planet-${e.id}`}
+            style={styles.planetRow}
+            onPress={() => onPick(e.id)}
+            accessibilityLabel={`${dateLabel(e.createdAt)} 행성 고르기`}>
+            <View style={[styles.dot, { backgroundColor: e.color }]} />
+            <View style={styles.planetRowText}>
+              <Text style={styles.planetDate}>{dateLabel(e.createdAt)}</Text>
+              <Text style={styles.planetSnippet} numberOfLines={1}>
+                {e.text}
+              </Text>
+            </View>
+            <Text style={[styles.planetEffect, parts.length > 0 && styles.planetEffectOn]} numberOfLines={2}>
+              {parts.length ? parts.join('\n') : '기본'}
             </Text>
-          </View>
-          <Text style={[styles.planetEffect, e.effect && styles.planetEffectOn]}>
-            {e.effect ? `${effectIcon(e.effect, itemByType.get(e.effect))} ${EFFECT_LABELS[e.effect].name.replace(' 효과', '')}` : '기본'}
-          </Text>
-        </TouchableOpacity>
-      ))}
+          </TouchableOpacity>
+        );
+      })}
     </ScrollView>
   );
 }
@@ -424,6 +565,12 @@ const styles = StyleSheet.create({
   removeLink: { alignSelf: 'center', marginTop: 12, paddingHorizontal: 12, paddingVertical: 4 },
   removeText: { color: '#F66C9E', fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' },
   notice: { color: '#7CE0B0', fontSize: 13, textAlign: 'center', marginTop: 12, marginBottom: 8 },
+  // [2026-11-21] 표면 / 효과 카테고리 탭
+  categoryRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  category: { flex: 1, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#3A3A4A', alignItems: 'center' },
+  categoryActive: { backgroundColor: '#FED240', borderColor: '#FED240' },
+  categoryText: { color: '#c8c8d8', fontSize: 13, fontWeight: 'bold' },
+  categoryTextActive: { color: '#000' },
   planetRow: {
     flexDirection: 'row',
     alignItems: 'center',

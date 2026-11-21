@@ -20,6 +20,8 @@ from app.schemas.shop import (
     EquipRequest,
     PlanetEffectRequest,
     PlanetEffectResult,
+    PlanetSurfaceRequest,
+    PlanetSurfaceResult,
     PurchaseRequest,
     PurchaseResult,
     ShopItem,
@@ -31,6 +33,9 @@ router = APIRouter(tags=["shop"])
 # DB 함수가 raise 하는 메시지 → (상태 코드, 화면에 보여줄 문장)
 # (위에서부터 찾는다: effect_not_owned 가 not_owned 를 포함하므로 더 긴 이름을 먼저 둔다)
 _DB_ERRORS = {
+    # [2026-11-21] 표면 스타일 (surface_not_owned 가 not_owned 를 포함하므로 위에 둔다)
+    "surface_not_owned": (403, "가지고 있는 행성 표면이 아닙니다. 상점에서 먼저 구매해 주세요."),
+    "surface_all_used": (409, "이 표면을 모두 다른 행성에 쓰고 있어요. 하나 더 구매하거나 다른 행성에서 해제해 주세요."),
     "effect_not_owned": (403, "가지고 있는 행성 효과가 아닙니다. 상점에서 먼저 구매해 주세요."),
     "effect_all_used": (409, "이 효과를 모두 다른 행성에 쓰고 있어요. 하나 더 구매하거나 다른 행성에서 해제해 주세요."),
     "diary_not_found": (404, "내 일기의 행성이 아닙니다."),
@@ -42,7 +47,11 @@ _DB_ERRORS = {
 
 # 행성 효과 아이템의 칸(slot)과 앱이 그릴 수 있는 효과 종류
 PLANET_EFFECT_SLOT = "planet_effect"
-SPECIAL_TYPES = ("ocean", "cloud", "crystal", "nebula", "lava")
+# [2026-11-21] 신규 3종(천상의 고리·공전하는 위성·별똥별) 추가. 기존 5종 id 는 그대로.
+SPECIAL_TYPES = ("ocean", "cloud", "crystal", "nebula", "lava", "celestial_ring", "orbiting_moons", "shooting_stars")
+# [2026-11-21] 행성 표면 아이템의 칸(slot)과 앱이 그릴 수 있는 표면 스타일
+PLANET_SURFACE_SLOT = "planet_surface"
+SURFACE_STYLES = ("opal_glass", "pastel_cloud", "pearl_silk", "crystal_prism", "aurora_ribbon")
 _MISSING_TABLE_CODES = ("PGRST205", "42P01")
 
 _MISSING_TABLE_HINT = (
@@ -94,12 +103,13 @@ def get_config(key: str):
 
 def reset_user_shop(user_id: str) -> int:
     """코인·보유 아이템·코인 기록을 지우고 시작 코인으로 새 지갑을 만든다 (테스트용).
-    산 효과가 없어지므로 행성에 적용한 효과도 함께 지운다(행성 본체·일기는 그대로)."""
-    try:
-        supabase.table("planet_effects").delete().eq("user_id", user_id).execute()
-    except APIError as e:
-        if e.code not in _MISSING_TABLE_CODES:  # 행성 효과 마이그레이션 전이면 지울 것도 없다
-            raise
+    산 효과·표면이 없어지므로 행성에 적용한 효과·표면도 함께 지운다(행성 본체·일기는 그대로)."""
+    for table in ("planet_effects", "planet_surfaces"):
+        try:
+            supabase.table(table).delete().eq("user_id", user_id).execute()
+        except APIError as e:
+            if e.code not in _MISSING_TABLE_CODES:  # 마이그레이션 전이면 지울 것도 없다
+                raise
     supabase.table("user_items").delete().eq("user_id", user_id).execute()
     supabase.table("coin_logs").delete().eq("user_id", user_id).execute()
     supabase.table("wallets").delete().eq("user_id", user_id).execute()
@@ -214,3 +224,54 @@ def set_planet_effect(
         rows = supabase.table("items").select("effect").eq("id", item_id).execute().data
         effect = special_of(rows[0].get("effect")) if rows else None
     return PlanetEffectResult(diary_id=str(diary_id), item_id=item_id, effect=effect)
+
+
+# --- 행성 표면 스타일 (2026-11-21) ---------------------------------------------------------
+# 행성 효과와 같은 규칙(소모품, 1개 = 행성 1개)이고 표(planet_surfaces)·DB 함수(apply_planet_surface)만 따로다.
+# 행성 하나에 표면 하나 + 효과 하나를 따로 고를 수 있다. 감정 분석 결과·좌표·크기와 무관하다.
+
+
+def surface_of(effect: dict | None) -> str | None:
+    """아이템 effect JSON → 화면이 그릴 표면 스타일. 표면 아이템이 아니거나 모르는 값이면 None."""
+    if not isinstance(effect, dict) or effect.get("type") != PLANET_SURFACE_SLOT:
+        return None
+    surface = effect.get("surface")
+    return surface if surface in SURFACE_STYLES else None
+
+
+def applied_surfaces(user_id: str) -> dict[str, dict]:
+    """내 행성에 적용한 표면: {diary_id: {"item_id", "surface"}}.
+    표면 표가 아직 없으면(마이그레이션 전, 예: 운영 DB) 빈 값 → 모든 행성이 기본 표면(기존과 같음)."""
+    try:
+        rows = supabase.table("planet_surfaces").select("diary_id, item_id").eq("user_id", user_id).execute().data
+        if not rows:
+            return {}
+        items = supabase.table("items").select("id, effect").eq("slot", PLANET_SURFACE_SLOT).execute().data
+    except APIError as e:
+        if e.code in _MISSING_TABLE_CODES:
+            return {}
+        raise
+    surface_by_item = {i["id"]: surface_of(i.get("effect")) for i in items}
+    result = {}
+    for row in rows:
+        surface = surface_by_item.get(row["item_id"])
+        if surface:
+            result[str(row["diary_id"])] = {"item_id": row["item_id"], "surface": surface}
+    return result
+
+
+@router.put("/diaries/{diary_id}/surface", response_model=PlanetSurfaceResult)
+def set_planet_surface(
+    diary_id: UUID, payload: PlanetSurfaceRequest, user_id: str = Depends(get_current_user_id)
+):
+    """내 일기 행성에 산 표면을 적용(또는 다른 표면으로 변경). item_id 가 null 이면 해제(기본 표면).
+    일기 주인·남은 개수 확인과 저장은 DB 함수가 한 번에 한다."""
+    data = call_db_function(
+        "apply_planet_surface", {"p_user": user_id, "p_diary": str(diary_id), "p_item": payload.item_id}
+    )
+    item_id = (data or {}).get("item_id")
+    surface = None
+    if item_id:
+        rows = supabase.table("items").select("effect").eq("id", item_id).execute().data
+        surface = surface_of(rows[0].get("effect")) if rows else None
+    return PlanetSurfaceResult(diary_id=str(diary_id), item_id=item_id, surface=surface)

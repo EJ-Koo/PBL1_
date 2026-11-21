@@ -8,7 +8,7 @@ import type { DiaryEntry } from '@/store/diary-context';
 export function SearchResultPlanet({ entry, active }: { entry: DiaryEntry; active: boolean }) {
   return <View pointerEvents="none" accessible={false}
     style={{ position: 'relative', zIndex: 1, width: 88, height: 68, flexShrink: 0, overflow: 'hidden' }}>
-    {active && <PlanetPreview id={entry.id} visual={entry.planet} effect={entry.effect}
+    {active && <PlanetPreview id={entry.id} visual={entry.planet} effect={entry.effect} surface={entry.surface}
       radius={PLANET_BASE_RADIUS * planetScaleForText(entry.text)} quality="medium" />}
   </View>;
 }

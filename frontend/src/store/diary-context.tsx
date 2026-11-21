@@ -27,6 +27,7 @@ import {
 } from '@/lib/api';
 import { fallbackVisual, type PlanetVisual } from '@/lib/planet-visual';
 import { asDiaryTopic, asSpecialType, type DiaryTopic, type SpecialType } from '@/lib/special-planet';
+import { asSurfaceStyle, type SurfaceStyle } from '@/lib/surface-style';
 
 export type Visibility = 'public' | 'friends' | 'private';
 
@@ -51,6 +52,8 @@ export type DiaryEntry = {
   planet: PlanetVisual;
   /** [2026-11-12] 사용자가 상점에서 산 효과를 직접 적용한 특수 효과. 없으면 null(일반 행성). 본체(색·무늬·크기·위치)와 무관. */
   effect: SpecialType | null;
+  /** [2026-11-21] 사용자가 상점에서 산 표면 스타일을 직접 적용한 것. 없으면 null(기본 스타일 = 기존 행성 그대로). 감정 색·무늬·크기·위치와 무관. */
+  surface: SurfaceStyle | null;
   /** [2026-11-12] 일기를 쓸 때 고른 주제(선택). 없으면 null. 별자리 해금·표시에만 쓴다(좌표·외형과 무관). */
   topic: DiaryTopic | null;
 };
@@ -98,6 +101,8 @@ type DiaryContextValue = {
   isOwnEntry: (id: string) => boolean;
   /** [2026-11-12] 서버에 효과 적용·해제가 저장된 뒤 화면의 행성 효과를 바로 바꾼다(상점 store가 부른다). */
   setEntryEffect: (id: string, effect: SpecialType | null) => void;
+  /** [2026-11-21] 서버에 표면 스타일 적용·해제가 저장된 뒤 화면의 행성 표면을 바로 바꾼다(상점 store가 부른다). */
+  setEntrySurface: (id: string, surface: SurfaceStyle | null) => void;
   isEditableToday: (id: string) => boolean;
   groups: ApiGroup[];
   createGroup: (name: string) => Promise<SaveResult>;
@@ -165,6 +170,7 @@ export function toEntry(diary: ApiDiary, colorIndex: number, star?: ApiStar): Di
     position: star ? [star.x, star.y, star.z] : fallbackPosition(colorIndex),
     planet: starVisual(star),
     effect: asSpecialType(star?.effect),
+    surface: asSurfaceStyle(star?.surface),
     // [2026-11-13] 주제: 일기 행(diaries.topic)이 먼저, 없으면 별 목록(예전 AI 저장소 보충값)
     topic: asDiaryTopic(diary.topic) ?? asDiaryTopic(star?.topic),
   };
@@ -186,6 +192,7 @@ function groupStarToEntry(g: ApiGroupStar): DiaryEntry {
     position: [g.x, g.y, g.z],
     planet,
     effect: asSpecialType(g.effect),
+    surface: asSurfaceStyle(g.surface),
     // 그룹 우주는 별자리 보기를 쓰지 않으므로 주제가 필요 없다
     topic: null,
   };
@@ -431,7 +438,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
             setEntries((prev) =>
               prev.map((e) =>
                 e.id === id
-                  ? { ...e, color: planet.base_color, brightness: star.brightness, planet, effect: asSpecialType(star.effect) }
+                  ? { ...e, color: planet.base_color, brightness: star.brightness, planet, effect: asSpecialType(star.effect), surface: asSurfaceStyle(star.surface) }
                   : e
               )
             );
@@ -449,6 +456,8 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
       isOwnEntry: (id: string) => entries.some((e) => e.id === id),
       setEntryEffect: (id: string, effect: SpecialType | null) =>
         setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, effect } : e))),
+      setEntrySurface: (id: string, surface: SurfaceStyle | null) =>
+        setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, surface } : e))),
       isEditableToday: (id: string) => {
         const entry = entries.find((e) => e.id === id);
         return entry ? isSameDay(entry.createdAt) : false;

@@ -21,6 +21,9 @@ class Star(BaseModel):
     # [ADDED 2026-11-12] 사용자가 이 행성에 적용한 특수 효과(ocean·cloud·crystal·nebula·lava). 없으면 None(일반 행성).
     effect: str | None = None
     effect_item_id: str | None = None
+    # [2026-11-21] 사용자가 적용한 표면 스타일(planet_surfaces). 없으면 null = 기본 표면. 기존 칸은 그대로(추가만).
+    surface: str | None = None
+    surface_item_id: str | None = None
     # [ADDED 2026-11-12] 사용자가 일기를 쓸 때 고른 주제(선택). 별자리 해금·표시에만 쓴다.
     # DB가 아니라 AI 서비스 저장값을 읽어 붙인다. 고르지 않았거나 AI 서비스가 없으면 None.
     topic: str | None = None

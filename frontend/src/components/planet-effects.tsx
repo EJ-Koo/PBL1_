@@ -20,22 +20,34 @@ import {
   type InstancedMesh,
   type Points,
   type ShaderMaterial,
-  type Vector2,
 } from 'three';
 
-import { seededRandoms, type PlanetQuality } from '@/lib/planet-visual';
-import { SPECIAL_EFFECT_SETTINGS, type EffectTier, type SpecialType } from '@/lib/special-planet';
+import { seededRandoms } from '@/lib/planet-visual';
+import { SPECIAL_EFFECT_SETTINGS, isNewSpecialType, type ClassicSpecialType, type EffectTier } from '@/lib/special-planet';
+import { NewSpecialEffect } from './planet-effects-new';
+// [2026-11-21] 기존 5종과 신규 3종이 함께 쓰는 값은 planet-effects-shared.ts 로 옮겼다(내용 그대로). 이 파일에서 그대로 다시 내보낸다.
+import {
+  EFFECT_TIERS,
+  FADE_GLSL,
+  LIGHT_DIR_GLSL,
+  NO_DIM,
+  effectColors,
+  type EffectProps,
+} from './planet-effects-shared';
+export {
+  EFFECT_TIERS,
+  FADE_GLSL,
+  LIGHT_DIR_GLSL,
+  NO_DIM,
+  effectColors,
+  type EffectPalette,
+  type EffectProps,
+  type SharedUniforms,
+} from './planet-effects-shared';
 
-/** 행성 셰이더와 같은 빛 방향(화면 기준 오른쪽 위, 옆에서 비스듬히) */
-export const LIGHT_DIR_GLSL = 'const vec3 LIGHT_DIR = vec3(0.88, 0.36, 0.31);';
 
-/** 화면 전체가 함께 쓰는 값(universe-scene의 SCENE_UNIFORMS): 선택 중 여부, 먼 행성 어둡게 */
-export type SharedUniforms = { uFocus: { value: number }; uDepthFade: { value: Vector2 } };
 
-/** 효과 단계: 카메라 거리·선택에 따라 UniverseScene이 주기적으로 정한다(행성 id → 단계). 없으면 0(멀리). */
-export const EFFECT_TIERS = new Map<string, EffectTier>();
 
-export type EffectPalette = { deep: string; base: string; tone: string; light: string; accent: string };
 
 // 색만 더한다(캔버스 알파는 그대로). 투명 캔버스에서 테두리가 검게 보이지 않게(universe-scene 대기막과 같은 방식).
 const ADDITIVE = {
@@ -77,21 +89,6 @@ const NOISE_GLSL = `
   }
   float fbm3(vec3 p) {
     return (0.5 * vnoise(p) + 0.25 * vnoise(p * 2.03 + 1.7) + 0.125 * vnoise(p * 4.1 + 9.2)) / 0.875;
-  }
-`;
-
-// 선택 강조·먼 행성 어둡게(행성 본체와 같은 규칙)
-// [2026-11-13] uDim: 별자리 보기에서 별자리 밖 행성을 어둡게 할 때 본체(universe-scene uDim)와 같은 값으로
-// 막·판·궤도·수정·입자를 모두 함께 어둡게 한다(0이면 예전과 똑같다). 효과 저장값과는 무관한 화면 처리.
-const FADE_GLSL = `
-  uniform float uHighlight;
-  uniform float uFocus;
-  uniform vec2 uDepthFade;
-  uniform float uDim;
-  float sceneFade(float viewZ) {
-    return (1.0 - 0.45 * smoothstep(uDepthFade.x, uDepthFade.y, -viewZ))
-         * (1.0 + 0.6 * uHighlight) * (1.0 - 0.35 * uFocus * (1.0 - uHighlight))
-         * (1.0 - uDim);
   }
 `;
 
@@ -367,7 +364,7 @@ const PARTICLE_FRAGMENT = `
   }
 `;
 
-const MOTION: Record<SpecialType, string> = {
+const MOTION: Record<ClassicSpecialType, string> = {
   // 물방울: 행성 둘레의 넓은 띠를 천천히 돌며 위아래로 출렁인다
   ocean: `
     float ang = aSeed.x * TAU + uTime * 0.18 * (0.6 + aSeed.y);
@@ -406,54 +403,23 @@ const MOTION: Record<SpecialType, string> = {
     size = 1.3 - 0.7 * life;`,
 };
 
-const PARTICLE_COUNT: Record<SpecialType, number> = { ocean: 28, cloud: 16, crystal: 18, nebula: 22, lava: 30 };
-const PARTICLE_SIZE: Record<SpecialType, number> = { ocean: 0.05, cloud: 0.045, crystal: 0.06, nebula: 0.05, lava: 0.055 };
+const PARTICLE_COUNT: Record<ClassicSpecialType, number> = { ocean: 28, cloud: 16, crystal: 18, nebula: 22, lava: 30 };
+const PARTICLE_SIZE: Record<ClassicSpecialType, number> = { ocean: 0.05, cloud: 0.045, crystal: 0.06, nebula: 0.05, lava: 0.055 };
 const CRYSTAL_COUNT = 7;
 
-/** 대표색 계열에서 효과 색을 고른다(색상은 대표색 그대로, 밝기·채도만 조절). */
-function effectColors(p: EffectPalette) {
-  const light = new Color(p.light);
-  const base = new Color(p.base);
-  const accent = new Color(p.accent);
-  const white = new Color('#ffffff');
-  const hsl = { h: 0, s: 0, l: 0 };
-  base.getHSL(hsl);
-  // 에너지 색: 대표색의 색상 그대로, 더 밝고 선명하게
-  const hot = new Color().setHSL(hsl.h, Math.min(1, Math.max(hsl.s, 0.25) * 1.15), Math.min(0.78, Math.max(hsl.l, 0.5) + 0.12));
-  return {
-    light,
-    base,
-    accent,
-    hot,
-    water: light.clone().lerp(white, 0.35),
-    cloud: light.clone().lerp(white, 0.6),
-    deep: new Color(p.deep),
-    crystalA: light.clone().lerp(white, 0.45),
-    crystalB: base.clone().lerp(light, 0.5),
-  };
+/** 특수 행성 효과 하나. Planet의 위치·기울기 그룹 안에 둔다(자전 그룹 밖 → 효과는 자기 속도로 움직인다). */
+
+/**
+ * [2026-11-21] 효과 종류에 따라 기존 5종(ClassicEffect, 아래 코드 그대로) 또는 신규 3종(planet-effects-new.tsx)을 그린다.
+ * 훅이 없는 갈래 함수라 종류마다 컴포넌트가 따로다(Planet 이 효과를 바꾸면 key 로 통째로 내리고 새로 만든다).
+ */
+export function SpecialEffect(props: EffectProps) {
+  if (isNewSpecialType(props.type)) return <NewSpecialEffect {...props} type={props.type} />;
+  return <ClassicEffect {...props} type={props.type} />;
 }
 
-type EffectProps = {
-  id: string;
-  type: SpecialType;
-  radius: number;
-  palette: EffectPalette;
-  intensity: number;
-  speed: number;
-  quality: PlanetQuality;
-  /** 행성 선택 강조 값(0~1, Planet이 매 프레임 갱신) */
-  highlight: { current: number };
-  /** [2026-11-13] 어둡게 할 정도(0~1, Planet 본체와 같은 값. 별자리 밖 행성). 없으면 0 */
-  dim?: { current: number };
-  shared: SharedUniforms;
-  /** 단계 고정(미리보기). 없으면 선택 여부·EFFECT_TIERS(거리)로 정한다. */
-  fixedTier?: EffectTier;
-};
-
-/** 특수 행성 효과 하나. Planet의 위치·기울기 그룹 안에 둔다(자전 그룹 밖 → 효과는 자기 속도로 움직인다). */
-const NO_DIM = { current: 0 };
-
-export function SpecialEffect({ id, type, radius, palette, intensity, speed, quality, highlight, dim = NO_DIM, shared, fixedTier }: EffectProps) {
+/** 기존 5종(바다·구름·수정·성운·용암). [2026-11-21] 이름만 SpecialEffect → ClassicEffect, 내용은 그대로. */
+function ClassicEffect({ id, type, radius, palette, intensity, speed, quality, highlight, dim = NO_DIM, shared, fixedTier }: EffectProps & { type: ClassicSpecialType }) {
   // 효과마다 재질은 최대 두 개(막·판·궤도) + 입자 하나
   const mat0 = useRef<ShaderMaterial>(null);
   const mat1 = useRef<ShaderMaterial>(null);

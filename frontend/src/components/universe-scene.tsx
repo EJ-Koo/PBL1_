@@ -51,6 +51,16 @@ import {
 } from '@/lib/planet-visual';
 import { SPECIAL_EFFECT_SETTINGS, effectToDraw, type EffectTier, type SpecialType } from '@/lib/special-planet';
 import {
+  SURFACE_OVERLAY_MAX,
+  SURFACE_STYLE_SETTINGS,
+  SURFACE_TIERS,
+  surfaceTiers,
+  surfaceToDraw,
+  type SurfaceStyle,
+  type SurfaceTier,
+} from '@/lib/surface-style';
+import { buildSurfaceFragmentShader } from '@/lib/surface-shader';
+import {
   CONSTELLATION_CONFIG,
   arriveDuration,
   drawableConnections,
@@ -499,6 +509,8 @@ function Planet({
   effectIntensity = SPECIAL_EFFECT_SETTINGS.intensity,
   effectSpeed = 1,
   effectTier,
+  surface = null,
+  surfaceTier,
   shared = SCENE_UNIFORMS,
   onPress,
   onPressStart,
@@ -524,6 +536,13 @@ function Planet({
   effectSpeed?: number;
   /** 효과 단계를 고정한다(미리보기: 2 = 전부). 없으면 우주 화면의 거리별 단계(LOD)를 따른다. */
   effectTier?: EffectTier;
+  /**
+   * [2026-11-21] 사용자가 적용한 표면 스타일(상점). null 이면 기본 스타일 = 기존 셰이더 그대로.
+   * 감정 본체가 만든 색(col)을 입력으로 재질(광택·빛결)만 바꾼다. 크기·위치·감정 색 줄은 그대로다.
+   */
+  surface?: SurfaceStyle | null;
+  /** 표면 단계를 고정한다(미리보기: 2 = 전부). 없으면 우주 화면의 거리별 단계(SURFACE_TIERS)를 따른다. */
+  surfaceTier?: SurfaceTier;
   /** 화면 공통 값(선택 중 어둡게, 먼 행성 어둡게). 미리보기는 자기 값을 따로 쓴다. */
   shared?: SharedUniforms;
   onPress?: () => void;
@@ -562,12 +581,28 @@ function Planet({
     [palette]
   );
 
+  // [2026-11-21] 표면 스타일: 없으면 기존 셰이더 문자열 그대로(기존 행성과 완전히 같다)
+  const fragmentShader = useMemo(
+    () => buildSurfaceFragmentShader(PLANET_FRAGMENT_SHADER, surface, SURFACE_OVERLAY_MAX),
+    [surface]
+  );
+
   const bodyUniforms = useMemo(() => {
     const style = PATTERN_STYLE[visual.pattern];
     // 소용돌이 위치: 중위도(위도 ±12~35도)의 한 점. 절반 정도의 행성은 소용돌이를 약하게만 둔다(행성마다 변화).
     const lat = (0.2 + r6 * 0.4) * (r7 < 0.5 ? -1 : 1);
     const lon = r8 * Math.PI * 2;
+    // 표면 스타일 값(스타일이 있을 때만). 색은 감정 본체에서 온다: 보조 감정 색(대표색과 어울리게 조정한 값)
+    const surfaceUniforms: Record<string, { value: unknown }> = surface
+      ? {
+          uTime: { value: 0 },
+          uSurfaceTier: { value: 0 },
+          uSurfaceAmount: { value: SURFACE_STYLE_SETTINGS.amount },
+          uAccentA: { value: new Color(effectPalette.accent) },
+        }
+      : {};
     return {
+      ...surfaceUniforms,
       uStrip: { value: bandTexture },
       uLight: { value: new Color(palette.light) },
       // 각성이 높을수록(소용돌이 무늬) 층이 더 휘어 흐른다
@@ -586,7 +621,7 @@ function Planet({
       uSeed: { value: new Vector3(r0 * 40, r1 * 40, r2 * 40) },
       uDim: { value: 0 },
     };
-  }, [visual, palette, bandTexture, brightness, atmo, atmoColor, shared, r0, r1, r2, r6, r7, r8]);
+  }, [visual, palette, bandTexture, brightness, atmo, atmoColor, shared, r0, r1, r2, r6, r7, r8, surface, effectPalette.accent]);
 
   const ringUniforms = useMemo(
     () => ({
@@ -625,8 +660,20 @@ function Planet({
   // 별자리 보기: 어둡게(서서히), 화면 위치(별자리 자리 ↔ 원래 좌표)
   const dimNow = useRef(0);
   const moved = useRef(false);
+  // [2026-11-21] 표면 단계(0~2, 부드럽게)와 표면 시계. 멀리(0)서는 시계를 멈춰 움직임이 없다.
+  const surfaceTierNow = useRef(0);
+  const surfaceClock = useRef(0);
   useFrame((_, delta) => {
     if (spinRef.current) spinRef.current.rotation.y += delta * spinSpeed;
+    if (surface && bodyMat.current?.uniforms.uSurfaceTier) {
+      // 선택 2 > 별자리 밖(어둡게 함) 0 > 거리별 단계
+      const target = surfaceTier ?? (selected ? 2 : dim > 0 ? 0 : (SURFACE_TIERS.get(id) ?? 0));
+      surfaceTierNow.current += (target - surfaceTierNow.current) * Math.min(1, delta * 3);
+      const t = surfaceTierNow.current;
+      surfaceClock.current += delta * Math.min(Math.max(t, 0), 1);
+      bodyMat.current.uniforms.uSurfaceTier.value = t;
+      bodyMat.current.uniforms.uTime.value = surfaceClock.current;
+    }
     dimNow.current += (dim - dimNow.current) * Math.min(1, delta * 4);
     if (Math.abs(dimNow.current - dim) < 0.001) dimNow.current = dim;
     for (const m of [bodyMat.current, ringMat.current, atmoMat.current]) {
@@ -682,10 +729,11 @@ function Planet({
           <sphereGeometry args={[radius, q.segments, Math.round(q.segments * 0.75)]} />
           <shaderMaterial
             ref={bodyMat}
-            key={quality}
+            // 품질·표면 스타일이 바뀌면 재질을 새로 만든다(셰이더가 다르다)
+            key={`${quality}|${surface ?? 'base'}`}
             uniforms={bodyUniforms}
             vertexShader={PLANET_VERTEX_SHADER}
-            fragmentShader={PLANET_FRAGMENT_SHADER}
+            fragmentShader={fragmentShader}
             defines={{ OCTAVES: q.octaves }}
           />
         </mesh>
@@ -1133,12 +1181,20 @@ export function UniverseScene({
   // 특수 효과 단계(LOD): 0.3초마다 카메라와 특수 행성 사이 거리를 재서, 가까운 순서로 maxNear개까지만 '가까이'(1).
   // 나머지는 '멀리'(0, 바탕 층만 멈춘 채). 선택한 행성(2)은 효과 쪽에서 바로 판단한다. 좌표는 바꾸지 않는다.
   const specialEntries = useMemo(() => entries.filter((e) => effectToDraw(e.effect)), [entries]);
+  // [2026-11-21] 표면 스타일 행성도 같은 방식으로 거리별 단계를 정한다(멀리 0 = 광택만)
+  const surfaceEntries = useMemo(() => entries.filter((e) => surfaceToDraw(e.surface)), [entries]);
   const lodClock = useRef(0);
   const centerRef = useRef<[number, number, number]>([0, 0, 0]);
   useEffect(() => {
     centerRef.current = framing?.center ?? [0, 0, 0];
   }, [framing]);
-  useEffect(() => () => EFFECT_TIERS.clear(), []);
+  useEffect(
+    () => () => {
+      EFFECT_TIERS.clear();
+      SURFACE_TIERS.clear();
+    },
+    []
+  );
 
   // 별자리 이동: 런타임 시계를 올리고 움직이는 행성의 화면 위치를 계산한다(Planet 이 그 위치에 그린다)
   useFrame((_, delta) => {
@@ -1170,16 +1226,18 @@ export function UniverseScene({
       const [cx, cy, cz] = centerRef.current;
       const m = groupRef.current.matrixWorld;
       const tmp = new Vector3();
-      const ranked = specialEntries
-        .map((e) => {
-          // [2026-11-12] 별자리로 옮긴 행성은 지금 화면 위치로 잰다
-          const p = livePosition(runtimeRef.current, e.id);
-          if (p) tmp.set(p.x - cx, p.y - cy, p.z - cz);
-          else tmp.set(e.position[0] - cx, e.position[1] - cy, e.position[2] - cz);
-          tmp.applyMatrix4(m);
-          return { id: e.id, d: tmp.distanceTo(state.camera.position) };
-        })
-        .sort((a, b) => a.d - b.d);
+      const rank = (list: DiaryEntry[]) =>
+        list
+          .map((e) => {
+            // [2026-11-12] 별자리로 옮긴 행성은 지금 화면 위치로 잰다
+            const p = livePosition(runtimeRef.current, e.id);
+            if (p) tmp.set(p.x - cx, p.y - cy, p.z - cz);
+            else tmp.set(e.position[0] - cx, e.position[1] - cy, e.position[2] - cz);
+            tmp.applyMatrix4(m);
+            return { id: e.id, d: tmp.distanceTo(state.camera.position) };
+          })
+          .sort((a, b) => a.d - b.d);
+      const ranked = rank(specialEntries);
       const maxNear = SPECIAL_EFFECT_SETTINGS.maxNear[quality];
       // [2026-11-12] 별자리 전환 중(여러 행성이 움직이는 동안)에는 입자·애니메이션을 잠시 멈춘다(효과의 바탕 층은 그대로 보임)
       const moving = runtimeRef.current.tracks.size > 0;
@@ -1188,6 +1246,12 @@ export function UniverseScene({
         const tier: EffectTier = !moving && i < maxNear && r.d < SPECIAL_EFFECT_SETTINGS.nearDistance ? 1 : 0;
         EFFECT_TIERS.set(r.id, tier);
       });
+      // [2026-11-21] 표면 스타일 단계: 별자리 밖(어둡게 한) 행성·전환 중에는 0(기존 가독성·성능 규칙 우선)
+      SURFACE_TIERS.clear();
+      if (surfaceEntries.length) {
+        const dimmed = constellation ? new Set(surfaceEntries.filter((e) => !memberSet.has(e.id)).map((e) => e.id)) : undefined;
+        for (const [id, tier] of surfaceTiers(rank(surfaceEntries), quality, { moving, dimmed })) SURFACE_TIERS.set(id, tier);
+      }
     }
     const smoothing = 1 - Math.exp(-delta * 9);
     if (groupRef.current) {
@@ -1255,6 +1319,7 @@ export function UniverseScene({
               unread={unreadIds?.includes(entry.id)}
               newStar={entry.id === newStar?.id ? newStar : undefined}
               special={effectToDraw(entry.effect)}
+              surface={surfaceToDraw(entry.surface)}
               runtime={runtimeRef}
               dim={constellation && !memberSet.has(entry.id) ? DIM_OTHERS_LINEAR : 0}
               onPress={() => onStarPress(entry.id)}
@@ -1336,6 +1401,7 @@ export function PlanetPreview({
   visual,
   radius = PLANET_BASE_RADIUS,
   effect,
+  surface = null,
   quality = 'medium',
   zoom = 1,
 }: {
@@ -1344,6 +1410,8 @@ export function PlanetPreview({
   visual: PlanetVisual;
   radius?: number;
   effect: SpecialType | null;
+  /** [2026-11-21] 표면 스타일(없으면 기본). 미리보기는 항상 가장 높은 단계(2)로 그린다. */
+  surface?: SurfaceStyle | null;
   quality?: PlanetQuality;
   zoom?: number;
 }) {
@@ -1360,6 +1428,8 @@ export function PlanetPreview({
           quality={quality}
           special={effectToDraw(effect)}
           effectTier={2}
+          surface={surfaceToDraw(surface)}
+          surfaceTier={2}
           shared={PREVIEW_UNIFORMS}
         />
       </PreviewSpin>
@@ -1389,4 +1459,201 @@ export function PlanetFieldPreview({ entries }: { entries: DiaryEntry[] }) {
     camera={{ fov: CAMERA_FOV, position: [0, 0, 8] }}>
     <PlanetField entries={entries} />
   </Canvas>;
+}
+
+// ---------------------------------------------------------------- 표면 스타일 비교·성능 측정 (개발용 /surface-lab)
+// [ADDED 2026-11-21] 같은 일기 행성(같은 감정 분석 결과·같은 id)을 한 줄에 여러 표면 스타일·효과로 나란히 그린다.
+export type SurfaceCompareCell = {
+  key: string;
+  id: string;
+  visual: PlanetVisual;
+  surface: SurfaceStyle | null;
+  effect: SpecialType | null;
+};
+
+function CompareCells({ cells, tier }: { cells: SurfaceCompareCell[]; tier: SurfaceTier }) {
+  const viewport = useThree((s) => s.viewport);
+  const cw = viewport.width / Math.max(cells.length, 1);
+  const radius = Math.min(cw, viewport.height) * 0.34;
+  return (
+    <>
+      {cells.map((c, i) => (
+        <Planet
+          key={c.key}
+          id={c.id}
+          position={[-viewport.width / 2 + cw * (i + 0.5), 0, 0]}
+          radius={radius}
+          visual={c.visual}
+          quality="high"
+          special={effectToDraw(c.effect)}
+          effectTier={tier}
+          surface={surfaceToDraw(c.surface)}
+          surfaceTier={tier}
+          shared={PREVIEW_UNIFORMS}
+        />
+      ))}
+    </>
+  );
+}
+
+export function SurfaceCompareRow({ cells, tier }: { cells: SurfaceCompareCell[]; tier: SurfaceTier }) {
+  // 가로로 긴 줄이라 원근 카메라면 양 끝 행성이 옆으로 늘어난다 → 직교 카메라(모든 칸이 같은 모양)
+  return (
+    <Canvas style={{ flex: 1 }} orthographic camera={{ position: [0, 0, 10], zoom: 100 }}>
+      <CompareCells cells={cells} tier={tier} />
+    </Canvas>
+  );
+}
+
+/**
+ * 성능 측정: count개 행성을 한 화면에 그리고, 한 프레임 그리기 + GPU 완료 대기(readPixels)까지 걸린 시간(ms)을 잰다.
+ * 처음 warmup 프레임(셰이더 컴파일 포함)은 빼고 samples 프레임 평균·95% 값을 onResult 로 알려 준다.
+ */
+export type BenchmarkResult = {
+  avg: number;
+  p95: number;
+  /** 그리기 호출 수·삼각형 수(한 번 그릴 때), GPU 지오메트리·셰이더 프로그램 수, JS 힙(MB, Chrome 만) */
+  calls: number;
+  triangles: number;
+  geometries: number;
+  programs: number;
+  heapMB: number | null;
+};
+
+function BenchmarkScene({
+  visual,
+  surface,
+  tier,
+  count,
+  effects,
+  onResult,
+}: {
+  visual: PlanetVisual;
+  surface: SurfaceStyle | null;
+  tier: SurfaceTier;
+  count: number;
+  /** [2026-11-21] 행성 i 의 효과 = effects[i % 길이]. 단계는 우주 화면 규칙처럼: 1개 선택(2), 가까운 6개(1), 나머지 멀리(0) */
+  effects?: (SpecialType | null)[];
+  onResult: (r: BenchmarkResult) => void;
+}) {
+  const viewport = useThree((s) => s.viewport);
+  const cols = Math.ceil(Math.sqrt(count * (viewport.width / viewport.height)));
+  const rows = Math.ceil(count / cols);
+  const cell = Math.min(viewport.width / cols, viewport.height / rows);
+  const times = useRef<number[]>([]);
+  const frame = useRef(0);
+  const done = useRef(false);
+  const pixel = useRef(new Uint8Array(4));
+  useFrame(({ gl, scene, camera }) => {
+    const ctx = gl.getContext();
+    // 앞서 쌓인 GPU 작업을 먼저 비운 뒤, 같은 장면을 4번 그리고 끝날 때까지 기다린 시간 / 4
+    ctx.readPixels(0, 0, 1, 1, ctx.RGBA, ctx.UNSIGNED_BYTE, pixel.current);
+    const t0 = performance.now();
+    for (let k = 0; k < 4; k++) gl.render(scene, camera);
+    ctx.readPixels(0, 0, 1, 1, ctx.RGBA, ctx.UNSIGNED_BYTE, pixel.current);
+    const ms = (performance.now() - t0) / 4;
+    frame.current++;
+    if (done.current || frame.current <= 20) return;
+    times.current.push(ms);
+    if (times.current.length >= 90) {
+      done.current = true;
+      const sorted = [...times.current].sort((a, b) => a - b);
+      gl.info.reset();
+      gl.render(scene, camera);
+      const mem = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
+      onResult({
+        avg: sorted.reduce((s, v) => s + v, 0) / sorted.length,
+        p95: sorted[Math.floor(sorted.length * 0.95)],
+        calls: gl.info.render.calls,
+        triangles: gl.info.render.triangles,
+        geometries: gl.info.memory.geometries,
+        programs: gl.info.programs?.length ?? 0,
+        heapMB: mem ? mem.usedJSHeapSize / 1048576 : null,
+      });
+    }
+  }, 1);
+  return (
+    <>
+      {Array.from({ length: count }, (_, i) => (
+        <Planet
+          key={i}
+          id={`bench-${i}`}
+          position={[-viewport.width / 2 + cell * ((i % cols) + 0.5), viewport.height / 2 - cell * (Math.floor(i / cols) + 0.5), 0]}
+          radius={cell * 0.38}
+          visual={visual}
+          quality="high"
+          surface={surface}
+          surfaceTier={tier}
+          special={effects ? effectToDraw(effects[i % effects.length]) : null}
+          effectTier={i === 0 ? 2 : i <= 6 ? 1 : 0}
+          shared={PREVIEW_UNIFORMS}
+        />
+      ))}
+    </>
+  );
+}
+
+export function SurfaceBenchmark(props: {
+  visual: PlanetVisual;
+  surface: SurfaceStyle | null;
+  tier: SurfaceTier;
+  count: number;
+  effects?: (SpecialType | null)[];
+  onResult: (r: BenchmarkResult) => void;
+}) {
+  return (
+    <Canvas style={{ flex: 1 }} orthographic camera={{ position: [0, 0, 10], zoom: 100 }}>
+      <BenchmarkScene {...props} />
+    </Canvas>
+  );
+}
+
+/**
+ * [2026-11-21] 효과 교체 정리 확인(개발용): 한 캔버스에서 같은 행성의 효과를 순서대로 바꾸며(효과 없음 → 8종 → … 3바퀴)
+ * 바꿀 때마다 GPU 지오메트리·텍스처 수를 기록한다. 효과를 바꿔도 수가 늘어나지 않으면 이전 효과 자원이 정리된 것이다.
+ */
+function EffectSwapScene({
+  visual,
+  sequence,
+  onResult,
+}: {
+  visual: PlanetVisual;
+  sequence: (SpecialType | null)[];
+  onResult: (r: { effect: string; geometries: number; textures: number }[]) => void;
+}) {
+  const [step, setStep] = useState(0);
+  const frames = useRef(0);
+  const log = useRef<{ effect: string; geometries: number; textures: number }[]>([]);
+  useFrame(({ gl }) => {
+    frames.current++;
+    if (frames.current % 20 !== 0 || step >= sequence.length) return;
+    log.current.push({ effect: sequence[step] ?? 'none', geometries: gl.info.memory.geometries, textures: gl.info.memory.textures });
+    if (step + 1 >= sequence.length) onResult(log.current);
+    setStep(step + 1);
+  });
+  const effect = sequence[Math.min(step, sequence.length - 1)];
+  return (
+    <Planet
+      id="swap-test"
+      position={[0, 0, 0]}
+      radius={0.9}
+      visual={visual}
+      quality="high"
+      special={effectToDraw(effect)}
+      effectTier={2}
+      shared={PREVIEW_UNIFORMS}
+    />
+  );
+}
+
+export function EffectSwapTest(props: {
+  visual: PlanetVisual;
+  sequence: (SpecialType | null)[];
+  onResult: (r: { effect: string; geometries: number; textures: number }[]) => void;
+}) {
+  return (
+    <Canvas style={{ flex: 1 }} orthographic camera={{ position: [0, 0, 10], zoom: 60 }}>
+      <EffectSwapScene {...props} />
+    </Canvas>
+  );
 }

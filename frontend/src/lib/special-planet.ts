@@ -7,7 +7,11 @@
 import type { PlanetQuality, PlanetVisual } from '@/lib/planet-visual';
 import type { ShopItem } from '@/lib/shop-api';
 
-export type SpecialType = 'ocean' | 'cloud' | 'crystal' | 'nebula' | 'lava';
+/** [2026-11-12] 기존 5종. 이 다섯 개의 id·모양은 바꾸지 않는다. */
+export type ClassicSpecialType = 'ocean' | 'cloud' | 'crystal' | 'nebula' | 'lava';
+/** [2026-11-21] 신규 3종: 천상의 고리 · 공전하는 위성 · 별똥별 */
+export type NewSpecialType = 'celestial_ring' | 'orbiting_moons' | 'shooting_stars';
+export type SpecialType = ClassicSpecialType | NewSpecialType;
 
 export type DiaryTopic =
   | 'travel'
@@ -44,6 +48,9 @@ export const SPECIAL_NAMES: Record<SpecialType, string> = {
   crystal: '수정 행성',
   nebula: '성운 행성',
   lava: '용암 행성',
+  celestial_ring: '천상의 고리 행성',
+  orbiting_moons: '위성을 거느린 행성',
+  shooting_stars: '별똥별 행성',
 };
 
 /** 효과 이름(상점·꾸미기 화면 칩). 서버 아이템 이름이 있으면 그것을 먼저 쓴다. */
@@ -53,9 +60,18 @@ export const EFFECT_LABELS: Record<SpecialType, { name: string; icon: string }> 
   crystal: { name: '수정 효과', icon: '💎' },
   nebula: { name: '성운 효과', icon: '🌌' },
   lava: { name: '용암 효과', icon: '🌋' },
+  celestial_ring: { name: '천상의 고리', icon: '💫' },
+  orbiting_moons: { name: '공전하는 위성', icon: '🌙' },
+  shooting_stars: { name: '별똥별', icon: '🌠' },
 };
 
 export const SPECIAL_TYPES = Object.keys(SPECIAL_NAMES) as SpecialType[];
+
+export const NEW_SPECIAL_TYPES: readonly NewSpecialType[] = ['celestial_ring', 'orbiting_moons', 'shooting_stars'];
+
+export function isNewSpecialType(type: SpecialType): type is NewSpecialType {
+  return (NEW_SPECIAL_TYPES as readonly string[]).includes(type);
+}
 
 /** 서버 아이템의 칸(slot). 이 칸의 아이템은 상점 '소모품' 탭의 '행성 효과' 줄에 나온다. */
 export const PLANET_EFFECT_SLOT = 'planet_effect';
@@ -82,12 +98,89 @@ export const SPECIAL_EFFECT_SETTINGS = {
   speed: 1,
   /** 효과 세기(0.6~1.0). 예전 AI 방식은 점수에 따라 달랐고, 사용자가 고른 효과는 모두 같은 세기로 그린다. */
   intensity: 0.85,
-  types: { ocean: true, cloud: true, crystal: true, nebula: true, lava: true } as Record<SpecialType, boolean>,
+  types: {
+    ocean: true,
+    cloud: true,
+    crystal: true,
+    nebula: true,
+    lava: true,
+    celestial_ring: true,
+    orbiting_moons: true,
+    shooting_stars: true,
+  } as Record<SpecialType, boolean>,
   maxNear: { low: 3, medium: 6, high: 10 } as Record<PlanetQuality, number>,
   nearDistance: 9,
   /** 저품질(휴대폰·행성 많음)에서는 가까운 행성도 입자를 그리지 않는다(선택한 행성만) */
   particlesWhenNear: { low: false, medium: true, high: true } as Record<PlanetQuality, boolean>,
 };
+
+/**
+ * [2026-11-21] 신규 효과 크기(행성 반지름 R 기준 배수). 디자인을 보며 여기 값만 바꾸면 된다.
+ * 행성 크기는 0.16~0.54라서, 배수만 쓰면 작은 행성의 효과는 안 보이고 큰 행성의 효과는 너무 넓어진다
+ * → 표면에서 바깥으로 나가는 거리(R × (배수 − 1))를 minGap~maxGap 사이로 묶는다(effectReach).
+ */
+export const NEW_EFFECT_LAYOUT = {
+  /** 표면 바깥으로 최소·최대 이만큼(화면 단위)까지만 나간다 */
+  minGap: 0.1,
+  maxGap: 0.5,
+  /** 천상의 고리: 고리 3개의 반지름(배수)과 고리 폭(R 대비) */
+  ring: { radii: [1.42, 1.6, 1.8], width: [0.1, 0.065, 0.05] },
+  /** 공전하는 위성: 궤도 반지름 범위(배수)와 위성 크기(R 대비) */
+  moons: { orbitMin: 1.5, orbitMax: 2.2, sizeMin: 0.17, sizeMax: 0.24 },
+  /** 별똥별: 행성 둘레 이 범위(배수) 안에서만 지나간다 */
+  stars: { reachMin: 1.35, reachMax: 2.4 },
+};
+
+/** 행성 반지름 R, 배수 k → 효과까지의 거리. R×k 를 쓰되 표면에서 나가는 거리를 minGap~maxGap 으로 묶는다. */
+export function effectReach(radius: number, k: number): number {
+  const gap = Math.min(Math.max(radius * (k - 1), NEW_EFFECT_LAYOUT.minGap), NEW_EFFECT_LAYOUT.maxGap);
+  return radius + gap;
+}
+
+/**
+ * 반지름 R 행성의 고리 n개 반지름(안쪽 → 바깥쪽). 작은 행성에서도 고리끼리 minSpacing 이상 떨어진다.
+ */
+export function ringRadii(radius: number, ks: readonly number[], minSpacing = 0.03): number[] {
+  const out: number[] = [];
+  for (const k of ks) {
+    const r = effectReach(radius, k);
+    out.push(out.length ? Math.max(r, out[out.length - 1] + minSpacing) : r);
+  }
+  return out;
+}
+
+/**
+ * 공전하는 위성 배치(행성 id 고정 난수 rand 로 결정 → 같은 행성은 항상 같은 구성).
+ * 위성끼리·행성과 부딪히지 않게: 궤도 반지름 간격 ≥ 위성 지름의 1.1배, 가장 안쪽 궤도 > R + 위성 크기 × 1.8.
+ * kind: 0 진주(Pearl) · 1 수정(Crystal) · 2 발광(Glow)
+ */
+export function moonLayout(radius: number, rand: readonly number[]) {
+  const L = NEW_EFFECT_LAYOUT.moons;
+  const count = rand[0] < 0.45 ? 2 : 3;
+  const out: { orbit: number; size: number; phase: number; speed: number; tiltX: number; tiltZ: number; kind: number }[] = [];
+  const inner0 = effectReach(radius, L.orbitMin);
+  const outer0 = effectReach(radius, L.orbitMax);
+  const sizes = Array.from({ length: count }, (_, i) =>
+    Math.min(Math.max(radius * (L.sizeMin + (L.sizeMax - L.sizeMin) * rand[1 + i]), 0.022), 0.075)
+  );
+  const biggest = Math.max(...sizes);
+  const inner = Math.max(inner0, radius + biggest * 1.8);
+  const spacing = Math.max((outer0 - inner) / Math.max(count - 1, 1), biggest * 2.2);
+  const firstKind = Math.floor(rand[4] * 3);
+  for (let i = 0; i < count; i++) {
+    out.push({
+      orbit: inner + spacing * i,
+      size: sizes[i],
+      phase: rand[5 + i] * Math.PI * 2,
+      // 바깥 궤도일수록 느리게(케플러처럼), 행성마다 조금씩 다르게. 한 바퀴 약 25~60초.
+      speed: (0.25 - 0.05 * i) * (0.8 + 0.4 * rand[8 + i]) * (rand[11] < 0.5 ? 1 : -1),
+      tiltX: (rand[12 + i] - 0.5) * 0.9,
+      tiltZ: (rand[15 + i] - 0.5) * 0.7,
+      kind: (firstKind + i) % 3,
+    });
+  }
+  return out;
+}
 
 /** 화면에 그릴 효과. 효과가 꺼져 있거나 모르는 값이면 null(일반 행성). */
 export function effectToDraw(effect: SpecialType | null | undefined): SpecialType | null {

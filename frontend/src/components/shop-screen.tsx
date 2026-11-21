@@ -12,6 +12,8 @@ import { Text } from '@/components/app-text';
 //  - [ADDED 2026-11-12] slot=planet_effect → 소모품 탭 '행성 효과' 줄 (바다·구름·수정·성운·용암)
 //      위에 샘플 행성 미리보기(카드를 누르면 그 효과로 바뀜). 소모품: 1개 = 행성 1개.
 //      [구매]로 개수를 늘리고, 남은 개수가 있으면 [적용]으로 원하는 일기 행성에 적용(해제·변경하면 1개가 돌아온다)
+//  - [ADDED 2026-11-21] slot=planet_surface → 소모품 탭 '행성 표면' 줄 (오팔 유리·솜사탕 구름·진주 실크·크리스탈 프리즘·오로라 리본)
+//      행성 효과와 같은 규칙(소모품, 1개 = 행성 1개). 행성 하나에 표면 하나 + 효과 하나를 따로 고른다.
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 
@@ -25,10 +27,11 @@ import { confirmChoice } from '@/lib/notice';
 import type { ShopItem } from '@/lib/shop-api';
 import { STARTER_CURSOR_ID, cursorEffect } from '@/lib/cursor-items';
 import { PLANET_EFFECT_SLOT, SAMPLE_PLANET, effectOfItem, type SpecialType } from '@/lib/special-planet';
+import { PLANET_SURFACE_SLOT, surfaceOfItem, type SurfaceStyle } from '@/lib/surface-style';
 import { useDiary } from '@/store/diary-context';
 import { useShop } from '@/store/shop-context';
 
-const KNOWN_SLOTS = ['effect', 'background', 'music', 'cursor', PLANET_EFFECT_SLOT];
+const KNOWN_SLOTS = ['effect', 'background', 'music', 'cursor', PLANET_EFFECT_SLOT, PLANET_SURFACE_SLOT];
 
 type DefaultCard = { name: string; icon: string; description: string };
 type Section = {
@@ -37,8 +40,8 @@ type Section = {
   /** 같은 slot 의 장착을 모두 해제하는 무료 기본 카드 (예: 기본 우주) */
   defaultCard?: DefaultCard & { slot: string };
   emptyText?: string;
-  /** 줄 위에 샘플 행성 효과 미리보기를 보인다(행성 효과 줄) */
-  preview?: boolean;
+  /** 줄 위에 샘플 행성 미리보기를 보인다(행성 효과 줄 = effect, 행성 표면 줄 = surface) */
+  preview?: 'effect' | 'surface';
 };
 type Tab = { id: string; label: string; sections: Section[] };
 
@@ -81,13 +84,24 @@ const TABS: Tab[] = [
     id: 'consumable',
     label: '소모품',
     sections: [
-      // 행성 효과도 소모품 종류지만 아래 자기 줄에만 보인다
-      { title: '소모품', match: (i) => i.kind === 'consumable' && i.slot !== PLANET_EFFECT_SLOT, emptyText: '아직 소모품이 없어요.' },
+      // 행성 효과·표면도 소모품 종류지만 아래 자기 줄에만 보인다
+      {
+        title: '소모품',
+        match: (i) => i.kind === 'consumable' && i.slot !== PLANET_EFFECT_SLOT && i.slot !== PLANET_SURFACE_SLOT,
+        emptyText: '아직 소모품이 없어요.',
+      },
+      // [2026-11-21] 행성 표면(표면 재질) — 행성 효과(주변)와 따로 고른다
+      {
+        title: '행성 표면',
+        match: (i) => i.slot === PLANET_SURFACE_SLOT,
+        emptyText: '아직 행성 표면이 없어요.',
+        preview: 'surface',
+      },
       {
         title: '행성 효과',
         match: (i) => i.slot === PLANET_EFFECT_SLOT,
         emptyText: '아직 행성 효과가 없어요.',
-        preview: true,
+        preview: 'effect',
       },
     ],
   },
@@ -193,13 +207,14 @@ function Card({
   );
 }
 
-/** 행성 효과 줄 위의 미리보기: 샘플 감정 행성(연분홍 '설렘·애정')에 고른 효과를 실제 3D로 그린다. */
-function EffectPreview({ item, visible }: { item: ShopItem | undefined; visible: boolean }) {
+/** 행성 효과·표면 줄 위의 미리보기: 샘플 감정 행성(연분홍 '설렘·애정')에 고른 효과·표면을 실제 3D로 그린다. */
+function EffectPreview({ item, visible, kind }: { item: ShopItem | undefined; visible: boolean; kind: 'effect' | 'surface' }) {
   const effect = item ? effectOfItem(item) : null;
+  const surface = item ? surfaceOfItem(item) : null;
   return (
-    <View style={styles.preview} testID="shop-effect-preview">
+    <View style={styles.preview} testID={`shop-${kind}-preview`}>
       {/* 행성 꾸미기 팝업이 떠 있으면 3D 화면을 하나만 쓰도록 잠시 내린다 */}
-      {visible ? <PlanetPreview id="shop-sample" visual={SAMPLE_PLANET} radius={0.36} effect={effect} /> : null}
+      {visible ? <PlanetPreview id="shop-sample" visual={SAMPLE_PLANET} radius={0.36} effect={effect} surface={surface} /> : null}
       <Text style={styles.previewTag} pointerEvents="none">
         미리보기 · 샘플 행성
       </Text>
@@ -222,11 +237,14 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
   const [busyId, setBusyId] = useState<string | null>(null);
   // 행성 효과 줄: 미리보기 중인 아이템, 행성 꾸미기 팝업(적용하기)
   const [previewId, setPreviewId] = useState<string | null>(null);
-  const [decorating, setDecorating] = useState<SpecialType | null>(null);
-  // 효과별로 적용된 행성 수 (카드 배지)
+  const [decorating, setDecorating] = useState<{ effect?: SpecialType; surface?: SurfaceStyle } | null>(null);
+  // 효과·표면별로 적용된 행성 수 (카드 배지)
   const appliedCount = useMemo(() => {
-    const count = new Map<SpecialType, number>();
-    for (const e of entries) if (e.effect) count.set(e.effect, (count.get(e.effect) ?? 0) + 1);
+    const count = new Map<string, number>();
+    for (const e of entries) {
+      if (e.effect) count.set(`effect:${e.effect}`, (count.get(`effect:${e.effect}`) ?? 0) + 1);
+      if (e.surface) count.set(`surface:${e.surface}`, (count.get(`surface:${e.surface}`) ?? 0) + 1);
+    }
     return count;
   }, [entries]);
   const balance = coins ?? 0;
@@ -252,7 +270,7 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
     const action = actionFor(item, balance);
     if (action.disabled || action.kind === 'none' || busyId) return;
     if (action.kind === 'buy') {
-      const note = item.slot === PLANET_EFFECT_SLOT ? `\n${t('1개로 행성 1개를 꾸밀 수 있어요.')}` : '';
+      const note = item.slot === PLANET_EFFECT_SLOT || item.slot === PLANET_SURFACE_SLOT ? `\n${t('1개로 행성 1개를 꾸밀 수 있어요.')}` : '';
       confirmChoice(t('구매'), `${item.icon} ${t('{name}을(를) {price}코인에 살까요?',{name:item.name,price:item.price})}${note}`, t('구매'), () =>
         run(item.id, () => purchase(item.id))
       );
@@ -329,11 +347,14 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
                   {section.preview && list.length > 0 ? (
                     <>
                       <EffectPreview
+                        kind={section.preview}
                         item={list.find((i) => i.id === previewId) ?? list[0]}
                         visible={visible && decorating === null}
                       />
                       <Text style={styles.previewHint}>
-                        {t('카드를 누르면 미리 볼 수 있어요. 행성 색과 무늬는 그대로, 주변 효과만 더해져요.')}
+                        {section.preview === 'surface'
+                          ? t('카드를 누르면 미리 볼 수 있어요. 감정으로 정해진 색과 무늬는 그대로, 표면 재질만 바뀌어요.')
+                          : t('카드를 누르면 미리 볼 수 있어요. 행성 색과 무늬는 그대로, 주변 효과만 더해져요.')}
                       </Text>
                     </>
                   ) : null}
@@ -361,11 +382,17 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
                       ) : null}
                       {list.map((item) => {
                         const owned = item.quantity > 0;
-                        const effect = section.preview ? effectOfItem(item) : null;
-                        // 행성 효과: 남은 개수 = 산 개수 − 적용 중인 행성 수
-                        const applied = effect ? (appliedCount.get(effect) ?? 0) : 0;
+                        const effect = section.preview === 'effect' ? effectOfItem(item) : null;
+                        const surface = section.preview === 'surface' ? surfaceOfItem(item) : null;
+                        const perPlanet = effect ?? surface;
+                        // 행성 효과·표면: 남은 개수 = 산 개수 − 적용 중인 행성 수
+                        const applied = effect
+                          ? (appliedCount.get(`effect:${effect}`) ?? 0)
+                          : surface
+                            ? (appliedCount.get(`surface:${surface}`) ?? 0)
+                            : 0;
                         const left = Math.max(item.quantity - applied, 0);
-                        const previewing = section.preview && (previewId ?? list[0]?.id) === item.id;
+                        const previewing = !!section.preview && (previewId ?? list[0]?.id) === item.id;
                         return (
                           <Card
                             key={item.id}
@@ -375,7 +402,7 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
                             description={item.id === STARTER_CURSOR_ID ? t(item.description) : item.description}
                             priceText={item.id === STARTER_CURSOR_ID ? '기본 제공' : item.kind === 'equip' && owned ? '보유 중' : String(item.price)}
                             badge={
-                              effect
+                              perPlanet
                                 ? owned
                                   ? left > 0
                                     ? t('남은 {left}/{total}개',{left,total:item.quantity})
@@ -387,7 +414,11 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
                                     ? t('보유 {count}개',{count:item.quantity})
                                     : undefined
                             }
-                            secondary={effect && left > 0 ? { label: '적용', onPress: () => setDecorating(effect) } : undefined}
+                            secondary={
+                              perPlanet && left > 0
+                                ? { label: '적용', onPress: () => setDecorating(effect ? { effect } : { surface: surface ?? undefined }) }
+                                : undefined
+                            }
                             highlighted={item.equipped}
                             previewing={previewing}
                             onSelect={section.preview ? () => setPreviewId(item.id) : undefined}
@@ -425,7 +456,12 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
         </SpaceSurface>
       </View>
       {/* 적용하기 → 행성 고르기 → 미리보기 → 적용 */}
-      <PlanetDecorator visible={decorating !== null} effect={decorating} onClose={() => setDecorating(null)} />
+      <PlanetDecorator
+        visible={decorating !== null}
+        effect={decorating?.effect ?? null}
+        surface={decorating?.surface ?? null}
+        onClose={() => setDecorating(null)}
+      />
     </Modal>
   );
 }

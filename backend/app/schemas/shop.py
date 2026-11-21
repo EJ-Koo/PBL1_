@@ -42,7 +42,8 @@ class EquipRequest(BaseModel):
 
 
 # [ADDED 2026-11-12] 행성 특수 효과: 산 효과를 내 일기 행성에 적용·변경·해제
-SpecialType = Literal["ocean", "cloud", "crystal", "nebula", "lava"]
+# [2026-11-21] 신규 3종 추가(기존 5종 그대로)
+SpecialType = Literal["ocean", "cloud", "crystal", "nebula", "lava", "celestial_ring", "orbiting_moons", "shooting_stars"]
 
 
 class PlanetEffectRequest(BaseModel):
@@ -54,6 +55,21 @@ class PlanetEffectResult(BaseModel):
     diary_id: str
     item_id: str | None = None
     effect: SpecialType | None = None  # 화면이 그릴 효과 종류. 해제했으면 null
+
+
+# [ADDED 2026-11-21] 행성 표면 스타일: 산 표면을 내 일기 행성에 적용·변경·해제 (행성 효과와 따로)
+SurfaceStyle = Literal["opal_glass", "pastel_cloud", "pearl_silk", "crystal_prism", "aurora_ribbon"]
+
+
+class PlanetSurfaceRequest(BaseModel):
+    # 적용할 표면 아이템 id (예: sf_opal_glass). null 이면 해제(기본 표면)
+    item_id: str | None = Field(default=None, max_length=40)
+
+
+class PlanetSurfaceResult(BaseModel):
+    diary_id: str
+    item_id: str | None = None
+    surface: SurfaceStyle | None = None  # 화면이 그릴 표면 스타일. 해제했으면 null
 
 
 # --- 관리자 ---------------------------------------------------------------------
