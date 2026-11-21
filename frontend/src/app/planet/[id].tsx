@@ -1,47 +1,37 @@
-import { ScrollView } from '@/components/app-scroll-view';
-import { Text } from '@/components/app-text';
-// [MODIFIED 2026-11-05] 사진 여러 장(최대 5장)을 가로로 넘겨 보기, 넓은 화면에서는 폭 최대 520px 가운데 정렬.
-// [MODIFIED 2026-11-12] '행성 꾸미기' 버튼: 산 특수 효과를 이 행성에 적용·변경·해제 (components/planet-decorator.tsx)
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Image, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
-import { PlanetPreview } from '@/components/universe-scene';
-import { PLANET_BASE_RADIUS, planetScaleForText } from '@/lib/planet-visual';
-
-import { PlanetDecorator } from '@/components/planet-decorator';
-import { goBackSafe } from '@/lib/navigation';
-import { EFFECT_LABELS, SPECIAL_NAMES, effectToDraw } from '@/lib/special-planet';
+import { Text } from '@/components/app-text';
+import { PlanetDetailView } from '@/components/planet-detail-view';
+import { PlanetDetailBackground } from '@/components/ui/planet-detail-decoration';
+import { KoreanFonts } from '@/constants/ui-design';
 import { apiReadDiary } from '@/lib/api';
 import { authSession } from '@/lib/auth-session';
-import { useDiary, toEntry, type DiaryEntry, type Visibility } from '@/store/diary-context';
-
-const VISIBILITY_LABELS: Record<Visibility, string> = {
-  public: '전체공개',
-  friends: '친구에게만 공개',
-  private: '공개안함',
-};
+import { useLanguage } from '@/lib/language';
+import { goBackSafe } from '@/lib/navigation';
+import { useDiary, toEntry, type DiaryEntry } from '@/store/diary-context';
 
 export default function PlanetDetailScreen() {
   const { id, groupId } = useLocalSearchParams<{ id: string; groupId?: string }>();
+  const { t } = useLanguage();
   const { getEntry, isOwnEntry, isEditableToday, isRestoring, dataLoading, accessToken } = useDiary();
   const cached = getEntry(id, groupId);
   const revision = authSession.getRevision();
   const [remote, setRemote] = useState<{ id: string; revision: number; attempt: number; entry: DiaryEntry | null; error: string | null } | null>(null);
   const [retry, setRetry] = useState(0);
-  // Validate the exact diary with the server, including after a group share is revoked.
+  // Revalidate shared diaries, including after their group access is revoked.
   useFocusEffect(useCallback(() => {
     if (!accessToken || !groupId) return;
     let alive = true;
     apiReadDiary(accessToken, id).then(diary => {
       if (!alive || authSession.getRevision() !== revision) return;
-      const entry = toEntry(diary, 0);
-      setRemote({ id, revision, attempt: retry, entry, error: null });
+      setRemote({ id, revision, attempt: retry, entry: toEntry(diary, 0), error: null });
     }).catch(error => {
-      if (alive && authSession.getRevision() === revision) setRemote({ id, revision, attempt: retry, entry: null, error: error instanceof Error ? error.message : '기록을 불러오지 못했어요.' });
+      if (alive && authSession.getRevision() === revision) setRemote({ id, revision, attempt: retry, entry: null, error: error instanceof Error ? error.message : t('기록을 불러오지 못했어요.') });
     });
     return () => { alive = false; };
-  }, [accessToken, groupId, id, revision, retry]));
+  }, [accessToken, groupId, id, revision, retry, t]));
   const verified = remote?.id === id && remote.revision === revision && remote.attempt === retry ? remote : null;
   const entry = groupId ? (verified?.entry ? { ...verified.entry, planet: cached?.planet ?? verified.entry.planet, effect: cached?.effect ?? verified.entry.effect } : null) : cached;
   const goToUniverse = () => {
@@ -49,238 +39,39 @@ export default function PlanetDetailScreen() {
     else if (groupId) router.replace({ pathname: '/', params: { groupId } });
     else goBackSafe();
   };
-  const owned = isOwnEntry(id); // 그룹 공유 우주의 남의 별이면 false → 수정·꾸미기 숨김
-  const [decorating, setDecorating] = useState(false);
+  const owned = isOwnEntry(id);
   const [previewVisible, setPreviewVisible] = useState(false);
   useFocusEffect(useCallback(() => {
     setPreviewVisible(true);
     return () => setPreviewVisible(false);
   }, []));
 
-  if (isRestoring || dataLoading || (groupId && !verified)) return <View style={styles.container}><Text style={styles.notFoundText}>기록을 불러오는 중…</Text></View>;
-  if (!entry) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.notFoundText}>{verified?.error ?? '기록을 찾을 수 없습니다.'}</Text>
-        {groupId && <Pressable onPress={() => setRetry(value => value + 1)}><Text style={styles.backLink}>다시 불러오기</Text></Pressable>}
-        <Pressable onPress={goToUniverse}>
-          <Text style={styles.backLink}>← 돌아가기</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  const date = new Date(entry.createdAt);
-  const dateLabel = `${date.getFullYear()}.${date.getMonth() + 1}.${date.getDate()}`;
-  const editable = isEditableToday(entry.id);
-  const effect = effectToDraw(entry.effect);
-
-  return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.outer}>
-      <View style={styles.content}>
-      <Pressable onPress={goToUniverse}>
-        <Text style={styles.backLink}>{groupId ? '← 그룹 우주로' : '← 우주로'}</Text>
+  if (isRestoring || dataLoading || (groupId && !verified)) return <View style={styles.screen}>
+    <PlanetDetailBackground />
+    <View style={styles.message}><ActivityIndicator color="#b7caf1" /><Text style={styles.text}>{t('기록을 불러오는 중…')}</Text></View>
+  </View>;
+  if (!entry) return <View style={styles.screen}>
+    <PlanetDetailBackground />
+    <View style={styles.message}>
+      <Text accessibilityRole="alert" style={styles.text}>{verified?.error ?? t('기록을 찾을 수 없습니다.')}</Text>
+      {groupId && <Pressable accessibilityRole="button" onPress={() => setRetry(value => value + 1)} style={styles.link}>
+        <Text style={styles.text}>{t('다시 불러오기')}</Text>
+      </Pressable>}
+      <Pressable accessibilityRole="button" onPress={goToUniverse} style={styles.link}>
+        <Text style={styles.text}>← {t('돌아가기')}</Text>
       </Pressable>
+    </View>
+  </View>;
 
-      <View style={styles.planetHeader}>
-        <View style={styles.planet} pointerEvents="none" testID="planet-detail-preview">
-          {previewVisible && !decorating && <PlanetPreview id={entry.id} visual={entry.planet} effect={entry.effect}
-            radius={PLANET_BASE_RADIUS * planetScaleForText(entry.text)} quality="high" />}
-        </View>
-        <Text style={styles.dateLabel}>{dateLabel}</Text>
-        <View style={styles.visibilityBadge}>
-          <Text style={styles.visibilityBadgeText}>{VISIBILITY_LABELS[entry.visibility]}</Text>
-        </View>
-      </View>
-
-      {entry.photos.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.photoRow}>
-          {entry.photos.map((photo) => (
-            <Image
-              key={photo.id}
-              source={{ uri: photo.uri }}
-              style={[styles.photo, entry.photos.length === 1 && styles.photoSingle]}
-            />
-          ))}
-        </ScrollView>
-      )}
-
-      <Text style={styles.text}>{entry.text}</Text>
-
-      {/* [MODIFIED 2026-11-12] 행성 색·무늬는 AI 감정 분석, 특수 효과는 사용자가 직접 적용한 것 */}
-      <View style={styles.analysisBox} testID="planet-analysis">
-        <Text style={styles.analysisTitle}>{effect ? `✦ ${SPECIAL_NAMES[effect]}` : '일반 행성'}</Text>
-        <Text style={styles.analysisText}>
-          {entry.planet.version === 'fallback'
-            ? '아직 감정 분석 결과가 없어 기본색으로 표현했어요.'
-            : entry.planet.state === 'none'
-              ? '뚜렷한 감정이 없어 차분한 기본색으로 표현했어요.'
-              : `행성 색과 무늬: '${entry.planet.primary.name}' 감정`}
-        </Text>
-        <Text style={styles.analysisText}>
-          {effect
-            ? `${EFFECT_LABELS[effect].icon} ${EFFECT_LABELS[effect].name}를 적용한 행성이에요.`
-            : '상점에서 산 특수 효과로 이 행성을 꾸밀 수 있어요.'}
-        </Text>
-      </View>
-
-      {/* 꾸미기·수정은 내 일기에서만. 그룹 공유 우주의 남의 별은 보기만. */}
-      {owned && (
-        <>
-          <Pressable
-            style={styles.decorateButton}
-            onPress={() => setDecorating(true)}
-            testID="planet-decorate"
-            accessibilityLabel="행성 꾸미기">
-            <Text style={styles.decorateButtonText}>🪐 행성 꾸미기</Text>
-          </Pressable>
-          <PlanetDecorator visible={decorating} diaryId={entry.id} onClose={() => setDecorating(false)} />
-
-          <Pressable
-            style={[styles.editButton, !editable && styles.editButtonDisabled]}
-            onPress={() => editable && router.push(`/write?id=${entry.id}`)}
-            disabled={!editable}
-          >
-            <Text style={[styles.editButtonText, !editable && styles.editButtonTextDisabled]}>
-              수정
-            </Text>
-          </Pressable>
-          {!editable && (
-            <Text style={styles.editHint}>작성한 날에만 수정할 수 있어요.</Text>
-          )}
-        </>
-      )}
-      </View>
-    </ScrollView>
-  );
+  const editable = owned && isEditableToday(entry.id);
+  return <PlanetDetailView key={entry.id} entry={entry} owned={owned} editable={editable}
+    previewVisible={previewVisible} group={!!groupId} onBack={goToUniverse}
+    onEdit={() => { if (editable) router.push(`/write?id=${entry.id}`); }} />;
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0B0B1A',
-  },
-  outer: {
-    alignItems: 'center',
-  },
-  content: {
-    width: '100%',
-    maxWidth: 520,
-    paddingTop: 60,
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-    gap: 20,
-  },
-  backLink: {
-    color: '#9C9CC0',
-    fontSize: 14,
-  },
-  planetHeader: {
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 12,
-  },
-  planet: {
-    width: '100%',
-    height: 260,
-    borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: '#050611',
-  },
-  dateLabel: {
-    color: '#8888AA',
-    fontSize: 13,
-  },
-  visibilityBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: '#14142A',
-    borderWidth: 1,
-    borderColor: '#2A2A45',
-  },
-  visibilityBadgeText: {
-    color: '#9C9CC0',
-    fontSize: 11,
-  },
-  photoRow: {
-    gap: 10,
-  },
-  photo: {
-    width: 220,
-    height: 200,
-    borderRadius: 12,
-  },
-  photoSingle: {
-    width: 472,
-    maxWidth: '100%',
-  },
-  text: {
-    color: '#E4E4F0',
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  analysisBox: {
-    borderWidth: 1,
-    borderColor: '#2A2A45',
-    borderRadius: 12,
-    padding: 16,
-    backgroundColor: '#14142A',
-    gap: 6,
-  },
-  analysisTitle: {
-    color: '#7C6CF6',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  analysisText: {
-    color: '#6E6E90',
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  decorateButton: {
-    width: '100%',
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#7C6CF6',
-    backgroundColor: '#14142A',
-  },
-  decorateButtonText: {
-    color: '#C9C2FF',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  editButton: {
-    width: '100%',
-    paddingVertical: 16,
-    borderRadius: 10,
-    alignItems: 'center',
-    backgroundColor: '#7C6CF6',
-  },
-  editButtonDisabled: {
-    backgroundColor: '#1C1C33',
-  },
-  editButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  editButtonTextDisabled: {
-    color: '#4A4A6A',
-  },
-  editHint: {
-    color: '#5F5F80',
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: -12,
-  },
-  notFoundText: {
-    color: '#9C9CC0',
-    fontSize: 15,
-    textAlign: 'center',
-    marginTop: 100,
-    marginBottom: 12,
-  },
+  screen: { flex: 1, backgroundColor: '#080a16' },
+  message: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 14 },
+  text: { color: '#aaa5c7', fontFamily: KoreanFonts.regular, fontSize: 15, lineHeight: 23, textAlign: 'center' },
+  link: { minHeight: 44, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
 });

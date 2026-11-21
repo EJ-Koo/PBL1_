@@ -14,6 +14,8 @@
 
 `expo-image-picker`, `expo-audio`, `expo-notifications`, `expo-file-system`, AsyncStorage를 추가했습니다. 기존 개발용 앱을 사용하는 경우 네이티브 모듈과 플러그인을 반영하도록 개발 빌드를 다시 설치해야 합니다.
 
+본문은 Orbitron Regular와 에스코어 드림 4 Regular, 강조는 Orbitron Bold와 에스코어 드림 6 Bold를 사용합니다. 영문과 숫자는 Orbitron, 한글은 에스코어 드림으로 표시합니다. iOS와 Android 10 이상에서 입력 중인 글자와 입력 안내에도 두 폰트를 함께 쓰려면 `modules/app-fonts`가 포함된 개발 빌드가 필요합니다.
+
 검증 명령:
 
 ```bash

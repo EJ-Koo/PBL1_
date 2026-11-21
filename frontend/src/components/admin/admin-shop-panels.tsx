@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Switch, View } from 'react-native';
 
 import { confirmChoice, showNotice } from '@/lib/notice';
+import { CURSOR_STYLES, STARDUST, STARTER_CURSOR_ID, cursorEffect, type CursorStyle } from '@/lib/cursor-items';
 import {
   apiAdminAdjustCoins,
   apiAdminCoinLogs,
@@ -111,6 +112,8 @@ type ItemForm = {
   kind: 'consumable' | 'equip';
   slot: string;
   effect: string;
+  cursorStyle: CursorStyle;
+  cursorColor: string;
   sort_order: string;
   is_active: boolean;
 };
@@ -124,6 +127,8 @@ const toForm = (i?: AdminItem): ItemForm => ({
   kind: i?.kind ?? 'equip',
   slot: i?.slot ?? '',
   effect: JSON.stringify(i?.effect ?? {}),
+  cursorStyle: cursorEffect(i?.effect ?? null)?.style ?? STARDUST.style,
+  cursorColor: cursorEffect(i?.effect ?? null)?.color ?? STARDUST.color,
   sort_order: String(i?.sort_order ?? 0),
   is_active: i?.is_active ?? true,
 });
@@ -140,6 +145,12 @@ function fromForm(f: ItemForm): { ok: true; value: Partial<AdminItem> } | { ok: 
     if (typeof effect !== 'object' || effect === null || Array.isArray(effect)) throw new Error();
   } catch {
     return { ok: false, error: '효과(effect)는 {"type":"..."} 형태의 JSON이어야 합니다.' };
+  }
+  if (f.slot.trim() === 'cursor') {
+    if (f.kind !== 'equip') return { ok: false, error: '커서는 장착 아이템으로 등록해주세요.' };
+    const cursor = cursorEffect({ type: 'cursor', style: f.cursorStyle, color: f.cursorColor.trim() });
+    if (!cursor) return { ok: false, error: '커서 색상을 #RRGGBB 형식으로 입력해주세요.' };
+    effect = cursor;
   }
   if (f.kind === 'equip' && !f.slot.trim()) return { ok: false, error: '장착 아이템은 칸(slot)이 필요합니다. 예: background' };
   return {
@@ -187,7 +198,16 @@ function ItemEditor({ initial, isNew, onSave, onCancel }: {
         <View style={styles.flex1}><Field label="정렬 순서" value={f.sort_order} onChange={set('sort_order')} numeric /></View>
         <View style={styles.flex1}><Field label={f.kind === 'equip' ? '칸(slot)' : '칸(선택, 행성 효과는 planet_effect)'} value={f.slot} onChange={set('slot')} /></View>
       </View>
-      <Field label='효과 JSON (예: {"type":"background","tint":"#0B2A6B","opacity":0.45})' value={f.effect} onChange={set('effect')} multiline />
+      {f.slot.trim() === 'cursor' ? <>
+        <Text style={styles.fieldLabel}>커서 입자 모양</Text>
+        <View style={styles.rowWrap}>
+          {(Object.keys(CURSOR_STYLES) as CursorStyle[]).map(style =>
+            <Button key={style} label={CURSOR_STYLES[style]} testID={`cursor-style-${style}`}
+              kind={f.cursorStyle === style ? 'primary' : 'ghost'}
+              onPress={() => setF(prev => ({ ...prev, cursorStyle: style }))} />)}
+        </View>
+        <Field label="빛 색상 (#RRGGBB)" value={f.cursorColor} onChange={set('cursorColor')} testID="cursor-color" />
+      </> : <Field label='효과 JSON (예: {"type":"background","tint":"#0B2A6B","opacity":0.45})' value={f.effect} onChange={set('effect')} multiline />}
       <View style={styles.switchRow}>
         <Text style={styles.fieldLabel}>상점에서 판매</Text>
         <Switch value={f.is_active} onValueChange={(v) => setF((p) => ({ ...p, is_active: v }))} />
@@ -236,9 +256,11 @@ export function AdminItemsPanel({ token }: { token: string }) {
       <Text style={styles.help}>값을 바꾸고 저장하면 앱 상점에 바로 반영됩니다. 판매를 끄면 새로 살 수 없지만, 이미 산 사람은 계속 씁니다.</Text>
       <View style={styles.rowWrap}>
         <Button label="+ 새 아이템" onPress={() => setEditing('__new__')} testID="item-new" />
+        <Button label="+ 새 커서" onPress={() => setEditing('new:cursor')} testID="cursor-new" />
         <Button label={loading ? '불러오는 중…' : '새로고침'} kind="ghost" onPress={reload} />
       </View>
       {editing === '__new__' && <ItemEditor initial={toForm()} isNew onSave={(f) => save(f, true)} onCancel={() => setEditing(null)} />}
+      {editing === 'new:cursor' && <ItemEditor initial={{ ...toForm(), slot: 'cursor', icon: '✦' }} isNew onSave={f => save(f, true)} onCancel={() => setEditing(null)} />}
       {items.map((item) =>
         editing === item.id ? (
           <ItemEditor key={item.id} initial={toForm(item)} isNew={false} onSave={(f) => save(f, false)} onCancel={() => setEditing(null)} />
@@ -247,13 +269,13 @@ export function AdminItemsPanel({ token }: { token: string }) {
             <Text style={styles.icon}>{item.icon}</Text>
             <View style={styles.rowInfo}>
               <Text style={styles.rowTitle}>
-                {item.name} · 🪙 {item.price} {item.is_active ? '' : '(판매 중지)'}
+                {item.name} · {item.id === STARTER_CURSOR_ID ? '기본 제공' : `🪙 ${item.price} ${item.is_active ? '' : '(판매 중지)'}`}
               </Text>
               <Text style={styles.rowMeta}>
                 {item.id} · {item.kind === 'equip' ? `장착(${item.slot})` : item.slot ? `소모품(${item.slot})` : '소모품'} · {JSON.stringify(item.effect)}
               </Text>
             </View>
-            <Button label="수정" kind="ghost" onPress={() => setEditing(item.id)} testID={`item-edit-${item.id}`} />
+            {item.id !== STARTER_CURSOR_ID && <Button label="수정" kind="ghost" onPress={() => setEditing(item.id)} testID={`item-edit-${item.id}`} />}
           </View>
         )
       )}

@@ -124,3 +124,25 @@ def push_config(user: str=Depends(get_current_user_id)):
 def register_device(draft: PushDevice,user: str=Depends(get_current_user_id)):
     return rpc('register_group_push',{'p_user':user,'p_id':str(draft.id),'p_secret':hashlib.sha256(draft.secret.encode()).hexdigest(),
       'p_platform':draft.platform,'p_subscription':draft.subscription,'p_active':draft.enabled})
+
+
+@router.get('/me/group-push/status')
+def push_status(device_id: UUID, user: str = Depends(get_current_user_id)):
+    """Only this account's installation and aggregate delivery states; never subscriptions or keys."""
+    try:
+        devices = supabase.table('group_push_devices').select('id,active').eq('user_id', user).eq('id', str(device_id)).execute().data or []
+        result = {'registered': any(row.get('active') for row in devices), 'recent_notifications': 0,
+                  'pending': 0, 'sending': 0, 'sent': 0, 'failed': 0, 'max_attempts': 0}
+        if not devices:
+            return result
+        notifications = supabase.table('group_notifications').select('id').eq('user_id', user).order('id', desc=True).limit(50).execute().data or []
+        result['recent_notifications'] = len(notifications)
+        if notifications:
+            rows = supabase.table('group_push_deliveries').select('state,attempts').eq('device_id', str(device_id)).in_('notification_id', [row['id'] for row in notifications]).execute().data or []
+            for row in rows:
+                if row.get('state') in ('pending', 'sending', 'sent', 'failed'):
+                    result[row['state']] += 1
+                result['max_attempts'] = max(result['max_attempts'], int(row.get('attempts', 0)))
+        return result
+    except Exception:
+        raise HTTPException(503, '알림 상태를 확인하지 못했어요. 백엔드 배포와 DB 설정을 확인해주세요.') from None

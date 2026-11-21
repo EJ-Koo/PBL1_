@@ -13,7 +13,6 @@ import { DIARY_TOPICS, SHOW_TOPIC_PICKER, type DiaryTopic } from '@/lib/special-
 import { useDiary, type DiaryPhoto, type Visibility } from '@/store/diary-context';
 
 type Props = {
-  scale: number;
   // 있으면 그 일기를 수정, 없으면 새 일기
   editId?: string;
   onBack: () => void;
@@ -21,12 +20,14 @@ type Props = {
 };
 
 function dateLabelOf(timestamp: number) {
-  return new Date(timestamp).toLocaleDateString('ko-KR', {
-    year: 'numeric', month: 'long', day: 'numeric', weekday: 'long',
-  });
+  const date = new Date(timestamp);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const weekday = date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+  return `${date.getFullYear()}. ${month}. ${day}. ${weekday}`;
 }
 
-export function DiaryComposer({ scale, editId, onBack, onSaved }: Props) {
+export function DiaryComposer({ editId, onBack, onSaved }: Props) {
   const { addEntry, updateEntry, getEntry, groups } = useDiary();
   const editing = editId ? getEntry(editId) : undefined;
 
@@ -98,11 +99,10 @@ export function DiaryComposer({ scale, editId, onBack, onSaved }: Props) {
 
   return (
     <DiaryWriteScreen
-      scale={scale}
+      hasBottomNav={!editId}
       diaryText={text}
       onChangeText={setText}
       dateLabel={dateLabelOf(editing?.createdAt ?? openedAt)}
-      authorLabel="star2day"
       photoCountLabel={`${photos.length}/${MAX_PHOTOS}`}
       photos={photos}
       photoBusy={photoBusy}

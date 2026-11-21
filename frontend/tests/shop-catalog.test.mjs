@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { visibleShopItems } from '../src/lib/shop-catalog.ts';
+import { cursorEffect, equippedCursor, starterItem, withEquipment } from '../src/lib/cursor-items.ts';
 
 test('server-owned and equipped milky way cards stay hidden, including after sale ends', () => {
   const comet = { id: 'comet', effect: { type: 'comet' }, quantity: 1, equipped: false, on_sale: true };
@@ -34,4 +35,26 @@ test('the shared visible items also exclude the cancelled effect from active eff
   ];
   const active = visibleShopItems(items).filter((item) => item.equipped && item.quantity > 0).map((item) => item.effect);
   assert.deepEqual(active, [{ type: 'comet' }]);
+});
+
+test('only one owned cursor renders, and removing it leaves the cursor slot empty', () => {
+  const starter = starterItem(true);
+  const violet = { ...starter, id: 'violet', equipped: false, effect: { type: 'cursor', style: 'diamond', color: '#ba70ff' } };
+  const music = { ...starter, id: 'music', slot: 'music' };
+  assert.equal(equippedCursor([starter]).itemId, starter.id);
+  assert.equal(equippedCursor([{ ...violet, quantity: 0, equipped: true }]), null);
+  const items = withEquipment([starter, violet, music], violet.id, true);
+  assert.deepEqual(items.map(i => i.equipped), [false, true, true]);
+  assert.deepEqual(equippedCursor(items), { ...violet.effect, color: '#BA70FF', itemId: violet.id });
+  assert.equal(equippedCursor(withEquipment(items, violet.id, false)), null);
+  assert.equal(equippedCursor(withEquipment(items, starter.id, true)).itemId, starter.id);
+  assert.equal(starter.equipped, true);
+});
+
+test('cursor records accept supported shapes and hex colors only', () => {
+  assert.equal(cursorEffect({ type: 'cursor' }).color, '#FFFFFF');
+  assert.equal(cursorEffect({ type: 'cursor', style: 'dots' }).style, 'dots');
+  for (const effect of [null, {}, { type: 'cursor', style: 'unknown' }, { type: 'cursor', color: 'red' }]) {
+    assert.equal(cursorEffect(effect), null);
+  }
 });

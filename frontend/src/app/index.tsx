@@ -14,7 +14,7 @@ import { Text } from '@/components/app-text';
 //  - 서버 기능이 아직 없는 테마·소리·알림은 화면만 보여주고 반응하지 않는다(나중에 하나씩 연결).
 //  - [MODIFIED 2026-11-07] 코인·상점은 서버 연결(useShop). HUD 코인을 누르면 상점, 장착한 배경·혜성이 나의 우주에 보인다.
 //  - 폰은 fffju 배율 그대로, 웹·PC는 폭 최대 520px 가운데 정렬(useDesignFrame).
-//  - [ADDED 2026-11-12] 별자리 보기: HUD 아래 [나의 우주 | 별자리 보기] 전환, 아래쪽 별자리 정보 패널.
+//  - 별자리 보기: 하단바 위 [나의 우주 | 별자리 보기] 전환, 그 위에 별자리 정보 패널.
 //    별자리는 화면 표시만 바꾼다(행성 원래 좌표·DB는 그대로). 규칙: lib/constellation.ts
 //  - [ADDED 2026-11-15] Level 4 나만의 별자리: 같은 주제 일기 30개 이상이면 동의 후 서버(LLM)가 만든다.
 //    만든 결과는 서버에 저장되고, 볼 때는 저장된 좌표만 불러와 기존 별자리 애니메이션으로 그린다.
@@ -70,9 +70,12 @@ export default function HomeScreen() {
   const { frameWidth } = useDesignFrame();
   const { refresh: refreshQuest, rewardEvent, clearReward } = useQuest();
   // fffju 반응형 레이아웃: 전체 뷰포트로 그리는 화면(홈 HUD·하단바·그룹)은 이 scale을 쓴다.
-  // 아직 520 프레임을 쓰는 화면(일기 작성·상점)은 useDesignFrame(frameWidth/scale)을 유지.
+  // 상점은 별도의 최대 프레임 폭을 사용한다.
   const responsive = useResponsiveLayout();
   const { scale: rScale, headerTop } = responsive;
+  const constellationToggleHeight = 32 * rScale;
+  const constellationToggleBottom = responsive.navBottom + responsive.navHeight + 12 * rScale;
+  const constellationPanelBottom = constellationToggleBottom + constellationToggleHeight + 10 * rScale;
 
   const [screen, setScreen] = useState<Screen>('home');
   const [newStar, setNewStar] = useState<NewStarHighlight | null>(null);
@@ -201,24 +204,19 @@ export default function HomeScreen() {
   const panelBox = responsive.wide
     ? { left: responsive.chromeLeft + 12, width: Math.min(400 * rScale, responsive.chromeWidth * 0.42) }
     : { left: responsive.contentLeft + 12, width: Math.min(responsive.contentWidth, 460 * rScale) - 24 };
-  // [2026-11-18] 전환 버튼은 하단바 바로 위(별자리 보기 중에는 패널 바로 위)
-  const navTop = responsive.navBottom + responsive.navHeight + 10;
-  const toggleHeight = 32 * rScale;
-  const toggleBottom = constellationOn ? navTop + panelHeight + 8 : navTop;
   const constellationInsets = useMemo(() => {
     const h = Math.max(responsive.height, 1);
     const w = Math.max(windowWidth, 1);
     const top = responsive.headerTop + 75 * rScale + 12;
-    const nav = responsive.navBottom + responsive.navHeight + 12;
+    const toggleTopInset = constellationToggleBottom + constellationToggleHeight + 12;
     if (responsive.wide) {
-      // 넓은 화면: 패널·전환 버튼은 왼쪽 열에 있고 별자리는 오른쪽 영역을 쓴다
       const left = panelBox.left + panelBox.width + 16;
-      return { top: Math.min(top / h, 0.45), bottom: Math.min(nav / h, 0.4), left: Math.min(left / w, 0.5), right: 0.03 };
+      return { top: Math.min(top / h, 0.45), bottom: Math.min(toggleTopInset / h, 0.4), left: Math.min(left / w, 0.5), right: 0.03 };
     }
-    const bottom = nav + 10 + panelHeight + 8 + toggleHeight;
-    return { top: Math.min(top / h, 0.45), bottom: Math.min(bottom / h, 0.62), left: 0.04, right: 0.04 };
-  }, [responsive.height, responsive.headerTop, responsive.navBottom, responsive.navHeight, responsive.wide, rScale,
-    panelHeight, windowWidth, panelBox.left, panelBox.width, toggleHeight]);
+    const bottom = constellationPanelBottom + panelHeight + 12;
+    return { top: Math.min(top / h, 0.45), bottom: Math.min(bottom / h, 0.6), left: 0.04, right: 0.04 };
+  }, [responsive.height, responsive.headerTop, responsive.wide, rScale, constellationToggleBottom,
+    constellationToggleHeight, constellationPanelBottom, panelHeight, windowWidth, panelBox.left, panelBox.width]);
   const constellationRequest: ConstellationRequest | null = useMemo(
     () =>
       activeTemplate && constellationMembers.length === activeTemplate.requiredPlanets
@@ -381,6 +379,7 @@ export default function HomeScreen() {
             onNewStarFound={() => setNewStar(null)}
             constellation={constellationRequest}
             frontViewRequest={frontViewRequest}
+            popupInsets={{ top: headerTop + 84 * rScale, bottom: constellationToggleBottom + constellationToggleHeight + 12 }}
           />
 
           {entries.length === 0 && (
@@ -411,27 +410,23 @@ export default function HomeScreen() {
             }}
           />
 
-          {/* 별자리 보기 전환 — [2026-11-18] HUD 아래에서 하단바 바로 위로 옮겼다. 별자리 패널이 열리면 패널 바로 위에 붙는다. */}
+          {/* 별자리 보기 전환 (하단바 바로 위 가운데) */}
           {entries.length > 0 && (
             <View
               pointerEvents="box-none"
-              style={[
-                styles.constellationToggleRow,
-                { bottom: toggleBottom },
-                constellationOn ? { left: panelBox.left, width: panelBox.width } : { left: 0, right: 0 },
-              ]}>
+              style={[styles.constellationToggleRow, { bottom: constellationToggleBottom }]}>
               <ConstellationModeToggle scale={rScale} active={constellationOn} onChange={setConstellationMode} />
             </View>
           )}
 
-          {/* 별자리 정보 패널 (하단바 위) */}
+          {/* 별자리 정보 패널 (전환 탭 위) */}
           {constellationOn && (
             <View
               pointerEvents="box-none"
               style={[
                 styles.constellationPanelWrap,
                 {
-                  bottom: responsive.navBottom + responsive.navHeight + 10,
+                  bottom: constellationPanelBottom,
                   left: panelBox.left,
                   width: panelBox.width,
                 },
@@ -460,7 +455,7 @@ export default function HomeScreen() {
 
       {/* ===== 왼쪽: 일기 작성 — 다른 탭에 갔다 와도 쓰던 내용이 남도록 화면을 숨기기만 한다 ===== */}
       <View style={[styles.fill, screen !== 'diary' && styles.hidden]}>
-        <DiaryComposer scale={rScale} onBack={() => setScreen('home')} onSaved={id => { if (id) setNewStar({ id, startedAt: Date.now() }); setScreen('home'); }} />
+        <DiaryComposer onBack={() => setScreen('home')} onSaved={id => { if (id) setNewStar({ id, startedAt: Date.now() }); setScreen('home'); }} />
       </View>
 
       {/* ===== 오른쪽: 그룹 우주 (반응형 그리드 — 전체 뷰포트, useResponsiveLayout 사용) ===== */}
@@ -472,13 +467,7 @@ export default function HomeScreen() {
               id: g.id,
               name: g.name,
               members: getMemberStars(g, entries, today),
-              stars: groupEntries(g.diary_ids).map((e) => ({
-                color: e.color,
-                size: 0.36,
-                // 카드 미리보기 위치: 3D 위치(x, y)를 카드 안 비율로 옮긴다 (별 배치 반경 최대 약 12).
-                previewX: `${Math.round(50 + Math.max(-1, Math.min(1, e.position[0] / 12)) * 40)}%`,
-                previewY: `${Math.round(50 - Math.max(-1, Math.min(1, e.position[1] / 12)) * 40)}%`,
-              })),
+              stars: groupEntries(g.diary_ids),
             }))}
             onSelectGroup={(g) => { setSharedDiaryId(null); setActiveGroupId(g.id); }}
             onAddGroup={() => setCreateGroupVisible(true)}
@@ -513,7 +502,6 @@ export default function HomeScreen() {
       {/* ===== 공통: 하단 네비게이션 (fffju 반응형 — 전체 뷰포트) ===== */}
       {rewardEvent && <QuestRewardAnimation key={rewardEvent.id} event={rewardEvent} onDone={clearReward} />}
       <UniverseBottomNav
-        scale={rScale}
         activeScreen={screen}
         onDiary={() => setScreen('diary')}
         onHome={() => setScreen('home')}
@@ -636,7 +624,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   emptyText: { color: '#A4B0BE', fontSize: 15, textAlign: 'center', lineHeight: 22 },
-  constellationToggleRow: { position: 'absolute', alignItems: 'center', zIndex: 9 },
+  constellationToggleRow: { position: 'absolute', left: 0, right: 0, alignItems: 'center', zIndex: 9 },
   constellationPanelWrap: { position: 'absolute', zIndex: 15 },
 
   topBar: {

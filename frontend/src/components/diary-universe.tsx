@@ -1,3 +1,4 @@
+import { useFontScale } from '@/hooks/use-font-scale';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -8,7 +9,7 @@ import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { apiReadDiary, type ApiDiary } from '@/lib/api';
 import { authSession } from '@/lib/auth-session';
 import type { NewStarHighlight } from '@/lib/new-star-highlight';
-import { getStarPopupLayout, type StarPopupAnchor } from '@/lib/star-popup-layout';
+import { getStarPopupLayout, starPopupMinimumHeight, starPopupWidth, type StarPopupAnchor } from '@/lib/star-popup-layout';
 import { useDiary, toEntry, type DiaryEntry } from '@/store/diary-context';
 
 /** fffju's anchored UI, test's exact-ID permission checks, and a shared camera per login. */
@@ -23,6 +24,7 @@ export function DiaryUniverse({ entries, sceneKey, groupId, selection, newStar, 
   popupInsets?: { top: number; bottom: number };
 }) {
   const { isOwnEntry, isEditableToday, accessToken, profile } = useDiary();
+  const fontScale = useFontScale();
   const revision = authSession.getRevision();
   const { headerTop, scale, bottomSpace } = useResponsiveLayout();
   const [localId, setLocalId] = useState<string | null>(null);
@@ -57,8 +59,8 @@ export function DiaryUniverse({ entries, sceneKey, groupId, selection, newStar, 
       : { ...entry, text: '', photos: [] }
     : entry;
   const readable = !!anchor && anchor.id === selectedId && anchor.visible && !!getStarPopupLayout(anchor, {
-    ...size, topInset: popupInsets?.top ?? headerTop + 84 * scale, bottomInset: popupInsets?.bottom ?? (groupId ? 20 : bottomSpace),
-  });
+    ...size, minBodyHeight:starPopupMinimumHeight(starPopupWidth(size.width,groupId?'group':'personal'),!!groupId,!!groupId||!!entry&&isOwnEntry(entry.id),fontScale), topInset: popupInsets?.top ?? headerTop + 84 * scale, bottomInset: popupInsets?.bottom ?? (groupId ? 20 : bottomSpace),
+  }, groupId ? 'group' : 'personal');
   useEffect(() => {
     // A successful fetch alone is not a read: an off-screen/hidden popup must stay unread.
     if(groupId && readable && verified?.diary && selectedId && onDiaryRead) void onDiaryRead(selectedId);

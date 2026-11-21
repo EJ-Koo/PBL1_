@@ -47,3 +47,14 @@ test('selected year shows exactly its four quarters and excludes other years', (
   const current = groupArchive(entries, now, 2026);
   assert.deepEqual(current.map(g => g.locked), [false, false, true, true]);
 });
+
+test('July 15 2024 opens Spring, Summer and Autumn, with Winter locked until October 1', () => {
+  const now = new Date(2024, 6, 15, 12).getTime();
+  const groups = groupArchive([], now, 2024);
+  assert.deepEqual(groups.map(g => g.locked), [false, false, false, true]);
+  assert.equal(groups[3].unlockAt, new Date(2024, 9, 1).getTime());
+  assert.equal(groupArchive([], groups[3].unlockAt - 1, 2024)[3].locked, true);
+  assert.equal(groupArchive([], groups[3].unlockAt, 2024)[3].locked, false);
+  assert.ok(groupArchive([], now, 2023).every(g => !g.locked), 'empty past seasons remain open');
+  assert.ok(groupArchive([], now, 2025).every(g => g.locked), 'future years remain locked');
+});

@@ -1,29 +1,19 @@
-import { ScrollView, type ScrollViewHandle } from '@/components/app-scroll-view';
-import { Text, TextInput } from '@/components/app-text';
-import { Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
+import { Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 
-import {
-  DiaryBackFrame,
-  DiaryInputFrame,
-  DiaryLockIcon,
-  DiaryPhotoAddFrame,
-  DiaryPhotoEmptyFrame,
-  DiarySubmitFrame,
-} from './diary-decoration';
-
+import { ScrollView } from '@/components/app-scroll-view';
+import { Text, TextInput } from '@/components/app-text';
 import { DesignFonts, DesignPaint } from '@/constants/ui-design';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { MAX_PHOTOS, type Photo } from '@/lib/journal';
-import { router } from 'expo-router';
+import { DiaryBackFrame, DiaryInputFrame, DiaryLockIcon, DiaryPhotoAddFrame, DiaryPhotoEmptyFrame, DiarySubmitFrame } from './diary-decoration';
 
 type Props = {
-  scale: number;
   diaryText: string;
   onChangeText: (text: string) => void;
   dateLabel: string;
-  authorLabel: string;
   photoCountLabel: string;
   photos: Photo[];
   photoBusy: boolean;
@@ -39,191 +29,149 @@ type Props = {
   topics?: { id: string; label: string }[];
   selectedTopic?: string | null;
   onToggleTopic?: (id: string) => void;
+  hasBottomNav: boolean;
 };
 
 export function DiaryWriteScreen({
-  scale, diaryText, onChangeText, dateLabel, authorLabel, photoCountLabel,
-  photos, photoBusy, saving, onAddPhotos, onRemovePhoto,
-  groups, selectedGroupIds, onSelectPrivate, onToggleGroup, onBack, onSubmit,
-  topics, selectedTopic, onToggleTopic,
+  diaryText, onChangeText, dateLabel, photoCountLabel, photos, photoBusy, saving,
+  onAddPhotos, onRemovePhoto, groups, selectedGroupIds, onSelectPrivate, onToggleGroup,
+  onBack, onSubmit, topics, selectedTopic, onToggleTopic, hasBottomNav,
 }: Props) {
   const insets = useSafeAreaInsets();
   const [preview, setPreview] = useState<Photo | null>(null);
-  const topicList = useRef<ScrollViewHandle>(null);
-  const [topicScroll, setTopicScroll] = useState({ width: 0, content: 0, offset: 0 });
-  const { contentLeft, contentWidth, headerTop, bottomSpace } = useResponsiveLayout();
-  const box = (left: number, top: number, width: number, height: number) => ({
-    left: left * scale, top: top * scale, width: width * scale, height: height * scale,
-  });
-  const type = (fontSize: number, lineHeight: number) => ({
-    fontSize: fontSize * scale, lineHeight: lineHeight * scale,
-  });
+  const [topicsOpen, setTopicsOpen] = useState(false);
+  const { wide, compact, navLeft, navWidth, navHeight, navBottom, scale: phoneScale } = useResponsiveLayout();
+  const pageWidth = Math.min(navWidth, 1800);
+  const scale = wide ? Math.max(0.8, pageWidth / 1440) : phoneScale;
+  const bodyWidth = pageWidth * (wide ? 1248 / 1440 : 344 / 393);
+  const columnGap = wide ? bodyWidth * 0.045 : 0;
+  const sideWidth = wide ? Math.max(210, bodyWidth * 0.298) : bodyWidth;
+  const photoGap = (wide ? 24 : 12) * scale;
+  const photoSize = wide ? (sideWidth - photoGap) / 2 : Math.min(128 * scale, (sideWidth - photoGap) / 2);
+  const tile = { width: photoSize, height: photoSize };
+  const addDisabled = photoBusy || saving || photos.length >= MAX_PHOTOS;
+  const type = (size: number, line: number) => ({ fontSize: size * scale, lineHeight: line * scale });
+  const selectedTopicLabel = topics?.find(topic => topic.id === selectedTopic)?.label;
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView
-        style={{ marginBottom: bottomSpace }}
-        contentContainerStyle={{ width: contentWidth, marginLeft: contentLeft, paddingTop: headerTop, paddingBottom: 24 * scale }}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="always"
-        keyboardDismissMode="on-drag"
-        contentInsetAdjustmentBehavior="never">
-        <View style={{ marginLeft: 17 * scale, width: 360 * scale, height: 40 * scale, marginBottom: 30 * scale }}>
-          <DiaryBackFrame scale={scale} />
-          <TouchableOpacity accessibilityRole="button" accessibilityLabel="지난 기록 열기"
-            onPress={() => { Keyboard.dismiss(); router.push('/archive'); }}
-            style={[styles.positioned, box(12, 0, 150, 40), { justifyContent: 'center' }]}>
-            <Text style={[styles.text, styles.backText, type(20, 26)]}>‹ 지난 기록</Text>
-          </TouchableOpacity>
-          <TouchableOpacity accessibilityRole="button" accessibilityLabel="나의 우주로 이동" onPress={onBack}
-            style={[styles.positioned, box(198, 0, 150, 40), { justifyContent: 'center', alignItems: 'flex-end' }]}>
-            <Text style={[styles.text, styles.backText, type(20, 26)]}>나의 우주 ›</Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={[styles.text, { marginHorizontal: 27 * scale }, type(24, 32)]}>오늘은 어떤 별일이 있었나요?</Text>
-        <Text style={[styles.text, styles.dateText, { marginHorizontal: 27 * scale, marginTop: 8 * scale }, type(20, 27)]}>{dateLabel}</Text>
-
-        <View style={{ marginHorizontal: 27 * scale, marginTop: 10 * scale, marginBottom: 6 * scale,
-          flexDirection: 'row', alignItems: 'center', gap: 8 * scale }}>
-          <View style={{ flex: 1, height: 1, backgroundColor: DesignPaint.ink }} />
-          <Text style={[styles.text, { maxWidth: '50%' }, type(14, 20)]}>{authorLabel}</Text>
-        </View>
-
-        <View style={{ alignSelf: 'center', width: 344 * scale, height: 233 * scale }}>
-          <DiaryInputFrame scale={scale} />
-          <TextInput
-            style={[styles.positioned, styles.text, styles.input, box(19, 32, 306, 182), type(16, 22)]}
-            multiline
-            placeholder="글을 입력해주세요."
-            placeholderTextColor={DesignPaint.ink}
-            selectionColor={DesignPaint.ink}
-            cursorColor={DesignPaint.ink}
-            underlineColorAndroid={DesignPaint.clear}
-            value={diaryText}
-            editable={!saving}
-            onChangeText={onChangeText}
-          />
-        </View>
-
-        {topics?.length ? (
-          <>
-            <View style={{ marginHorizontal: 27 * scale, marginTop: 16 * scale, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={[styles.text, type(16, 22)]}>오늘의 주제</Text>
-              <View style={{ flexDirection: 'row', gap: 4 }}>
-                {[-1, 1].map(direction => <Pressable key={direction} accessibilityRole="button" accessibilityLabel={direction < 0 ? '이전 주제 보기' : '다음 주제 보기'}
-                  onPress={() => topicList.current?.scrollTo({ x: Math.max(0, Math.min(topicScroll.content - topicScroll.width, topicScroll.offset + direction * topicScroll.width * 0.7)), animated: true })}
-                  style={{ width: 36, height: 32, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#ffffff55' }}>
-                  <Text style={[styles.text, { fontSize: 20 }]}>{direction < 0 ? '‹' : '›'}</Text>
-                </Pressable>)}
-              </View>
-            </View>
-            <Text style={[styles.text, styles.photoCount, { marginHorizontal: 27 * scale }, type(12, 18)]}>선택 안 해도 돼요 · 좌우로 넘겨 보세요</Text>
-            <ScrollView
-              ref={topicList}
-              horizontal
-              accessibilityLabel="오늘의 주제 목록, 좌우 스크롤"
-              showsHorizontalScrollIndicator={false}
-              nestedScrollEnabled
-              keyboardShouldPersistTaps="handled"
-              onLayout={event => { const width = event.nativeEvent.layout.width; setTopicScroll(old => ({ ...old, width })); }}
-              onContentSizeChange={content => setTopicScroll(old => ({ ...old, content }))}
-              onScroll={event => { const offset = event.nativeEvent.contentOffset.x; setTopicScroll(old => ({ ...old, offset })); }}
-              scrollEventThrottle={16}
-              style={{ marginHorizontal: 27 * scale, marginTop: 8 * scale, flexGrow: 0 }}
-              contentContainerStyle={{ alignItems: 'flex-start', gap: 8 * scale, paddingBottom: 12 }}>
-              {topics.map((t) => {
-                const selected = selectedTopic === t.id;
-                return (
-                  <TouchableOpacity
-                    key={t.id}
-                    onPress={() => onToggleTopic?.(t.id)}
-                    disabled={saving}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    style={[styles.pill, { minHeight: Math.max(44, 44 * scale), borderRadius: 16 * scale, borderWidth: (selected ? 1.5 : 1) * scale, paddingHorizontal: 12 * scale, opacity: selected ? 1 : 0.75 }]}>
-                    <Text style={[styles.text, type(13, 18)]}>{selected ? '✓ ' : ''}{t.label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-            {topicScroll.content > topicScroll.width && topicScroll.width > 0 && <View pointerEvents="none" style={{ marginHorizontal: 27 * scale, height: 3, backgroundColor: '#ffffff30', borderRadius: 2 }}>
-              <View style={{ height: 3, borderRadius: 2, backgroundColor: '#e5e8f0', width: topicScroll.width ** 2 / topicScroll.content,
-                left: Math.max(0, Math.min(topicScroll.content - topicScroll.width, topicScroll.offset)) * topicScroll.width / topicScroll.content }} />
-            </View>}
-          </>
-        ) : null}
-
-        <View style={{ marginHorizontal: 27 * scale, marginTop: 26 * scale, marginBottom: 12 * scale,
-          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={[styles.text, type(20, 27)]}>오늘의 장면</Text>
-          <Text style={[styles.text, styles.photoCount, type(16, 24)]}>{photoCountLabel}</Text>
-        </View>
-
-        <View style={{ marginHorizontal: 29 * scale, flexDirection: 'row', gap: 12 * scale }}>
-          <TouchableOpacity accessibilityLabel="일기 사진 추가" onPress={onAddPhotos}
-            disabled={photoBusy || saving || photos.length >= MAX_PHOTOS}
-            style={{ width: 128 * scale, height: 129 * scale, opacity: photoBusy || photos.length >= MAX_PHOTOS ? 0.5 : 1 }}>
-            <DiaryPhotoAddFrame scale={scale} />
-            <Text style={[styles.positioned, styles.text, styles.photoCaption, box(0, 87, 128, 25), type(16, 24)]}>{photoBusy ? '불러오는 중' : '사진 추가'}</Text>
-          </TouchableOpacity>
-          {photos.length === 0 ? (
-            <View style={{ width: 131 * scale, height: 129 * scale }}><DiaryPhotoEmptyFrame scale={scale} /></View>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1, height: 129 * scale }}
-              contentContainerStyle={{ gap: 8 * scale }}>
-              {photos.map((photo, index) => (
-                <View key={photo.id} style={{ width: 131 * scale, height: 129 * scale }}>
-                  <TouchableOpacity accessibilityLabel={`첨부 사진 ${index + 1} 확대`} onPress={() => setPreview(photo)}>
-                    <Image source={{ uri: photo.uri }} style={{ width: 131 * scale, height: 129 * scale, borderRadius: 12 * scale }} />
-                  </TouchableOpacity>
-                  <TouchableOpacity accessibilityLabel={`첨부 사진 ${index + 1} 삭제`} disabled={saving} onPress={() => onRemovePhoto(photo.id)}
-                    style={{ position: 'absolute', right: 2 * scale, top: 2 * scale, width: 32 * scale, height: 32 * scale, borderRadius: 16 * scale, backgroundColor: '#000a', alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={[styles.text, type(20, 26)]}>×</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </ScrollView>
-          )}
-        </View>
-
-        <View accessibilityLabel="일기 공유 범위" style={{ marginTop: 16 * scale, marginLeft: 27 * scale, marginRight: 25 * scale,
-          flexDirection: 'row', flexWrap: 'wrap', gap: 8 * scale, zIndex: 1 }}>
-          <Pressable
-            accessibilityRole="button" accessibilityLabel="비공개, 나의 우주에만 별 띄우기"
-            onPress={() => { Keyboard.dismiss(); onSelectPrivate(); }}
-            disabled={saving}
-            accessibilityState={{ selected: selectedGroupIds.length === 0 }}
-            style={[styles.pill, { minWidth: 114 * scale, minHeight: Math.max(44, 44 * scale), borderRadius: 22 * scale,
-              borderWidth: (selectedGroupIds.length === 0 ? 2 : 1) * scale, opacity: selectedGroupIds.length === 0 ? 1 : 0.65, gap: 6 * scale }]}>
-            <DiaryLockIcon scale={scale} />
-            <Text style={[styles.text, type(14, 20)]}>비공개</Text>
+        style={{ marginLeft: navLeft, width: navWidth, marginBottom: navBottom + (hasBottomNav ? navHeight : 0) }}
+        contentContainerStyle={{ alignItems: 'center', paddingTop: Math.max(insets.top + 8, (compact ? 12 : 32) * scale), paddingBottom: 16 * scale }}
+        showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag" contentInsetAdjustmentBehavior="never">
+        <View style={[styles.header, { width: pageWidth * 0.912, minHeight: Math.max(44, (wide ? 48 : 40) * scale), paddingHorizontal: (wide ? 22 : 16) * scale }]}>
+          <DiaryBackFrame scale={scale} wide={wide} />
+          <Pressable accessibilityRole="button" accessibilityLabel="지난 기록 열기"
+            onPress={() => { Keyboard.dismiss(); router.push('/archive'); }} style={styles.headerAction}>
+            <Text style={[styles.muted, type(wide ? 17 : 14, 22)]}>‹  지난 기록</Text>
           </Pressable>
-          {groups.map((group) => (
-            <Pressable
-              key={group.id}
-              accessibilityRole="button" accessibilityLabel={`${group.name}에 일기 공유`}
-              onPress={() => { Keyboard.dismiss(); onToggleGroup(group.id); }} disabled={saving}
-              accessibilityState={{ selected: selectedGroupIds.includes(group.id) }}
-              style={[styles.pill, { minWidth: 105 * scale, maxWidth: '100%', minHeight: Math.max(44, 44 * scale),
-                borderRadius: 22 * scale, borderWidth: (selectedGroupIds.includes(group.id) ? 2 : 1) * scale,
-                backgroundColor: selectedGroupIds.includes(group.id) ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.08)', paddingHorizontal: 18 * scale, paddingVertical: 10 * scale }]}>
-              <Text style={[styles.text, { flexShrink: 1 }, type(14, 20)]}>{selectedGroupIds.includes(group.id) ? '✓ ' : ''}{group.name}</Text>
-            </Pressable>
-          ))}
+          {wide && <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.center]}>
+            <Text style={[styles.text, type(21, 30)]}>STAR2DAY</Text>
+          </View>}
+          <Pressable accessibilityRole="button" accessibilityLabel="나의 우주로 이동" onPress={onBack} style={styles.headerAction}>
+            <Text style={[styles.text, type(wide ? 17 : 14, 22)]}>나의 우주  ›</Text>
+          </Pressable>
         </View>
 
-        <TouchableOpacity onPress={onSubmit} disabled={saving || photoBusy} accessibilityLabel="오늘의 별 띄우기"
-          style={{ width: 344 * scale, height: 58 * scale, marginTop: 23 * scale, marginBottom: 21 * scale, alignSelf: 'center' }}>
-          <DiarySubmitFrame scale={scale} />
-          <Text style={[styles.positioned, styles.text, styles.submitText, box(0, 19, 344, 24), type(14, 22)]}>{saving ? '저장 중…' : '오늘의 별 띄우기'}</Text>
-        </TouchableOpacity>
+        <View style={{ width: bodyWidth, marginTop: (wide ? 46 : 32) * scale }}>
+          <Text accessibilityRole="header" style={[styles.text, type(wide ? 36 : 24, wide ? 50 : 32)]}>오늘은 어떤 별일이 있었나요?</Text>
+          <View style={[styles.rowBetween, { marginTop: (wide ? 14 : 7) * scale, minHeight: 30 * scale }]}>
+            <Text style={[styles.muted, { flexShrink: 1 }, type(wide ? 22 : 18, wide ? 31 : 26)]}>{dateLabel}</Text>
+            {!!topics?.length && <Pressable accessibilityRole="button" accessibilityLabel="오늘의 주제 선택"
+              accessibilityState={{ expanded: topicsOpen }} aria-expanded={topicsOpen} hitSlop={6}
+              onPress={() => setTopicsOpen(open => !open)} style={styles.topicToggle}>
+              <Text style={[styles.muted, type(12, 17)]}>{selectedTopicLabel ?? '주제 선택'} {topicsOpen ? '−' : '+'}</Text>
+            </Pressable>}
+          </View>
+          {topicsOpen && topics && <View style={[styles.chips, { marginVertical: 8 * scale }]}>
+            {topics.map(topic => {
+              const selected = selectedTopic === topic.id;
+              return <Pressable key={topic.id} accessibilityRole="button" accessibilityLabel={topic.label}
+                accessibilityState={{ selected }} disabled={saving} onPress={() => onToggleTopic?.(topic.id)}
+                style={[styles.pill, { minHeight: 40 }, selected && styles.selected]}>
+                <Text style={[styles.text, type(13, 19)]}>{selected ? '✓ ' : ''}{topic.label}</Text>
+              </Pressable>;
+            })}
+          </View>}
+          <View style={[styles.dividerRow, { marginTop: 4 * scale }]}>
+            <View style={[styles.rule, !wide && styles.mobileRule]} />
+            {!wide && <Text style={[styles.text, type(12, 18)]}>STAR2DAY</Text>}
+          </View>
+
+          <View style={{ flexDirection: wide ? 'row' : 'column', gap: wide ? columnGap : 27 * scale, marginTop: (wide ? 36 : 5) * scale }}>
+            <View style={wide ? { flex: 1, minWidth: 0, minHeight: 285 * scale } : { height: Math.min(bodyWidth * 233 / 344, 340 * scale) }}>
+              <DiaryInputFrame scale={scale} wide={wide} />
+              <TextInput accessibilityLabel="일기 내용" multiline
+                style={[StyleSheet.absoluteFill, styles.text, styles.input, type(wide ? 17 : 16, 24),
+                  { paddingHorizontal: (wide ? 28 : 18) * scale, paddingVertical: (wide ? 26 : 32) * scale }]}
+                placeholder="글을 입력해주세요." placeholderTextColor={wide ? '#bbb' : DesignPaint.ink}
+                selectionColor={DesignPaint.ink} cursorColor={DesignPaint.ink} underlineColorAndroid={DesignPaint.clear}
+                value={diaryText} editable={!saving} onChangeText={onChangeText} />
+            </View>
+
+            <View style={{ width: sideWidth }}>
+              <View style={[styles.rowBetween, { minHeight: 29 * scale, marginBottom: (wide ? 26 : 8) * scale }]}>
+                <Text style={[styles.text, type(wide ? 20 : 18, 26)]}>오늘의 장면</Text>
+                <Text style={[styles.muted, type(16, 24)]}>{photoCountLabel}</Text>
+              </View>
+              <View style={[styles.photoRow, { gap: photoGap }]}>
+                <Pressable accessibilityRole="button" accessibilityLabel="일기 사진 추가" onPress={onAddPhotos}
+                  disabled={addDisabled} style={[tile, addDisabled && styles.dimmed]}>
+                  <DiaryPhotoAddFrame wide={wide} />
+                  <Text numberOfLines={1} style={[styles.photoCaption, styles.text, type(16, 22)]}>{photoBusy ? '불러오는 중' : '사진 추가'}</Text>
+                </Pressable>
+                {photos.length === 0 ? <View style={tile}><DiaryPhotoEmptyFrame /></View> : (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1, minWidth: 0, height: photoSize }}
+                    keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8 * scale }}>
+                    {photos.map((photo, index) => (
+                      <View key={photo.id} style={tile}>
+                        <Pressable accessibilityRole="button" accessibilityLabel={`첨부 사진 ${index + 1} 확대`} onPress={() => setPreview(photo)} style={styles.photo}>
+                          <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                        </Pressable>
+                        <Pressable accessibilityRole="button" accessibilityLabel={`첨부 사진 ${index + 1} 삭제`} disabled={saving}
+                          onPress={() => onRemovePhoto(photo.id)} style={styles.removePhoto}>
+                          <Text style={[styles.text, type(19, 25)]}>×</Text>
+                        </Pressable>
+                      </View>
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+
+              <View accessibilityLabel="일기 공유 범위" style={[styles.chips, { marginTop: (wide ? 40 : 16) * scale }]}>
+                <Pressable accessibilityRole="button" accessibilityLabel="비공개, 나의 우주에만 별 띄우기"
+                  onPress={() => { Keyboard.dismiss(); onSelectPrivate(); }} disabled={saving}
+                  accessibilityState={{ selected: selectedGroupIds.length === 0 }}
+                  style={[styles.pill, { minWidth: 114 * scale }, !selectedGroupIds.length && styles.selected]}>
+                  <DiaryLockIcon scale={scale} /><Text style={[styles.text, type(14, 20)]}>비공개</Text>
+                </Pressable>
+                {groups.map(group => {
+                  const selected = selectedGroupIds.includes(group.id);
+                  return <Pressable key={group.id} accessibilityRole="button" accessibilityLabel={`${group.name}에 일기 공유`}
+                    onPress={() => { Keyboard.dismiss(); onToggleGroup(group.id); }} disabled={saving}
+                    accessibilityState={{ selected }} style={[styles.pill, { minWidth: 98 * scale }, selected && styles.selected]}>
+                    <Text style={[styles.text, { flexShrink: 1 }, type(14, 20)]}>{selected ? '✓ ' : ''}{group.name}</Text>
+                  </Pressable>;
+                })}
+              </View>
+
+              <Pressable accessibilityRole="button" onPress={onSubmit} disabled={saving || photoBusy} accessibilityLabel="오늘의 별 띄우기"
+                style={{ height: Math.max(44, (wide ? 56 : 58) * scale), marginTop: (wide ? 16 : 22) * scale }}>
+                <DiarySubmitFrame wide={wide} />
+                <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.center]}>
+                  <Text style={[styles.text, type(wide ? 16 : 14, 22)]}>{saving ? '저장 중…' : '오늘의 별 띄우기'}</Text>
+                </View>
+              </Pressable>
+            </View>
+          </View>
+        </View>
       </ScrollView>
       <Modal visible={preview !== null} transparent animationType="fade" onRequestClose={() => setPreview(null)}>
         <View style={{ flex: 1, backgroundColor: '#000e', paddingTop: insets.top, paddingBottom: insets.bottom }}>
-          <TouchableOpacity accessibilityLabel="사진 미리보기 닫기" onPress={() => setPreview(null)} style={{ padding: 20, alignSelf: 'flex-end' }}>
+          <Pressable accessibilityRole="button" accessibilityLabel="사진 미리보기 닫기" onPress={() => setPreview(null)} style={{ padding: 20, alignSelf: 'flex-end' }}>
             <Text style={[styles.text, { fontSize: 24 }]}>×</Text>
-          </TouchableOpacity>
+          </Pressable>
           {preview && <Image source={{ uri: preview.uri }} resizeMode="contain" style={{ flex: 1 }} />}
         </View>
       </Modal>
@@ -233,13 +181,24 @@ export function DiaryWriteScreen({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: DesignPaint.background },
-  positioned: { position: 'absolute' },
   text: { color: DesignPaint.ink, fontFamily: DesignFonts.regular, includeFontPadding: false },
-  backText: { textDecorationLine: 'underline' },
-  dateText: { fontFamily: DesignFonts.bold, fontWeight: '700' },
+  muted: { color: '#bdbdbd', includeFontPadding: false },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerAction: { minHeight: 44, justifyContent: 'center' },
+  center: { alignItems: 'center', justifyContent: 'center' },
+  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  topicToggle: { paddingVertical: 6, alignItems: 'flex-end' },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  rule: { flex: 1, height: 1, backgroundColor: '#666' },
+  mobileRule: { backgroundColor: '#ccc' },
   input: { padding: 0, textAlignVertical: 'top' },
-  photoCount: { textAlign: 'right' },
-  photoCaption: { textAlign: 'center' },
-  pill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: DesignPaint.diaryPill, borderColor: DesignPaint.ink },
-  submitText: { textAlign: 'center' },
+  photoRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  photoCaption: { position: 'absolute', bottom: '15%', width: '100%', textAlign: 'center' },
+  photo: { flex: 1, borderWidth: 1, borderColor: '#bbb' },
+  removePhoto: { position: 'absolute', right: 2, top: 2, width: 36, height: 36, borderRadius: 18, backgroundColor: '#000b', alignItems: 'center', justifyContent: 'center' },
+  dimmed: { opacity: 0.5 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
+  pill: { minHeight: 44, maxWidth: '100%', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 28, flexDirection: 'row', gap: 7,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: DesignPaint.diaryPill, borderColor: '#c4c4c4', borderWidth: 1 },
+  selected: { borderColor: '#fff', borderWidth: 2 },
 });

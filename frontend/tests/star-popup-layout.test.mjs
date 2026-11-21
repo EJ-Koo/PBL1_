@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getStarPopupLayout } from '../src/lib/star-popup-layout.ts';
+import { getStarPopupLayout, starPopupMinimumHeight, starPopupWidth } from '../src/lib/star-popup-layout.ts';
 
 const viewport = { width: 393, height: 852, topInset: 138, bottomInset: 100 };
 const anchor = { id: 'diary', x: 196, y: 490, radius: 24, visible: true };
@@ -58,5 +58,58 @@ test('stars behind screen chrome keep the diary body clear of the header and nav
     const bodyTop = layout.top + (layout.above ? 0 : layout.tailHeight);
     assert.ok(bodyTop >= viewport.topInset);
     assert.ok(bodyTop + layout.bodyHeight <= viewport.height - viewport.bottomInset);
+  }
+});
+
+test('group author and action controls leave two text lines even at extreme zoom and larger text size', () => {
+  for (const fontScale of [1, 1.4]) {
+    for (const screen of [{width:393,height:852,topInset:138,bottomInset:164},{width:1280,height:900,topInset:140,bottomInset:180}]) {
+      const minBodyHeight=starPopupMinimumHeight(Math.min(440,screen.width-32),true,true,fontScale);
+      for (const radius of [10,100,400,1000]) {
+        const layout=getStarPopupLayout({...anchor,x:screen.width/2,y:screen.height/2,radius},{...screen,minBodyHeight});
+        assert.ok(layout);
+        assert.ok(layout.bodyHeight>=minBodyHeight);
+        const bodyTop=layout.top+(layout.above?0:layout.tailHeight);
+        assert.ok(bodyTop>=screen.topInset);
+        assert.ok(bodyTop+layout.bodyHeight<=screen.height-screen.bottomInset);
+      }
+    }
+  }
+});
+
+test('group diaries use a compact card with space for the overlapping profile', () => {
+  const layout = getStarPopupLayout(anchor, viewport, 'group');
+  assert.ok(layout.width < 260);
+  assert.ok(layout.bodyHeight >= 164);
+  assert.equal(layout.tailHeight, 20);
+  assert.equal(layout.left + layout.tailX, anchor.x);
+  assert.ok(layout.left - 32 >= 16);
+});
+
+test('group cards keep the profile and body visible at either edge and above expanded chat', () => {
+  for (const width of [320, 393, 1440]) {
+    const screen = { width, height: 852, topInset: 138, bottomInset: 340 };
+    for (const x of [4, width / 2, width - 4]) {
+      for (const y of [150, 350, 780]) {
+        const layout = getStarPopupLayout({ ...anchor, x, y }, screen, 'group');
+        assert.ok(layout);
+        const bodyTop = layout.top + (layout.above ? 0 : layout.tailHeight);
+        assert.ok(layout.left - 32 >= 16);
+        assert.ok(layout.left + layout.width <= width - 16);
+        assert.ok(bodyTop >= screen.topInset);
+        assert.ok(bodyTop + layout.bodyHeight <= screen.height - screen.bottomInset);
+        assert.equal(layout.left + layout.tailX, x);
+      }
+    }
+  }
+});
+
+test('compact group cards retain readable author/action/text space after the UI merge', () => {
+  for(const width of [320,393,1440])for(const fontScale of [1,1.4]){
+    const screen={width,height:852,topInset:138,bottomInset:230};
+    const minBodyHeight=starPopupMinimumHeight(starPopupWidth(width,'group'),true,true,fontScale);
+    const layout=getStarPopupLayout({...anchor,x:width/2,radius:400},{...screen,minBodyHeight},'group');
+    assert.ok(layout.bodyHeight>=minBodyHeight);
+    assert.ok(layout.left-32>=16);
   }
 });

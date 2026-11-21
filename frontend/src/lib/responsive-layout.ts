@@ -13,16 +13,16 @@ export function getResponsiveLayout(width: number, height: number, insets: Inset
   const chromeWidth = Math.max(0, availableWidth - 2 * chromeInset);
   const compact = height < 600;
   const headerTop = Math.max((compact ? 12 : 27) * scale, insets.top + 12);
-  const navBottom = Math.max((compact ? 12 : 34) * scale, insets.bottom);
+  const navBottom = insets.bottom;
   const navLeft = insets.left;
   const navWidth = availableWidth;
-  const navLayout = getBottomNavLayout(scale > 0 ? navWidth / scale : 393);
-  const navHeight = Math.max(44, navLayout.height * scale);
+  const navLayout = getBottomNavLayout(navWidth);
+  const navHeight = navLayout.height;
   const bottomSpace = navBottom + navHeight + 16 * scale;
   const gridWidth = Math.min(availableWidth, 1120);
   const gridLeft = insets.left + (availableWidth - gridWidth) / 2;
   const page = getPageLayout(availableWidth, scale);
-  return { scale, contentWidth, contentLeft, chromeLeft, chromeWidth, wide, headerTop, navLeft, navWidth, navBottom, navHeight, bottomSpace,
+  return { scale, contentWidth, contentLeft, chromeLeft, chromeWidth, wide, headerTop, navLeft, navWidth, navBottom, navHeight, navLayout, bottomSpace,
     gridWidth, gridLeft, height, compact, ...page,
     pageLeft: insets.left + (availableWidth - page.pageWidth) / 2 };
 }
@@ -37,22 +37,30 @@ export function getPageLayout(availableWidth: number, scale: number) {
   return { pageWidth, pagePadding, innerWidth, pageGap, groupColumns, groupCardWidth };
 }
 
-// Coordinates shared by the SVG outlines and the actual navigation buttons.
-export function getBottomNavLayout(frameWidth: number) {
-  const labels = ['일기 작성', '나의 우주', '그룹 우주'];
-  const ids = ['diary', 'home', 'group'];
-  const groupWidth = Math.min(480, Math.max(0, frameWidth - 68));
-  const offset = (frameWidth - groupWidth) / 2;
-  const gap = 8;
-  const buttonWidth = Math.max(0, (groupWidth - 2 * gap) / 3);
-  const buttonHeight = 44;
-  const buttonY = 12;
-  const lineY = 0.5;
-  const stripeLeft = 10;
-  const stripeWidth = Math.max(0, offset - 8 - stripeLeft);
-  const items = ids.map((id, index) => ({ id, label: labels[index],
-    x: offset + index * (buttonWidth + gap), y: buttonY, width: buttonWidth, height: buttonHeight }));
-  return { items, height: 58, lineY, groupLeft: offset, groupRight: offset + groupWidth,
-    stripeLeft, stripeRight: frameWidth - stripeLeft - stripeWidth, stripeWidth,
-    stripeY: buttonY, stripeHeight: 15, stripePitch: 11, stripeStroke: 5 };
+const navPanels = [
+  { id: 'diary', label: '일기 작성', x: 181, width: 95 },
+  { id: 'home', label: '나의 우주', x: 290, width: 196 },
+  { id: 'group', label: '그룹 우주', x: 500, width: 95 },
+] as const;
+
+export function getBottomNavLayout(width: number) {
+  const scale = Math.min(Math.max(0, width) / 774, 1.15) * 0.85;
+  const viewWidth = scale > 0 ? width / scale : 774;
+  const offset = (viewWidth - 774) / 2;
+  const viewHeight = 120;
+  const height = Math.max(44, viewHeight * scale);
+  // Match the bottom-aligned artwork when the minimum touch height adds space.
+  const artworkTop = height - viewHeight * scale;
+  const hitHeight = Math.max(44, 42 * scale);
+  const hitTop = Math.min(height - hitHeight, Math.max(0, artworkTop + 66.5 * scale - hitHeight / 2));
+  const items = navPanels.map(panel => {
+    const x = offset + panel.x;
+    const panelWidth = panel.width * scale;
+    const hitWidth = Math.max(Math.min(65, width / 3), panelWidth);
+    // Extend small outside buttons toward the stripes, away from the middle button.
+    const hitLeft = panel.id === 'diary' ? (x + panel.width) * scale - hitWidth
+      : panel.id === 'home' ? (x + panel.width / 2) * scale - hitWidth / 2 : x * scale;
+    return { ...panel, x, hitLeft: Math.max(0, Math.min(width - hitWidth, hitLeft)), hitWidth };
+  });
+  return { viewWidth, viewHeight, scale, offset, height, artworkTop, hitHeight, hitTop, items };
 }

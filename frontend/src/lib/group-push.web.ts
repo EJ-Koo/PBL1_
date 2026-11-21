@@ -1,3 +1,5 @@
+import {publicPushKey,samePushKey} from './push-subscription';
+import {pushDeliveryStatus,type PushDiagnostics} from './group-social-api';
 import {socialRequest} from './group-social-api';
 import {API_BASE_URL} from './api-config';
 import {forgetPush,pushIdentity,savedPush,savePush,serialPush} from './push-device';
@@ -22,9 +24,12 @@ export function enableGroupPush(token:string,user:string){
   if(!config.web_public_key)throw new Error('서버의 웹 푸시 연결이 아직 준비되지 않았어요.');
   const registered=await navigator.serviceWorker.register('/group-push-sw.js',{scope:'/',updateViaCache:'none'});
   await navigator.serviceWorker.ready;
-  const key=config.web_public_key.replace(/-/g,'+').replace(/_/g,'/');
-  const bytes=Uint8Array.from(atob(key+'='.repeat((4-key.length%4)%4)),letter=>letter.charCodeAt(0));
-  const subscription=await registered.pushManager.getSubscription()??await registered.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:bytes});
+  const bytes=publicPushKey(config.web_public_key);
+  let subscription=await registered.pushManager.getSubscription();
+  if(subscription&&!samePushKey(subscription.options.applicationServerKey,bytes)){
+    await subscription.unsubscribe();subscription=null;
+  }
+  subscription??=await registered.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:bytes});
   const identity=await pushIdentity();
   const value={...identity,platform:'web' as const,subscription:subscription.toJSON() as Record<string,unknown>,user_id:user};
   try{await socialRequest(token,'/me/group-push/device','PUT',{...value,enabled:true});await syncPushUser(user);await savePush(value);}
@@ -39,3 +44,15 @@ export function disableGroupPush(token:string,user:string){return serialPush(asy
   const subscription=await registration?.pushManager.getSubscription();await subscription?.unsubscribe();await forgetPush();
 });}
 export function listenGroupPush(_onOpen:(data:Record<string,unknown>)=>void){return()=>{};}
+
+export async function inspectGroupPush(token:string,user:string):Promise<PushDiagnostics>{
+  const saved=await savedPush();
+  const registration=await navigator.serviceWorker?.getRegistration('/');
+  const subscription=await registration?.pushManager.getSubscription();
+  const config=await socialRequest<{web_public_key:string|null}>(token,'/me/group-push/config');
+  // Refresh the service worker's active account identity while the user explicitly checks this device.
+  await syncPushUser(user);
+  return {permission:typeof Notification==='undefined'?'unsupported':Notification.permission,subscription:!!subscription,
+    key_matches:subscription&&config.web_public_key?samePushKey(subscription.options.applicationServerKey,publicPushKey(config.web_public_key)):null,
+    server:saved?.user_id===user?await pushDeliveryStatus(token,saved.id):null};
+}

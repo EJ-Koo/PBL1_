@@ -30,23 +30,26 @@ export default function AdminDashboardScreen() {
   const [tab, setTab] = useState<Tab>('users');
   const [users, setUsers] = useState<ApiAdminUser[]>([]);
   const [diaries, setDiaries] = useState<ApiAdminDiary[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback((isActive: () => boolean = () => true) => {
     if (!adminToken) return;
-    setIsLoading(true);
-    try {
-      const [userList, diaryList] = await Promise.all([
-        apiAdminListUsers(adminToken),
-        apiAdminListDiaries(adminToken),
-      ]);
-      setUsers(userList);
-      setDiaries(diaryList);
-    } catch (err) {
-      showNotice('불러오기 실패', err instanceof Error ? err.message : '데이터를 불러오지 못했습니다.');
-    } finally {
-      setIsLoading(false);
-    }
+    return Promise.all([
+      apiAdminListUsers(adminToken),
+      apiAdminListDiaries(adminToken),
+    ])
+      .then(([userList, diaryList]) => {
+        if (!isActive()) return;
+        setUsers(userList);
+        setDiaries(diaryList);
+      })
+      .catch((err) => {
+        if (!isActive()) return;
+        showNotice('불러오기 실패', err instanceof Error ? err.message : '데이터를 불러오지 못했습니다.');
+      })
+      .finally(() => {
+        if (isActive()) setIsLoading(false);
+      });
   }, [adminToken]);
 
   useEffect(() => {
@@ -54,8 +57,17 @@ export default function AdminDashboardScreen() {
       router.replace('/admin/login');
       return;
     }
-    loadData();
+    let active = true;
+    void loadData(() => active);
+    return () => {
+      active = false;
+    };
   }, [isAdminLoggedIn, loadData]);
+
+  const handleRefresh = () => {
+    setIsLoading(true);
+    void loadData();
+  };
 
   const handleLogout = () => {
     adminLogout();
@@ -130,7 +142,7 @@ export default function AdminDashboardScreen() {
           data={users}
           keyExtractor={(item) => item.user_id}
           refreshing={isLoading}
-          onRefresh={loadData}
+          onRefresh={handleRefresh}
           contentContainerStyle={styles.list}
           ListEmptyComponent={<Text style={styles.empty}>유저가 없습니다.</Text>}
           renderItem={({ item }) => (
@@ -151,7 +163,7 @@ export default function AdminDashboardScreen() {
           data={diaries}
           keyExtractor={(item) => item.id}
           refreshing={isLoading}
-          onRefresh={loadData}
+          onRefresh={handleRefresh}
           contentContainerStyle={styles.list}
           ListEmptyComponent={<Text style={styles.empty}>일기가 없습니다.</Text>}
           renderItem={({ item }) => (

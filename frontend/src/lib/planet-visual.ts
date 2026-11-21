@@ -82,9 +82,9 @@ export const QUALITY_SETTINGS: Record<
   PlanetQuality,
   { segments: number; octaves: number; atmosphere: boolean; ringSegments: number; stars: number }
 > = {
-  low: { segments: 20, octaves: 2, atmosphere: false, ringSegments: 40, stars: 250 },
-  medium: { segments: 32, octaves: 3, atmosphere: true, ringSegments: 64, stars: 350 },
-  high: { segments: 48, octaves: 4, atmosphere: true, ringSegments: 96, stars: 500 },
+  low: { segments: 20, octaves: 2, atmosphere: false, ringSegments: 40, stars: 400 },
+  medium: { segments: 32, octaves: 3, atmosphere: true, ringSegments: 64, stars: 560 },
+  high: { segments: 48, octaves: 4, atmosphere: true, ringSegments: 96, stars: 800 },
 };
 
 /**

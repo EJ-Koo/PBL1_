@@ -3,7 +3,7 @@ import { useId } from 'react';
 import Svg, { ClipPath, Defs, G, Path, Rect } from 'react-native-svg';
 
 import { DesignColors, DesignPaint } from '@/constants/ui-design';
-import { getBottomNavLayout } from '@/lib/responsive-layout';
+import type { getBottomNavLayout } from '@/lib/responsive-layout';
 
 export function HomeHudFrame({ scale, width = 393 * scale, wide = false }: { scale: number; width?: number; wide?: boolean }) {
   const frameWidth = scale > 0 ? width / scale : 393;
@@ -64,34 +64,35 @@ export function HudIcon({ kind, scale }: { kind: 'star' | 'coin' | 'check'; scal
   );
 }
 
-export function BottomNavFrame({ scale, width = 393 * scale }: { scale: number; width?: number }) {
-  const id = useId().replace(/:/g, '');
-  const clipId = `bottom-stripes-${id}`;
-  const frameWidth = scale > 0 ? width / scale : 393;
-  const layout = getBottomNavLayout(frameWidth);
-  const { items, lineY, stripeLeft, stripeRight, stripeWidth, stripeY, stripeHeight, stripePitch, stripeStroke } = layout;
+type BottomLayout = ReturnType<typeof getBottomNavLayout>;
+
+export function BottomNavFrame({ layout, pressed }: { layout: BottomLayout; pressed?: string | null }) {
+  const clipId = 'bottom-stripes-' + useId().replace(/[^a-zA-Z0-9_-]/g, '');
+  const { viewWidth, viewHeight, scale, offset, height, items } = layout;
+  if (scale === 0) return null;
+  const stripeWidth = 139 + offset;
+  const bands = [21, 617 + offset];
   return (
-    <Svg width={width} height={layout.height * scale} viewBox={`0 0 ${frameWidth} ${layout.height}`} pointerEvents="none">
+    <Svg width="100%" height={height} viewBox={`0 0 ${viewWidth} ${viewHeight}`} preserveAspectRatio="xMidYMax meet" pointerEvents="none" aria-hidden>
+      <Rect width="100%" height="100%" fill={DesignColors.black} />
       <Defs>
         <ClipPath id={clipId}>
-          <Rect x={stripeLeft} y={stripeY} width={stripeWidth} height={stripeHeight} />
-          <Rect x={stripeRight} y={stripeY} width={stripeWidth} height={stripeHeight} />
+          {bands.map(x => <Rect key={x} x={x} y={58.5} width={stripeWidth} height={30} />)}
         </ClipPath>
       </Defs>
-      <Path d={`M0 ${lineY}H${frameWidth}`}
-        fill="none" stroke={DesignPaint.ink} strokeWidth={0.8} />
-      <G clipPath={`url(#${clipId})`}>
-        {Array.from({ length: Math.ceil(stripeWidth / stripePitch) + 3 }, (_, i) => (
-          <Path key={i}
-            d={[stripeLeft, stripeRight].map((left) =>
-              `M${left + i * stripePitch - stripeHeight} ${stripeY + stripeHeight + 2}L${left + i * stripePitch + 2} ${stripeY - 2}`).join(' ')}
-            stroke={DesignColors.gray} strokeWidth={stripeStroke} />
-        ))}
+      <Path d={`M0 44.5H${182 + offset}L${201 + offset} 29.5H${574 + offset}L${595 + offset} 44.5H${viewWidth}`}
+        fill="none" stroke={DesignPaint.ink} strokeWidth={2} />
+      <G clipPath={`url(#${clipId})`} fill={DesignColors.gray}>
+        {bands.map(left => <Path key={left} d={Array.from({ length: Math.ceil(stripeWidth / 31) + 1 }, (_, i) =>
+          `M${left + (i - 1) * 31} 88.5h20l28 -30h-20Z`).join(' ')} />)}
       </G>
-      {items.map(({ id, x, y, width, height }) => (
-        <Rect key={id} x={x} y={y} width={width} height={height}
-          fill={DesignPaint.bottomBar} stroke={DesignPaint.ink} strokeWidth={1} />
-      ))}
+      {items.map(({ id, x, width }) => {
+        const right = x + width;
+        const top = id === 'diary' ? `V71L${x + 35} 45.5H${right}`
+          : id === 'group' ? `V45.5H${right - 35}L${right} 71` : `V45.5H${right}`;
+        return <Path key={id} d={`M${x} 87.5${top}V87.5Z`}
+          fill={pressed === id ? '#686868' : DesignPaint.bottomBar} stroke={DesignPaint.ink} strokeWidth={2} />;
+      })}
     </Svg>
   );
 }
