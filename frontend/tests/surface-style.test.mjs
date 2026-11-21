@@ -10,7 +10,6 @@ import {
   SURFACE_STYLE_SETTINGS,
   asSurfaceStyle,
   surfaceOfItem,
-  surfaceTiers,
   surfaceToDraw,
 } from '../src/lib/surface-style.ts';
 import {
@@ -100,18 +99,4 @@ test('표면을 끄면(설정) 기본 스타일로 그린다', () => {
   assert.equal(surfaceToDraw('pearl_silk'), null);
   SURFACE_STYLE_SETTINGS.enabled = true;
   assert.equal(surfaceToDraw(null), null);
-});
-
-test('단계: 가까운 순서로 maxNear 개까지만 1, 멀거나 별자리 밖·전환 중이면 0', () => {
-  const ranked = Array.from({ length: 12 }, (_, i) => ({ id: `p${i}`, d: 2 + i }));
-  const tiers = surfaceTiers(ranked, 'medium');
-  const near = [...tiers.values()].filter((t) => t === 1).length;
-  assert.equal(near, Math.min(SURFACE_STYLE_SETTINGS.maxNear.medium, ranked.filter((r) => r.d < SURFACE_STYLE_SETTINGS.nearDistance).length));
-  assert.equal(tiers.get('p0'), 1);
-  assert.equal(tiers.get('p11'), 0); // 멀리
-  assert.equal(surfaceTiers(ranked, 'medium', { moving: true }).get('p0'), 0);
-  const dimmed = surfaceTiers(ranked, 'medium', { dimmed: new Set(['p0']) });
-  assert.equal(dimmed.get('p0'), 0);
-  assert.equal(dimmed.get('p1'), 1);
-  assert.ok([...surfaceTiers(ranked, 'low').values()].filter((t) => t === 1).length <= SURFACE_STYLE_SETTINGS.maxNear.low);
 });

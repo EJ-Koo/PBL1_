@@ -110,6 +110,12 @@ export const SPECIAL_EFFECT_SETTINGS = {
   } as Record<SpecialType, boolean>,
   maxNear: { low: 3, medium: 6, high: 10 } as Record<PlanetQuality, number>,
   nearDistance: 9,
+  /**
+   * [2026-11-22] 우주에서도 상점·꾸미기 미리보기와 똑같이(최고 단계) 그린다. false 면 위의 거리별 단계(예전 방식).
+   * maxFull: 최고 단계로 그릴 효과 행성 수 상한(기기 사양별, 가까운 순서). 넘는 행성은 '가까이' 단계.
+   */
+  matchPreview: true,
+  maxFull: { low: 8, medium: 24, high: 40 } as Record<PlanetQuality, number>,
   /** 저품질(휴대폰·행성 많음)에서는 가까운 행성도 입자를 그리지 않는다(선택한 행성만) */
   particlesWhenNear: { low: false, medium: true, high: true } as Record<PlanetQuality, boolean>,
 };

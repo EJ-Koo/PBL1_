@@ -94,7 +94,16 @@ function AnalysisLine({ row }: { row: ReturnType<typeof pickEntries>[number] }) 
   );
 }
 
-type BenchItem = { key: string; label: string; surface: SurfaceStyle | null; tier: SurfaceTier; count: number; effects?: (SpecialType | null)[] };
+type BenchItem = {
+  key: string;
+  label: string;
+  surface: SurfaceStyle | null;
+  tier: SurfaceTier;
+  count: number;
+  effects?: (SpecialType | null)[];
+  surfaces?: (SurfaceStyle | null)[];
+  full?: boolean;
+};
 type BenchResult = BenchItem & BenchmarkResult;
 const SURFACE_PLAN: BenchItem[] = [
   { key: 'base-0', label: '기본(기존)', surface: null, tier: 0, count: 36 },
@@ -103,10 +112,15 @@ const SURFACE_PLAN: BenchItem[] = [
   ),
 ];
 // [2026-11-21] 효과 행성 수별: 효과 없음 / 기존 5종을 돌아가며 / 신규 3종을 돌아가며. 단계는 1개 선택·6개 가까이·나머지 멀리.
-const EFFECT_SETS: { key: string; label: string; effects: (SpecialType | null)[] }[] = [
+// [2026-11-22] '미리보기와 같게' = 꾸민 행성 모두 최고 단계(우주 화면 기본값). '거리별' = 예전 규칙(1 선택·6 가까이·나머지 멀리).
+const CLASSIC5: SpecialType[] = ['ocean', 'cloud', 'crystal', 'nebula', 'lava'];
+const EFFECT_SETS: { key: string; label: string; effects: (SpecialType | null)[]; surfaces?: (SurfaceStyle | null)[]; full?: boolean }[] = [
   { key: 'none', label: '효과 없음', effects: [null] },
-  { key: 'classic', label: '기존 5종', effects: ['ocean', 'cloud', 'crystal', 'nebula', 'lava'] },
-  { key: 'new', label: '신규 3종', effects: [...NEW_SPECIAL_TYPES] },
+  { key: 'classic', label: '기존 5종(거리별)', effects: CLASSIC5 },
+  { key: 'new', label: '신규 3종(거리별)', effects: [...NEW_SPECIAL_TYPES] },
+  { key: 'classic-full', label: '기존 5종(미리보기와 같게)', effects: CLASSIC5, full: true },
+  { key: 'new-full', label: '신규 3종(미리보기와 같게)', effects: [...NEW_SPECIAL_TYPES], full: true },
+  { key: 'all-full', label: '표면5+효과8(미리보기와 같게)', effects: [...SPECIAL_TYPES], surfaces: [...SURFACE_STYLE_IDS], full: true },
 ];
 const EFFECT_PLAN: BenchItem[] = [10, 30, 50, 100].flatMap((count) =>
   EFFECT_SETS.map((set) => ({
@@ -116,6 +130,8 @@ const EFFECT_PLAN: BenchItem[] = [10, 30, 50, 100].flatMap((count) =>
     tier: 0 as SurfaceTier,
     count,
     effects: set.effects,
+    surfaces: set.surfaces,
+    full: set.full,
   }))
 );
 
@@ -271,6 +287,8 @@ export default function SurfaceLab() {
             tier={running.tier}
             count={running.count}
             effects={running.effects}
+            surfaces={running.surfaces}
+            full={running.full}
             onResult={(r) => setBench((b) => (b ? { ...b, index: b.index + 1, results: [...b.results, { ...running, ...r }] } : b))}
           />
         </View>
