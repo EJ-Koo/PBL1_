@@ -24,6 +24,11 @@ test('배율은 0.6~2.0, 글자 수가 늘수록 커지고 300자에서 최대',
   }
 });
 
+test('표시 반지름은 약 0.16~0.54 (2026-11-21 15% 축소)', () => {
+  assert.ok(Math.abs(planetRadiusForText('') - 0.1632) < 1e-9);
+  assert.ok(Math.abs(planetRadiusForText(text(300)) - 0.544) < 1e-9);
+});
+
 test('공백은 세지 않는다', () => {
   assert.equal(planetScaleForText('가 나 다'), planetScaleForText('가나다'));
 });
@@ -35,7 +40,7 @@ test('짧은 일기끼리도 분량 차이가 보인다(5자 vs 40자 1.5배 이
 });
 
 test('이웃과 가까우면 겹치지 않게 줄이고, 멀면 그대로 둔다', () => {
-  const big = planetRadiusForText(text(300)); // 0.64
+  const big = planetRadiusForText(text(300)); // 0.544
   const positions = [[0, 0, 0], [0.8, 0, 0], [10, 0, 0]];
   const out = capRadiiByNeighbors(positions, [big, big, big]);
   assert.ok(out[0] + out[1] < 0.8, '두 행성이 서로 파고들면 안 된다');
