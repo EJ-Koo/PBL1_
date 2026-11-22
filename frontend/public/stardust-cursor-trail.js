@@ -1,3 +1,6 @@
+import { startAstronautCursor } from './astronaut-cursor.js';
+import { mountCursorLayer } from './cursor-layer.js';
+
 const SPACING = 8;
 const MAX_PARTICLES = 72;
 const MAX_PER_FRAME = 8;
@@ -46,21 +49,7 @@ function startTrail(effect) {
     pointerEvents: 'none', zIndex: '2147483647', display: 'block',
   });
 
-  // A showModal() dialog lives above body-level portals. Follow it until it closes or unmounts.
-  const dialogObserver = new MutationObserver(syncLayer);
-  function syncLayer() {
-    const host = document.activeElement?.closest('dialog[open]') ?? document.querySelector('dialog[open]') ?? document.body;
-    if (canvas.parentElement === host) return;
-    dialogObserver.disconnect();
-    host.appendChild(canvas);
-    if (host instanceof HTMLDialogElement && host.parentNode) {
-      dialogObserver.observe(host, { attributes: true, attributeFilter: ['open'] });
-      dialogObserver.observe(host.parentNode, { childList: true });
-    }
-  }
-  function onDialogChange(event) {
-    if (event.target instanceof HTMLDialogElement) syncLayer();
-  }
+  const layer = mountCursorLayer(canvas);
 
   let dpr = 0;
   let width = 0;
@@ -117,7 +106,7 @@ function startTrail(effect) {
     if (previous && pending) emit(previous, pending, now);
     previous = pending ?? previous;
     pending = null;
-    if (!canvas.isConnected) syncLayer();
+    if (!canvas.isConnected) layer.sync();
     if ((window.devicePixelRatio || 1) !== dpr) resize();
     ctx.clearRect(0, 0, width, height);
     let alive = 0;
@@ -148,7 +137,6 @@ function startTrail(effect) {
     if (event.pointerType === 'mouse' && !event.relatedTarget) resetPointer();
   }
 
-  syncLayer();
   resize();
   const listeners = new AbortController();
   const options = { capture: true, passive: true, signal: listeners.signal };
@@ -156,14 +144,10 @@ function startTrail(effect) {
   window.addEventListener('pointerout', onPointerOut, options);
   window.addEventListener('blur', resetPointer, { signal: listeners.signal });
   window.addEventListener('resize', resize, { signal: listeners.signal });
-  document.addEventListener('toggle', onDialogChange, options);
-  document.addEventListener('close', onDialogChange, options);
-  document.addEventListener('focusin', syncLayer, options);
   return () => {
     listeners.abort();
-    dialogObserver.disconnect();
     window.cancelAnimationFrame(frame);
-    canvas.remove();
+    layer.dispose();
   };
 }
 
@@ -194,7 +178,7 @@ class StardustCursorTrail extends HTMLElement {
     const cacheKey = (id) => id ? this.dataset.cachePrefix + id : null;
     const update = () => {
       if (effect && eligible.matches && !document.hidden) {
-        stopTrail ??= startTrail(effect);
+        stopTrail ??= effect.style === 'astronaut_blue' ? startAstronautCursor() : startTrail(effect);
       } else {
         stopTrail?.();
         stopTrail = undefined;
@@ -204,7 +188,7 @@ class StardustCursorTrail extends HTMLElement {
     const apply = (next) => {
       // Cache entries only describe appearance. The shop API verifies ownership and equipment.
       if (next === undefined) next = starter;
-      if (next?.type !== 'cursor' || !['stardust', 'dots', 'diamond'].includes(next.style)
+      if (next?.type !== 'cursor' || !['stardust', 'dots', 'diamond', 'astronaut_blue'].includes(next.style)
           || !/^#[\da-f]{6}$/i.test(next.color)) next = null;
       if (next?.color !== effect?.color || next?.style !== effect?.style) {
         stopTrail?.();

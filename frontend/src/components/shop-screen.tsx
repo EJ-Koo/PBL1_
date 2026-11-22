@@ -15,7 +15,7 @@ import { Text } from '@/components/app-text';
 //  - [ADDED 2026-11-21] slot=planet_surface → 소모품 탭 '행성 표면' 줄 (오팔 유리·솜사탕 구름·진주 실크·크리스탈 프리즘·오로라 리본)
 //      행성 효과와 같은 규칙(소모품, 1개 = 행성 1개). 행성 하나에 표면 하나 + 효과 하나를 따로 고른다.
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, TouchableOpacity, useWindowDimensions, View, type ImageSourcePropType } from 'react-native';
 
 import { SpaceSurface, SpaceIcon } from '@/components/ui/space-ui';
 import { DesignFonts } from '@/constants/ui-design';
@@ -123,6 +123,7 @@ function actionFor(item: ShopItem, coins: number): Action {
 
 function Card({
   icon,
+  imageSource,
   name,
   description,
   priceText,
@@ -138,6 +139,7 @@ function Card({
   testID,
 }: {
   icon: string;
+  imageSource?: ImageSourcePropType;
   name: string;
   description: string;
   priceText: string;
@@ -164,7 +166,8 @@ function Card({
       style={[styles.card, highlighted && styles.cardEquipped, previewing && styles.cardPreviewing]}
       testID={testID}>
       {badge ? <Text style={styles.badge}>{t(badge)}</Text> : null}
-      <Text style={styles.icon}>{icon}</Text>
+      {imageSource ? <Image source={imageSource} style={styles.cursorImage} resizeMode="contain" accessibilityLabel={name} />
+        : <Text style={styles.icon}>{icon}</Text>}
       <Text style={styles.name} numberOfLines={1}>
         {name}
       </Text>
@@ -398,6 +401,8 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
                             key={item.id}
                             testID={`shop-item-${item.id}`}
                             icon={item.icon}
+                            imageSource={item.slot === 'cursor' && cursorEffect(item.effect)?.style === 'astronaut_blue'
+                              ? require('../../public/cursors/astronaut-blue-idle.png') : undefined}
                             name={item.id === STARTER_CURSOR_ID ? t(item.name) : item.name}
                             description={item.id === STARTER_CURSOR_ID ? t(item.description) : item.description}
                             priceText={item.id === STARTER_CURSOR_ID ? '기본 제공' : item.kind === 'equip' && owned ? '보유 중' : String(item.price)}
@@ -545,6 +550,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   icon: { fontSize: 40, marginTop: 8, marginBottom: 8 },
+  cursorImage: { width: 64, height: 64, marginTop: 4, marginBottom: 8 },
   name: { fontFamily: DesignFonts.bold, fontSize: 14, fontWeight: 'bold', marginBottom: 4, color: '#fff' },
   desc: { fontSize: 10, lineHeight: 14, color: '#aeb7c4', textAlign: 'center', marginBottom: 8, height: 28 },
   price: { fontWeight: 'bold', fontSize: 14, lineHeight: 20, color: '#fff', marginBottom: 8 },
