@@ -1,7 +1,7 @@
 import { mountCursorLayer } from './cursor-layer.js';
 
 const SIZE = 64;
-const GAP = 20;
+const GAP = 12;
 const EDGE = 8;
 const REST_DELAY = 180;
 
