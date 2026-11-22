@@ -430,3 +430,21 @@ def test_admin_cursor_create_edit_and_starter_protection(fake):
     with pytest.raises(HTTPException) as reserved:
         admin_shop.admin_create_item(item.model_copy(update={"id": "cursor_stardust"}), admin_id="a")
     assert reserved.value.status_code == 422
+
+
+def test_astronaut_cursor_can_be_sold_owned_and_managed(fake):
+    effect = {"type": "cursor", "style": "astronaut_blue", "color": "#48DFFF"}
+    item = AdminItemCreate(
+        id="cursor_astronaut_blue", name="우주비행사(blue)", price=50,
+        kind="equip", slot="cursor", effect=effect,
+    )
+    assert admin_shop.admin_create_item(item, admin_id="a")["effect"] == effect
+    listed = next(i for i in shop.list_shop_items(user_id="u1") if i.id == item.id)
+    assert listed.on_sale and listed.quantity == 0 and not listed.equipped
+    fake.tables["user_items"].append({"user_id": "u1", "item_id": item.id, "quantity": 1, "equipped": True})
+    owned = next(i for i in shop.list_shop_items(user_id="u1") if i.id == item.id)
+    assert owned.quantity == 1 and owned.equipped
+    assert admin_shop.admin_update_item(item.id, AdminItemUpdate(price=75), admin_id="a")["price"] == 75
+    with pytest.raises(HTTPException) as invalid:
+        admin_shop.admin_update_item(item.id, AdminItemUpdate(effect={**effect, "color": "blue"}), admin_id="a")
+    assert invalid.value.status_code == 422

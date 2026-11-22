@@ -199,14 +199,14 @@ function ItemEditor({ initial, isNew, onSave, onCancel }: {
         <View style={styles.flex1}><Field label={f.kind === 'equip' ? '칸(slot)' : '칸(선택, 행성 효과는 planet_effect)'} value={f.slot} onChange={set('slot')} /></View>
       </View>
       {f.slot.trim() === 'cursor' ? <>
-        <Text style={styles.fieldLabel}>커서 입자 모양</Text>
+        <Text style={styles.fieldLabel}>커서 모양</Text>
         <View style={styles.rowWrap}>
           {(Object.keys(CURSOR_STYLES) as CursorStyle[]).map(style =>
             <Button key={style} label={CURSOR_STYLES[style]} testID={`cursor-style-${style}`}
               kind={f.cursorStyle === style ? 'primary' : 'ghost'}
               onPress={() => setF(prev => ({ ...prev, cursorStyle: style }))} />)}
         </View>
-        <Field label="빛 색상 (#RRGGBB)" value={f.cursorColor} onChange={set('cursorColor')} testID="cursor-color" />
+        {f.cursorStyle !== 'astronaut_blue' && <Field label="빛 색상 (#RRGGBB)" value={f.cursorColor} onChange={set('cursorColor')} testID="cursor-color" />}
       </> : <Field label='효과 JSON (예: {"type":"background","tint":"#0B2A6B","opacity":0.45})' value={f.effect} onChange={set('effect')} multiline />}
       <View style={styles.switchRow}>
         <Text style={styles.fieldLabel}>상점에서 판매</Text>

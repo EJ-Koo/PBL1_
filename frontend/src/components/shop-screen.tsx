@@ -13,7 +13,7 @@ import { Text } from '@/components/app-text';
 //      위에 샘플 행성 미리보기(카드를 누르면 그 효과로 바뀜). 소모품: 1개 = 행성 1개.
 //      [구매]로 개수를 늘리고, 남은 개수가 있으면 [적용]으로 원하는 일기 행성에 적용(해제·변경하면 1개가 돌아온다)
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, TouchableOpacity, useWindowDimensions, View, type ImageSourcePropType } from 'react-native';
 
 import { SpaceSurface, SpaceIcon } from '@/components/ui/space-ui';
 import { DesignFonts } from '@/constants/ui-design';
@@ -109,6 +109,7 @@ function actionFor(item: ShopItem, coins: number): Action {
 
 function Card({
   icon,
+  imageSource,
   name,
   description,
   priceText,
@@ -124,6 +125,7 @@ function Card({
   testID,
 }: {
   icon: string;
+  imageSource?: ImageSourcePropType;
   name: string;
   description: string;
   priceText: string;
@@ -150,8 +152,9 @@ function Card({
       style={[styles.card, highlighted && styles.cardEquipped, previewing && styles.cardPreviewing]}
       testID={testID}>
       {badge ? <Text style={styles.badge}>{t(badge)}</Text> : null}
-      <Text style={styles.icon}>{icon}</Text>
-      <Text style={styles.name} numberOfLines={1}>
+      {imageSource ? <Image source={imageSource} style={styles.cursorImage} resizeMode="contain" accessibilityLabel={name} />
+        : <Text style={styles.icon}>{icon}</Text>}
+      <Text style={styles.name} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
         {name}
       </Text>
       <Text style={styles.desc} numberOfLines={2}>
@@ -371,6 +374,8 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
                             key={item.id}
                             testID={`shop-item-${item.id}`}
                             icon={item.icon}
+                            imageSource={item.slot === 'cursor' && cursorEffect(item.effect)?.style === 'astronaut_blue'
+                              ? require('../../public/cursors/astronaut-blue-idle.png') : undefined}
                             name={item.id === STARTER_CURSOR_ID ? t(item.name) : item.name}
                             description={item.id === STARTER_CURSOR_ID ? t(item.description) : item.description}
                             priceText={item.id === STARTER_CURSOR_ID ? '기본 제공' : item.kind === 'equip' && owned ? '보유 중' : String(item.price)}
@@ -509,6 +514,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   icon: { fontSize: 40, marginTop: 8, marginBottom: 8 },
+  cursorImage: { width: 64, height: 64, marginTop: 4, marginBottom: 8 },
   name: { fontFamily: DesignFonts.bold, fontSize: 14, fontWeight: 'bold', marginBottom: 4, color: '#fff' },
   desc: { fontSize: 10, lineHeight: 14, color: '#aeb7c4', textAlign: 'center', marginBottom: 8, height: 28 },
   price: { fontWeight: 'bold', fontSize: 14, lineHeight: 20, color: '#fff', marginBottom: 8 },
