@@ -4,7 +4,7 @@ import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg'
 /** Shared vector coin: silver rim, warm gold face and a four-point navigation star. */
 export function CoinIcon({ size = 24 }: { size?: number }) {
   const id = useId().replace(/[^a-zA-Z0-9_-]/g, '');
-  return <Svg width={size} height={size} viewBox="0 0 40 40" pointerEvents="none" accessible={false}>
+  return <Svg width={size} height={size} viewBox="0 0 40 40" pointerEvents="none" aria-hidden>
     <Defs>
       <LinearGradient id={`rim-${id}`} x1="0" y1="0" x2="1" y2="1">
         <Stop offset="0" stopColor="#fffdf1" /><Stop offset="0.45" stopColor="#bdc6d9" /><Stop offset="1" stopColor="#7d8ca8" />

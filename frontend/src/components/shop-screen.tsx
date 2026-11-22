@@ -1,8 +1,8 @@
 import { useLanguage } from '@/lib/language';
-import { ScrollView } from '@/components/app-scroll-view';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { CoinIcon } from '@/components/coin-icon';
 import { Text } from '@/components/app-text';
-// [MODIFIED 2026-11-10] 상점 팝업 (fffju 상점 카드 디자인 + 서버 코인·구매·장착).
+// 상점 팝업: 각진 프레임·모서리 카드 디자인 + 서버 코인·구매·장착.
 //  - 화면 가운데 뜨는 창 (2026-11-10 아래 → 가운데로 변경). ✕ 버튼, 창 바깥 누르기, 안드로이드 뒤로가기로 닫힘
 //  - 탭: 배경(이펙트 줄 / 테마 줄) · 음악 · 커서 · 소모품
 //  - 각 줄은 가로로 넘겨 보는 카드 목록. 산 것은 장착/해제, 안 산 것은 구매
@@ -17,9 +17,8 @@ import { Text } from '@/components/app-text';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, TouchableOpacity, useWindowDimensions, View, type ImageSourcePropType } from 'react-native';
 
-import { SpaceSurface, SpaceIcon } from '@/components/ui/space-ui';
+import { ShopFrame, ShopSectionRule } from '@/components/ui/shop-frame';
 import { DesignFonts } from '@/constants/ui-design';
-import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { PlanetDecorator } from '@/components/planet-decorator';
 import { PlanetPreview } from '@/components/universe-scene';
 import { showMessage } from '@/lib/feedback';
@@ -137,6 +136,7 @@ function Card({
   disabledAll,
   onPress,
   testID,
+  width,
 }: {
   icon: string;
   imageSource?: ImageSourcePropType;
@@ -156,6 +156,7 @@ function Card({
   disabledAll: boolean;
   onPress: () => void;
   testID: string;
+  width: number;
 }) {
   const { t } = useLanguage();
   return (
@@ -163,36 +164,44 @@ function Card({
       disabled={!onSelect}
       onPress={onSelect}
       accessibilityLabel={onSelect ? `${name} 미리보기` : undefined}
-      style={[styles.card, highlighted && styles.cardEquipped, previewing && styles.cardPreviewing]}
+      style={[styles.card, { width }, highlighted && styles.cardEquipped, previewing && styles.cardPreviewing]}
       testID={testID}>
-      {badge ? <Text style={styles.badge}>{t(badge)}</Text> : null}
-      {imageSource ? <Image source={imageSource} style={styles.cursorImage} resizeMode="contain" accessibilityLabel={name} />
-        : <Text style={styles.icon}>{icon}</Text>}
-      <Text style={styles.name} numberOfLines={1}>
+      <View pointerEvents="none" aria-hidden style={StyleSheet.absoluteFill}>
+        {[styles.topLeft, styles.topRight, styles.bottomLeft, styles.bottomRight].map((corner, index) =>
+          <View key={index} style={[styles.cardCorner, corner, previewing && styles.cardCornerPreviewing]} />)}
+      </View>
+      {badge && !highlighted ? <Text style={styles.badge}>{t(badge)}</Text> : null}
+      <View style={styles.artwork}>
+        {imageSource ? <Image source={imageSource} style={styles.cursorImage} resizeMode="contain" accessibilityLabel={name} />
+          : <Text style={styles.icon}>{icon}</Text>}
+      </View>
+      <Text style={styles.name} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
         {name}
       </Text>
       <Text style={styles.desc} numberOfLines={2}>
         {description}
       </Text>
       {/* 가격 줄은 항상 같은 높이 → 구매 후에도 버튼 위치가 그대로 */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><CoinIcon size={18} /><Text style={styles.price}>{t(priceText)}</Text></View>
+      <View style={styles.priceRow}><CoinIcon size={15} /><Text style={styles.price}>{t(priceText)}</Text></View>
       <View style={styles.buttonRow}>
         <TouchableOpacity
           testID={`${testID}-action`}
           accessibilityLabel={`${name} ${action.label}`}
           disabled={action.disabled || disabledAll}
           onPress={onPress}
+          hitSlop={{ top: 8, bottom: 8 }}
           style={[
             styles.button,
             // 버튼 줄(가로) 안에서는 늘이기(stretch)가 폭이 아니라 높이에 걸리므로, 하나든 둘이든 flex 로 폭을 채운다
             styles.buttonHalf,
             action.kind === 'unequip' && styles.buttonGhost,
-            action.disabled && styles.buttonDisabled,
+            action.disabled && (action.kind === 'none' ? styles.buttonInactive : styles.buttonDisabled),
           ]}>
           {busy ? (
-            <ActivityIndicator size="small" color="#000" />
+            <ActivityIndicator size="small" color={action.kind === 'unequip' ? '#fff' : '#000'} />
           ) : (
-            <Text style={[styles.buttonText, action.disabled && styles.buttonTextDisabled]}>{t(action.label)}</Text>
+            <Text style={[styles.buttonText, (action.kind === 'unequip' || (action.disabled && action.kind === 'none')) && styles.buttonTextLight,
+              action.disabled && action.kind !== 'none' && styles.buttonTextDisabled]}>{t(action.label)}</Text>
           )}
         </TouchableOpacity>
         {secondary ? (
@@ -201,6 +210,7 @@ function Card({
             accessibilityLabel={`${name} ${secondary.label}`}
             disabled={disabledAll}
             onPress={secondary.onPress}
+            hitSlop={{ top: 8, bottom: 8 }}
             style={[styles.button, styles.buttonHalf, styles.buttonApply]}>
             <Text style={styles.buttonText}>{t(secondary.label)}</Text>
           </TouchableOpacity>
@@ -235,7 +245,10 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
   const { coins, items, loading, error, refresh, purchase, setEquipped, resetAllowed, resetShop } = useShop();
   const { entries } = useDiary();
   const { height, width: viewportWidth } = useWindowDimensions();
-  const { scale } = useResponsiveLayout();
+  const compact = viewportWidth < 768;
+  const sheetWidth = Math.min(viewportWidth - (compact ? 32 : 96), 1180);
+  const sheetHeight = Math.min(height - 48, compact ? Math.min(height * 0.82, 720) : 700);
+  const cardWidth = compact ? Math.min(CARD_WIDTH, Math.max(124, (sheetWidth - 32 - CARD_GAP - 4) / 2)) : CARD_WIDTH;
   const [tabId, setTabId] = useState(TABS[0].id);
   const [busyId, setBusyId] = useState<string | null>(null);
   // 행성 효과 줄: 미리보기 중인 아이템, 행성 꾸미기 팝업(적용하기)
@@ -297,19 +310,19 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
       <View style={styles.backdrop}>
         {/* 창 바깥(어두운 부분)을 누르면 닫힘 */}
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel={t("상점 닫기")} testID="shop-backdrop" />
-        <SpaceSurface
+        <View
           testID="shop-sheet"
           style={[
             styles.sheet,
-            { width: Math.min(viewportWidth - 24, 960), maxHeight: height - 48, height: Math.min(height * 0.8, 760), paddingBottom: 12 },
+            compact && styles.sheetCompact,
+            { width: sheetWidth, height: sheetHeight },
           ]}>
-          <View style={styles.header}>
-            {/* 왼쪽 칸은 나중에 넣을 기능 자리 (예전 뒤로가기 위치) */}
-            <SpaceIcon kind="group" size={28 * scale} />
-            <Text style={styles.title}>SPACE SHOP</Text>
-            <View style={[styles.headerSide, styles.headerRight]}>
-              <View style={styles.coinPill} testID="shop-coins">
-                <CoinIcon size={25} /><Text style={styles.coinText}>{coins?.toLocaleString() ?? '…'}</Text>
+          <ShopFrame fill="#1F2025" />
+          <View style={[styles.header, compact && styles.headerCompact]}>
+            <Text style={[styles.title, compact && styles.titleCompact, viewportWidth < 360 && styles.titleNarrow]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>SPACE SHOP</Text>
+            <View style={styles.headerRight}>
+              <View style={styles.coinBalance} testID="shop-coins">
+                <CoinIcon size={16} /><Text style={styles.coinText} numberOfLines={1}>{coins?.toLocaleString() ?? '…'}</Text>
               </View>
               <TouchableOpacity onPress={onClose} accessibilityLabel={t("닫기")} testID="shop-close" hitSlop={10} style={styles.close}>
                 <Text style={styles.closeText}>✕</Text>
@@ -317,7 +330,7 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
             </View>
           </View>
 
-          <View style={styles.tabs}>
+          <View style={[styles.tabs, compact && styles.tabsCompact]}>
             {TABS.map((tabItem) => (
               <TouchableOpacity
                 key={tabItem.id}
@@ -325,8 +338,9 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
                 accessibilityRole="tab"
                 accessibilityState={{ selected: tabItem.id === tab.id }}
                 onPress={() => setTabId(tabItem.id)}
-                style={[styles.tab, tabItem.id === tab.id && styles.tabActive]}>
-                <Text style={[styles.tabText, tabItem.id === tab.id && styles.tabTextActive]}>{t(tabItem.label)}</Text>
+                style={styles.tab}>
+                <ShopFrame tab cut={12} fill={tabItem.id === tab.id ? '#D9D9D9' : '#55565A'} />
+                <Text style={[styles.tabText, compact && styles.tabTextCompact, tabItem.id === tab.id && styles.tabTextActive]}>{t(tabItem.label)}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -339,14 +353,17 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
           ) : null}
           {loading && coins === null ? <ActivityIndicator color="#fff" style={styles.loading} /> : null}
 
-          <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
+          <ScrollArea key={tab.id} style={[styles.body, compact && styles.bodyCompact]} contentContainerStyle={styles.bodyContent}
+            label={t('상점 상품 목록')} scrollbarLabel={t('상점 세로 스크롤')} testID="shop-scroll">
             {sections.map(({ section, list }, index) => {
               const slot = section.defaultCard?.slot;
               const slotInUse = slot ? list.some((i) => i.equipped && i.quantity > 0) : false;
               return (
-                <View key={section.title} testID={`shop-section-${section.title}`}>
-                  {index > 0 ? <View style={styles.divider} /> : null}
-                  <Text style={styles.sectionTitle}>{t(section.title)}</Text>
+                <View key={section.title} style={styles.section} testID={`shop-section-${section.title}`}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={[styles.sectionTitle, compact && styles.sectionTitleCompact]}>{t(section.title)}</Text>
+                    <ShopSectionRule />
+                  </View>
                   {section.preview && list.length > 0 ? (
                     <>
                       <EffectPreview
@@ -364,10 +381,13 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
                   {list.length === 0 && !section.defaultCard ? (
                     <Text style={styles.empty}>{t(section.emptyText??'')}</Text>
                   ) : (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+                    <ScrollArea horizontal hideScrollbarWhenNotScrollable contentContainerStyle={styles.row} scrollStep={cardWidth + CARD_GAP}
+                      label={t('{title} 상품 목록', { title: t(section.title) })}
+                      scrollbarLabel={t('{title} 가로 스크롤', { title: t(section.title) })} testID={`shop-row-${tab.id}-${index}`}>
                       {section.defaultCard ? (
                         <Card
                           testID={`shop-item-default-${slot}`}
+                          width={cardWidth}
                           icon={section.defaultCard.icon}
                           name={t(section.defaultCard.name)}
                           description={t(section.defaultCard.description)}
@@ -400,6 +420,7 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
                           <Card
                             key={item.id}
                             testID={`shop-item-${item.id}`}
+                            width={cardWidth}
                             icon={item.icon}
                             imageSource={item.slot === 'cursor' && cursorEffect(item.effect)?.style === 'astronaut_blue'
                               ? require('../../public/cursors/astronaut-blue-idle.png') : undefined}
@@ -434,7 +455,7 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
                           />
                         );
                       })}
-                    </ScrollView>
+                    </ScrollArea>
                   )}
                   {list.length === 0 && section.defaultCard && section.emptyText ? (
                     <Text style={styles.empty}>{t(section.emptyText??'')}</Text>
@@ -457,8 +478,8 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
                 )}
               </TouchableOpacity>
             ) : null}
-          </ScrollView>
-        </SpaceSurface>
+          </ScrollArea>
+        </View>
       </View>
       {/* 적용하기 → 행성 고르기 → 미리보기 → 적용 */}
       <PlanetDecorator
@@ -471,104 +492,115 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
   );
 }
 
-const CARD_WIDTH = 140;
+const CARD_WIDTH = 164;
+const CARD_GAP = 14;
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center' },
   sheet: {
-    backgroundColor: 'rgba(12,16,24,0.96)',
-    borderRadius: 0,
-    borderWidth: 1,
-    borderColor: '#3A3A4A',
-    paddingTop: 14,
-    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 32,
+    paddingHorizontal: 56,
   },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  headerSide: { width: 120 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 10 },
-  title: { color: '#fff', fontFamily: DesignFonts.bold, fontSize: 18, fontWeight: 'bold', flexShrink: 1 },
-  coinPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#171c28', borderColor: '#c6aa704f', borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 18 },
-  coinText: { color: '#ffedb4', fontWeight: 'bold', fontSize: 14 },
-  close: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
-  closeText: { color: '#fff', fontSize: 20, fontWeight: '600' },
-  tabs: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  sheetCompact: { paddingTop: 26, paddingBottom: 28, paddingHorizontal: 16 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingBottom: 10, marginBottom: 24, borderBottomWidth: 1, borderBottomColor: '#D9D9D9' },
+  headerCompact: { minHeight: 46, marginBottom: 16 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  title: { color: '#fff', fontFamily: DesignFonts.bold, fontSize: 30, flex: 1, minWidth: 0 },
+  titleCompact: { fontSize: 24 },
+  titleNarrow: { fontSize: 18 },
+  coinBalance: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  coinText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+  close: { width: 24, height: 32, alignItems: 'center', justifyContent: 'center' },
+  closeText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  tabs: { flexDirection: 'row', gap: 16, marginHorizontal: 48, marginBottom: 24 },
+  tabsCompact: { gap: 10, marginHorizontal: 0, marginBottom: 18 },
   tab: {
     flex: 1,
-    paddingVertical: 9,
-    borderRadius: 10,
-    backgroundColor: '#1d1d26',
+    minWidth: 0,
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#2f2f3d',
   },
-  tabActive: { backgroundColor: '#ffffff', borderColor: '#ffffff' },
-  tabText: { color: '#c8c8d8', fontWeight: '600', fontSize: 14 },
+  tabText: { color: '#fff', fontSize: 18 },
+  tabTextCompact: { fontSize: 14 },
   tabTextActive: { color: '#000' },
   errorBox: { backgroundColor: '#3A1F2E', borderRadius: 10, padding: 12, marginBottom: 12 },
   errorText: { color: '#F66C9E', fontSize: 13 },
   errorRetry: { color: '#fff', fontSize: 12, marginTop: 6, textDecorationLine: 'underline' },
   loading: { marginTop: 20 },
-  body: { flex: 1 },
-  divider: { height: 1, backgroundColor: '#3A3A4A', marginVertical: 14 },
-  sectionTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginBottom: 10 },
-  empty: { color: '#9C9CC0', fontSize: 12, marginBottom: 6, marginTop: 4 },
-  row: { gap: 10, paddingRight: 4 },
+  body: { flex: 1, minHeight: 0, marginHorizontal: 48 },
+  bodyCompact: { marginHorizontal: 0 },
+  bodyContent: { paddingBottom: 4 },
+  section: { marginBottom: 18 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
+  sectionTitle: { color: '#fff', fontSize: 22 },
+  sectionTitleCompact: { fontSize: 16 },
+  empty: { color: '#ADADB2', fontSize: 12, marginBottom: 6, marginTop: 4 },
+  row: { gap: CARD_GAP, padding: 2, alignItems: 'stretch' },
   card: {
-    backgroundColor: 'rgba(16,21,31,0.82)',
-    width: CARD_WIDTH,
-    borderRadius: 10,
-    padding: 12,
+    flexShrink: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.24)',
+    borderWidth: 1,
+    borderColor: '#858589',
   },
-  cardEquipped: { borderColor: '#ffffff' },
+  cardEquipped: { borderColor: '#D9D9D9', outlineColor: '#D9D9D9', outlineWidth: 2, outlineStyle: 'solid' },
   cardPreviewing: { borderColor: '#B888FF' },
+  cardCorner: { position: 'absolute', width: 13, height: 13, borderColor: '#D9D9D9' },
+  cardCornerPreviewing: { borderColor: '#B888FF' },
+  topLeft: { top: -1, left: -1, borderTopWidth: 3, borderLeftWidth: 3 },
+  topRight: { top: -1, right: -1, borderTopWidth: 3, borderRightWidth: 3 },
+  bottomLeft: { bottom: -1, left: -1, borderBottomWidth: 3, borderLeftWidth: 3 },
+  bottomRight: { bottom: -1, right: -1, borderBottomWidth: 3, borderRightWidth: 3 },
   preview: {
     height: 170,
-    borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: '#05050c',
+    backgroundColor: '#17181D',
     borderWidth: 1,
-    borderColor: '#2f2f3d',
+    borderColor: '#747478',
     marginBottom: 8,
   },
-  previewTag: { position: 'absolute', top: 8, left: 10, color: '#B888FF', fontSize: 11, fontWeight: 'bold' },
+  previewTag: { position: 'absolute', top: 8, left: 10, color: '#D9D9D9', fontSize: 12 },
   previewName: { position: 'absolute', bottom: 8, left: 10, color: '#fff', fontSize: 13, fontWeight: 'bold' },
-  previewHint: { color: '#9C9CC0', fontSize: 11, lineHeight: 16, marginBottom: 10 },
+  previewHint: { color: '#ADADB2', fontSize: 12, lineHeight: 17, marginBottom: 10 },
   badge: {
     position: 'absolute',
-    top: 6,
+    top: 4,
     right: 6,
     fontSize: 10,
     fontWeight: 'bold',
-    color: '#000',
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    overflow: 'hidden',
+    color: '#D9D9D9',
   },
-  icon: { fontSize: 40, marginTop: 8, marginBottom: 8 },
-  cursorImage: { width: 64, height: 64, marginTop: 4, marginBottom: 8 },
-  name: { fontFamily: DesignFonts.bold, fontSize: 14, fontWeight: 'bold', marginBottom: 4, color: '#fff' },
-  desc: { fontSize: 10, lineHeight: 14, color: '#aeb7c4', textAlign: 'center', marginBottom: 8, height: 28 },
-  price: { fontWeight: 'bold', fontSize: 14, lineHeight: 20, color: '#fff', marginBottom: 8 },
+  artwork: { minHeight: 64, alignItems: 'center', justifyContent: 'center' },
+  icon: { fontSize: 46, lineHeight: 56 },
+  cursorImage: { width: 56, height: 56 },
+  name: { fontSize: 14, lineHeight: 18, marginBottom: 4, color: '#fff', textAlign: 'center' },
+  desc: { fontSize: 12, lineHeight: 14, color: '#A7A7AC', textAlign: 'center', marginBottom: 6, minHeight: 28 },
+  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 18, marginBottom: 6 },
+  price: { fontSize: 12, lineHeight: 18, color: '#fff' },
   button: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    paddingVertical: 7,
+    backgroundColor: '#D9D9D9',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#D9D9D9',
+    paddingVertical: 3,
     alignSelf: 'stretch',
     alignItems: 'center',
-    minHeight: 32,
+    minHeight: 28,
     justifyContent: 'center',
   },
   buttonRow: { flexDirection: 'row', gap: 6, alignSelf: 'stretch' },
   buttonHalf: { flex: 1, alignSelf: 'auto' },
-  buttonApply: { backgroundColor: '#B888FF' },
-  buttonGhost: { backgroundColor: '#dfe6e9' },
-  buttonDisabled: { backgroundColor: '#95a5a6' },
-  buttonText: { fontWeight: 'bold', fontSize: 13, color: '#000' },
+  buttonApply: { backgroundColor: '#D9D9D9' },
+  buttonGhost: { backgroundColor: 'transparent' },
+  buttonInactive: { backgroundColor: 'transparent' },
+  buttonDisabled: { backgroundColor: '#858589', borderColor: '#858589' },
+  buttonText: { fontSize: 12, color: '#000' },
+  buttonTextLight: { color: '#fff' },
   buttonTextDisabled: { color: '#555' },
   reset: {
     marginTop: 22,

@@ -3,6 +3,10 @@ export type Language = 'ko' | 'en';
 export const ENGLISH: Readonly<Record<string, string>> = {
   "메뉴": "Menu",
   "상점": "Shop",
+  "상점 상품 목록": "Shop products",
+  "상점 세로 스크롤": "Scroll shop vertically",
+  "{title} 상품 목록": "{title} products",
+  "{title} 가로 스크롤": "Scroll {title} horizontally",
   "퀘스트": "Quest",
   "일기 작성": "Write diary",
   "나의 우주": "My universe",

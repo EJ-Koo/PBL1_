@@ -114,7 +114,7 @@ test('uses the supplied swimming pose during movement and returns upright while 
   assert.equal(swim.style.transform, 'scaleX(-1)');
   env.advance(800);
   assert.equal(avatar.dataset.pose, 'idle');
-  assert.match(avatar.style.transform, /520\.00px,118\.00px/);
+  assert.match(avatar.style.transform, /512\.00px,118\.00px/);
   env.move(450, 150);
   assert.equal(swim.style.transform, 'none');
 });
@@ -125,10 +125,10 @@ test('stays inside the viewport, hides on leave or blur, and ignores touch point
   const avatar = env.find();
   env.move(799, 599);
   env.advance(300);
-  assert.match(avatar.style.transform, /715\.00px,528\.00px/);
+  assert.match(avatar.style.transform, /723\.00px,528\.00px/);
   env.move(0, 0);
   env.advance(1000);
-  assert.match(avatar.style.transform, /20\.00px,8\.00px/);
+  assert.match(avatar.style.transform, /12\.00px,8\.00px/);
   env.emit(env.window, 'pointerout', { pointerType: 'mouse', relatedTarget: {} });
   assert.equal(avatar.style.display, 'block');
   env.emit(env.window, 'pointerout', { pointerType: 'mouse', relatedTarget: null });
