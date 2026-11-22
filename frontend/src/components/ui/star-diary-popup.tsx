@@ -1,3 +1,4 @@
+import { useFontScale } from '@/hooks/use-font-scale';
 import { useLanguage } from '@/lib/language';
 import { ScrollView } from '@/components/app-scroll-view';
 import { DiaryHeart } from '@/components/diary-heart';
@@ -7,7 +8,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 
 import { DesignFonts } from '@/constants/ui-design';
 import { Text } from '@/components/app-text';
-import { getStarPopupLayout, type StarPopupAnchor } from '@/lib/star-popup-layout';
+import { getStarPopupLayout, starPopupMinimumHeight, starPopupWidth, type StarPopupAnchor } from '@/lib/star-popup-layout';
 import type { DiaryEntry } from '@/store/diary-context';
 
 type Props = {
@@ -49,6 +50,7 @@ function AuthorAvatar({ author, size }: { author: NonNullable<Props['author']>; 
 
 export function StarDiaryPopup({ entry, anchor, viewport, editable, owned, loading, error, onRetry, author, onClose, onEdit, onDecorate, groupId }: Props) {
   const { t } = useLanguage();
+  const fontScale = useFontScale();
   useEffect(() => {
     if (Platform.OS === 'web') {
       const onKeyDown = (event: KeyboardEvent) => {
@@ -64,7 +66,7 @@ export function StarDiaryPopup({ entry, anchor, viewport, editable, owned, loadi
     return () => subscription.remove();
   }, [onClose]);
 
-  const layout = getStarPopupLayout(anchor, viewport, groupId ? 'group' : 'personal');
+  const layout = getStarPopupLayout(anchor, {...viewport,minBodyHeight:starPopupMinimumHeight(starPopupWidth(viewport.width,groupId?'group':'personal'),!!author,!!(owned||groupId),fontScale)}, groupId ? 'group' : 'personal');
   if (!anchor.visible || !layout) return null;
   const { left, top, width, bodyHeight, tailHeight, tailX, tailBaseX, above } = layout;
   const height = bodyHeight + tailHeight;
@@ -81,9 +83,7 @@ export function StarDiaryPopup({ entry, anchor, viewport, editable, owned, loadi
   const topTail = above
     ? ''
     : `L ${bubbleTailBase - tailHalf} ${bodyTop} L ${tailX} 1 L ${bubbleTailBase + tailHalf} ${bodyTop}`;
-  const outline = groupId
-    ? `M1 ${bodyTop + corner}L${1 + corner} ${bodyTop} ${topTail}H${width - 1}V${bodyBottom} ${tail}H1Z`
-    : `M 1 ${bodyTop + corner} L ${1 + corner} ${bodyTop} ${topTail} L ${width - 11} ${bodyTop} L ${width - 1} ${bodyTop + 10} L ${width - 1} ${bodyBottom - 10} L ${width - 11} ${bodyBottom} ${tail} L 1 ${bodyBottom} Z`;
+  const outline = `M 1 ${bodyTop + corner} L ${1 + corner} ${bodyTop} ${topTail} L ${width - 11} ${bodyTop} L ${width - 1} ${bodyTop + 10} L ${width - 1} ${bodyBottom - 10} L ${width - 11} ${bodyBottom} ${tail} L 1 ${bodyBottom} Z`;
   const date = new Date(entry.createdAt);
   const dateLabel = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}.${WEEKDAYS[date.getDay()]}`;
 
@@ -93,7 +93,7 @@ export function StarDiaryPopup({ entry, anchor, viewport, editable, owned, loadi
       <Svg width={width + Math.max(0, -tailX + 2) + Math.max(0, tailX - width + 2)} height={height}
         viewBox={`${-Math.max(0, -tailX + 2)} 0 ${width + Math.max(0, -tailX + 2) + Math.max(0, tailX - width + 2)} ${height}`}
         style={{ position: 'absolute', left: -Math.max(0, -tailX + 2), top: 0 }} pointerEvents="none">
-        <Path d={outline} fill="#5E5E69" fillOpacity={0.9} stroke={groupId ? '#fff' : '#D9D9D9'} strokeWidth={groupId ? 1.5 : 2} />
+        <Path d={outline} fill="#D9D9D9" fillOpacity={groupId ? 0.26 : 0.5} stroke={groupId ? '#fff' : '#D9D9D9'} strokeWidth={groupId ? 1.5 : 2} />
       </Svg>
       {author && (
         <View pointerEvents="none" style={{ position: 'absolute', zIndex: 1, left: groupId ? -32 : -10, top: (above ? 0 : tailHeight) + (groupId ? 0 : 12) }}>
@@ -141,12 +141,12 @@ export function StarDiaryPopup({ entry, anchor, viewport, editable, owned, loadi
 const styles = StyleSheet.create({
   popup: { position: 'absolute' },
   body: { position: 'absolute', left: 1, right: 1, paddingHorizontal: 18 },
-  header: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#D9D9D9', minHeight: 54 },
+  header: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#D9D9D9', minHeight: 54 },
   authorHeader: { minHeight: 66, alignItems: 'flex-end', gap: 8, paddingBottom: 8 },
   nickname: { flexGrow: 1, flexShrink: 1, flexBasis: 0, color: '#FFF', fontFamily: DesignFonts.bold, fontSize: 26, lineHeight: 32 },
   authorDate: { color: '#FFF', fontFamily: DesignFonts.regular, fontSize: 10, lineHeight: 16, maxWidth: '52%', marginBottom: 2 },
   compactAuthorHeader: { flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-end', gap: 0, paddingBottom: 6 },
-  compactNickname: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', height: 28, fontSize: 21, lineHeight: 28, paddingRight: 20 },
+  compactNickname: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', minHeight: 28, fontSize: 21, lineHeight: 28, paddingRight: 20 },
   compactAuthorDate: { alignSelf: 'flex-end', maxWidth: '100%', fontSize: 9, lineHeight: 12, marginBottom: 0 },
   authorClose: { position: 'absolute', top: 0, right: -8, width: 32, height: 32, alignItems: 'center' },
   avatar: { borderWidth: 2, borderColor: '#FFF', backgroundColor: '#000', overflow: 'hidden' },
@@ -154,21 +154,21 @@ const styles = StyleSheet.create({
   date: { color: '#FFF', fontFamily: DesignFonts.regular, fontSize: 21, flex: 1, letterSpacing: -0.8 },
   close: { width: 36, height: 44, alignItems: 'flex-end', justifyContent: 'center' },
   closeText: { color: '#EEE', fontSize: 26, lineHeight: 30 },
-  scroll: { flex: 1 },
+  scroll: { flex: 1, minHeight:48 },
   content: { paddingTop: 14, paddingBottom: 12, gap: 14 },
   text: { color: '#FFF', fontSize: 16, lineHeight: 24 },
   photos: { gap: 10, paddingBottom: 6 },
   photo: { width: 160, height: 120, resizeMode: 'cover' },
-  actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 18, minHeight: 40 },
+  actions: { flexShrink:0, flexWrap:'wrap', flexDirection: 'row', justifyContent: 'flex-end', gap: 18, minHeight: 40 },
   action: { minHeight: 40, justifyContent: 'center' },
   actionText: { color: '#F2F2F2', fontSize: 12 },
   groupBody: { paddingHorizontal: 10 },
   groupHeader: { minHeight: 42, paddingLeft: 52, paddingBottom: 4, gap: 4 },
   groupNickname: { fontSize: 19, lineHeight: 26 },
   groupDate: { fontSize: 6, lineHeight: 10, maxWidth: '43%', marginBottom: 1 },
-  groupClose: { top: -27, right: -13, width: 32, height: 32, opacity: 0.7 },
+  groupClose: { top: 0, right: -4, width: 32, height: 32, opacity: 0.7 },
   groupScroll: { marginLeft: 52 },
   groupContent: { paddingTop: 8, paddingBottom: 6, gap: 8 },
-  groupText: { fontSize: 11, lineHeight: 15 },
+  groupText: { fontSize: 14, lineHeight: 22 },
   groupActions: { gap: 10 },
 });

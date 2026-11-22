@@ -107,6 +107,9 @@ export type ApiStar = {
   /** [2026-11-12] 사용자가 이 행성에 적용한 특수 효과(상점에서 산 효과). 없으면 null/없음 = 일반 행성. */
   effect?: SpecialType | null;
   effect_item_id?: string | null;
+  /** [2026-11-21] 사용자가 이 행성에 적용한 표면 스타일(상점에서 산 표면). 없으면 null/없음 = 기본 스타일. */
+  surface?: string | null;
+  surface_item_id?: string | null;
   /** [2026-11-12] 일기를 쓸 때 고른 주제(선택). 별자리에만 쓴다. 고르지 않았거나 AI 서비스가 없으면 null/없음. */
   topic?: DiaryTopic | null;
 };
@@ -303,6 +306,8 @@ export type ApiGroupStar = {
   brightness: number;
   planet: PlanetVisual | null;
   effect: SpecialType | null;
+  /** [2026-11-21] 작성자가 적용한 표면 스타일. 없으면 null/없음 = 기본 표면. */
+  surface?: string | null;
 };
 
 export async function apiGroupStars(accessToken: string, groupId: string) {

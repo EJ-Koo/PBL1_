@@ -4,19 +4,20 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Keyboard, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import { Text, TextInput } from '@/components/app-text';
-import { Avatar } from '@/components/ui/group-profile-control';
 import { GroupChatChevron, GroupSendIcon } from '@/components/ui/group-universe-decoration';
+import { Avatar } from '@/components/ui/group-profile-control';
 import { authSession } from '@/lib/auth-session';
 import { chatMessages, markChatRead, sendChat, type ChatMessage } from '@/lib/group-social-api';
 import { mergeChat } from '@/lib/group-chat';
 import { useDiary } from '@/store/diary-context';
 
-export function GroupChatDock({ groupId, bottom, left, width, unread, onRead, initialExpanded = false, onExpandedChange, scale = 1 }: {groupId:string;bottom:number;left:number;width:number;unread:number;onRead:()=>void;initialExpanded?:boolean;onExpandedChange?:(expanded:boolean)=>void;scale?:number}) {
+export function GroupChatDock({ groupId, bottom, left, width, unread, onRead, initialExpanded = false, expanded: controlledExpanded, onExpandedChange, scale=1 }: {groupId:string;bottom:number;left:number;width:number;unread:number;onRead:()=>void;initialExpanded?:boolean;expanded?:boolean;onExpandedChange?:(expanded:boolean)=>void;scale?:number}) {
   const { t, language } = useLanguage();
   const {accessToken,profile}=useDiary();
   const revision=authSession.getRevision();
   const {height}=useWindowDimensions();
-  const [expanded,setExpanded]=useState(initialExpanded);
+  const [localExpanded,setExpanded]=useState(initialExpanded);
+  const expanded=controlledExpanded??localExpanded;
   const changeExpanded=(next:boolean)=>{setExpanded(next);onExpandedChange?.(next);};
   const [messages,setMessages]=useState<ChatMessage[]>([]);
   const [body,setBody]=useState('');
@@ -63,8 +64,9 @@ export function GroupChatDock({ groupId, bottom, left, width, unread, onRead, in
     finally {pollLock.current=false;if(alive.current)setLoading(false);}
   },[accessToken,groupId,revision,read,messages.length,expanded,t]);
   useEffect(()=>{
+    if(!expanded)return;
     const initial=setTimeout(()=>void load(),0);
-    const timer=setInterval(()=>{if(AppState.currentState!=='background')void load();},expanded?3000:10000);
+    const timer=setInterval(()=>{if(AppState.currentState!=='background')void load();},3000);
     return()=>{clearTimeout(initial);clearInterval(timer);};
   },[expanded,load]);
   const send=async()=>{
@@ -77,7 +79,7 @@ export function GroupChatDock({ groupId, bottom, left, width, unread, onRead, in
       if(!alive.current || revision!==authSession.getRevision())return;
       setBody('');retry.current=null;nearBottom.current=true;
       await load();
-    }catch(reason){if(alive.current && revision===authSession.getRevision())setError(reason instanceof Error?reason.message:t('전송하지 못했어요. 다시 시도해주세요.'));}
+    }catch(reason){if(alive.current && revision===authSession.getRevision()){setError(reason instanceof Error?reason.message:t('전송하지 못했어요. 다시 시도해주세요.'));changeExpanded(true);}}
     finally{lock.current=false;if(alive.current)setBusy(false);}
   };
   return <View style={[styles.dock,{left,width,bottom:Math.max(bottom,keyboard?keyboard+12:0)}]} testID="group-chat">
@@ -104,7 +106,7 @@ export function GroupChatDock({ groupId, bottom, left, width, unread, onRead, in
     {error && <Pressable accessibilityRole="button" onPress={()=>void load()} style={styles.errorPanel}><Text style={styles.error}>{error} · {t('다시 시도')}</Text></Pressable>}
     <View style={[styles.composer,{minHeight:56*scale}]}>
       <TextInput accessibilityLabel={t("그룹 채팅 메시지")} style={[styles.input,{paddingHorizontal:24*scale,fontSize:13*scale}]} placeholder={t("입력하세요")} placeholderTextColor="#fff" value={body} onChangeText={setBody} maxLength={2000}
-        underlineColorAndroid="transparent" onFocus={()=>changeExpanded(true)} editable={!busy} returnKeyType="send" onSubmitEditing={()=>void send()}/>
+        underlineColorAndroid="transparent" editable={!busy} returnKeyType="send" onSubmitEditing={()=>void send()}/>
       <Pressable accessibilityRole="button" accessibilityLabel={t("메시지 보내기")} accessibilityState={{disabled:busy||!body.trim(),busy}} disabled={busy||!body.trim()} onPress={()=>void send()} style={[styles.send,{width:48*scale}]}>
         {busy?<ActivityIndicator color="#fff" size="small"/>:<GroupSendIcon size={27*scale}/>}
       </Pressable>

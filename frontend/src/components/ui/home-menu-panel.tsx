@@ -116,16 +116,7 @@ export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, 
               <Text style={[styles.label, type(22, 28)]}>+</Text>
             </Pressable>
           </View>
-          <Text style={[styles.label, styles.heading, { marginTop: 12 * scale }, type(16, 24)]}>{t('언어 설정')}</Text>
-          <View accessibilityRole="radiogroup" accessibilityLabel={t('언어 설정')} style={{ flexDirection: 'row', gap: 8 * scale }}>
-            {([{ id: 'ko', label: '한국어' }, { id: 'en', label: 'English' }] as const).map(item => <Pressable key={item.id}
-              accessibilityRole="radio" accessibilityState={{ checked: language === item.id }} onPress={() => setLanguage(item.id)}
-              style={{ flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: DesignPaint.menuText,
-                backgroundColor: language === item.id ? '#101114' : 'transparent' }}>
-              <Text style={[styles.label, type(13, 20), language === item.id && { color: '#fff' }]}>{item.label}</Text>
-            </Pressable>)}
-          </View>
-          <Text style={[styles.label, type(12, 19)]}>{t('선택한 언어는 이 기기에 저장돼요.')}</Text>
+
         </MenuAccordion>
 
         {divider}
@@ -152,6 +143,18 @@ export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, 
             <Text style={[styles.label, type(16, 24)]}>{t('회원 탈퇴')}</Text>
           </View>
         </MenuAccordion>
+
+        {divider}
+          <Text style={[styles.label, styles.heading, { marginTop: 12 * scale }, type(16, 24)]}>{t('언어 설정')}</Text>
+          <View accessibilityRole="radiogroup" accessibilityLabel={t('언어 설정')} style={{ flexDirection: 'row', gap: 8 * scale }}>
+            {([{ id: 'ko', label: '한국어' }, { id: 'en', label: 'English' }] as const).map(item => <Pressable key={item.id}
+              accessibilityRole="radio" accessibilityState={{ checked: language === item.id }} onPress={() => setLanguage(item.id)}
+              style={{ flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: DesignPaint.menuText,
+                backgroundColor: language === item.id ? '#101114' : 'transparent' }}>
+              <Text style={[styles.label, type(13, 20), language === item.id && { color: '#fff' }]}>{item.label}</Text>
+            </Pressable>)}
+          </View>
+          <Text style={[styles.label, type(12, 19)]}>{t('선택한 언어는 이 기기에 저장돼요.')}</Text>
 
         {divider}
         <View accessible accessibilityState={{ disabled: true }} style={{ minHeight: 44 * scale, justifyContent: 'center', paddingHorizontal: 16 * scale }}>

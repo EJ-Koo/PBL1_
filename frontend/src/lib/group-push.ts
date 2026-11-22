@@ -1,3 +1,4 @@
+import {pushDeliveryStatus,type PushDiagnostics} from './group-social-api';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import {Platform} from 'react-native';
@@ -33,4 +34,11 @@ export function listenGroupPush(onOpen:(data:Record<string,unknown>)=>void){
   const sub=Notifications.addNotificationResponseReceivedListener(open);
   void Notifications.getLastNotificationResponseAsync().then(value=>{if(value)open(value);}).catch(()=>{});
   return()=>sub.remove();
+}
+
+export async function inspectGroupPush(token:string,user:string):Promise<PushDiagnostics>{
+  const saved=await savedPush();
+  const permission=await Notifications.getPermissionsAsync();
+  return {permission:permission.granted?'granted':'denied',subscription:saved?.user_id===user,key_matches:null,
+    server:saved?.user_id===user?await pushDeliveryStatus(token,saved.id):null};
 }

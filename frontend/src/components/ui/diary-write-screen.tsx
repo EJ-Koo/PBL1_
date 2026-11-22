@@ -61,7 +61,7 @@ export function DiaryWriteScreen({
         contentContainerStyle={{ alignItems: 'center', paddingTop: Math.max(insets.top + 8, (compact ? 12 : 32) * scale), paddingBottom: 16 * scale }}
         showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag" contentInsetAdjustmentBehavior="never">
-        <View style={[styles.header, { width: bodyWidth, minHeight: Math.max(44, (wide ? 48 : 40) * scale), paddingHorizontal: (wide ? 22 : 16) * scale }]}>
+        <View style={[styles.header, { width: pageWidth * 0.912, minHeight: Math.max(44, (wide ? 48 : 40) * scale), paddingHorizontal: (wide ? 22 : 16) * scale }]}>
           <DiaryBackFrame scale={scale} wide={wide} />
           <Pressable accessibilityRole="button" accessibilityLabel="지난 기록 열기"
             onPress={() => { Keyboard.dismiss(); router.push('/archive'); }} style={styles.headerAction}>

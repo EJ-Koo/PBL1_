@@ -56,10 +56,6 @@ export const TextInput = forwardRef<NativeTextInput, TextInputProps>(function Ap
   if (needsRuns && font.weight) {
     const visible = value || props.defaultValue || props.placeholder || '';
     const hasHangul = hangul.test(visible);
-    const mixed = !!value && hasHangul && /[a-zA-Z0-9]/.test(value) && !props.secureTextEntry;
-    if (mixed) {
-      return <NativeTextInput ref={ref} {...props} style={font.style}>{fontRuns(value, font.weight)}</NativeTextInput>;
-    }
     return <NativeTextInput ref={ref} {...props} value={value} style={[font.style, hasHangul && { fontFamily: KoreanFonts[font.weight] }]}>{children}</NativeTextInput>;
   }
   return <NativeTextInput ref={ref} {...props} value={value} style={font.style}>{children}</NativeTextInput>;

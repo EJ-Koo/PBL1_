@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, BackHandler, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 
@@ -15,7 +14,7 @@ import { useGroupSocial } from '@/hooks/use-group-social';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import type { ApiGroup } from '@/lib/api';
 import { authSession } from '@/lib/auth-session';
-import { disableGroupPush, enableGroupPush } from '@/lib/group-push';
+import { disableGroupPush, enableGroupPush, inspectGroupPush } from '@/lib/group-push';
 import { markDiaryRead } from '@/lib/group-social-api';
 import { useLanguage } from '@/lib/language';
 import { confirmChoice, showNotice } from '@/lib/notice';
@@ -43,6 +42,8 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   const layout = useResponsiveLayout();
   const s = layout.scale;
   const [chatExpanded, setChatExpanded] = useState(initialChat);
+  const chatOpen=chatExpanded&&!selection.id;
+  const [checkingPush,setCheckingPush]=useState(false);
   const [panel, setPanel] = useState<'members' | 'quest' | null>(null);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
@@ -85,17 +86,38 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
     }
   }, [accessToken, group.id, revision, forgetUnread, t]);
 
-  const push = async () => {
+  const push = async (reconnect=false) => {
     if (pushBusy || !accessToken || !profile?.user_id) return;
     setPushBusy(true);
     try {
-      if (pushEnabled) await disableGroupPush(accessToken, profile.user_id);
+      if (pushEnabled&&!reconnect) await disableGroupPush(accessToken, profile.user_id);
       else await enableGroupPush(accessToken, profile.user_id);
-      if (alive.current && revision === authSession.getRevision()) setPushEnabled(!pushEnabled);
+      if (alive.current && revision === authSession.getRevision()) setPushEnabled(reconnect||!pushEnabled);
     } catch (reason) {
       if (alive.current && revision === authSession.getRevision()) showNotice(t('그룹 알림'), reason instanceof Error ? reason.message : t('알림을 연결하지 못했어요.'));
     } finally { if (alive.current) setPushBusy(false); }
   };
+
+ const checkPush=async()=>{
+  if(checkingPush||!accessToken||!profile?.user_id)return;setCheckingPush(true);
+  try{
+   const status=await inspectGroupPush(accessToken,profile.user_id);
+   if(!alive.current||revision!==authSession.getRevision())return;
+   const server=status.server;
+   const lines=[t('브라우저/기기 권한: {value}',{value:status.permission}),t('이 기기의 구독: {value}',{value:t(status.subscription?'있음':'없음')}),
+    t('서버 등록: {value}',{value:t(server?.registered?'있음':'없음')})];
+   if(status.key_matches!==null)lines.push(t('푸시 키 일치: {value}',{value:t(status.key_matches?'일치':'불일치')}));
+   if(server)lines.push(t('최근 알림 {count}개 · 대기 {pending} · 처리 중 {sending} · 전달 {sent} · 실패 {failed} · 최대 시도 {attempts}',
+    {count:server.recent_notifications,pending:server.pending,sending:server.sending,sent:server.sent,failed:server.failed,attempts:server.max_attempts}));
+   if(!status.subscription||!server?.registered||status.key_matches===false)lines.push(t('아래 알림 다시 연결을 누른 뒤 다른 계정으로 새 채팅을 보내주세요.'));
+   else if(server.pending>0&&server.max_attempts===0)lines.push(t('worker가 이 기기의 대기열을 처리하지 않았어요. worker의 DB 연결과 실행 로그를 확인해주세요.'));
+   else if(server.failed>0||server.pending>0&&server.max_attempts>0)lines.push(t('발송 재시도 또는 실패가 있어요. worker 실행 로그의 Group push failed 코드를 확인해주세요.'));
+   else if(server.sent>0)lines.push(t('푸시 서비스에는 전달됐어요. 운영체제 알림 허용과 방해금지 설정을 확인해주세요.'));
+   lines.push(t('본인이 보낸 채팅은 본인에게 알림이 오지 않아요. 같은 그룹의 다른 계정으로 새 채팅을 보내 테스트해주세요.'));
+   showNotice(t('알림 상태'),lines.join('\n\n'));
+  }catch(reason){if(alive.current&&revision===authSession.getRevision())showNotice(t('알림 상태'),reason instanceof Error?reason.message:t('알림 상태를 확인하지 못했어요.'));}
+  finally{if(alive.current)setCheckingPush(false);}
+ };
 
   const togglePanel = (next: 'members' | 'quest') => {
     if (panel !== next) selection.onChange(null);
@@ -112,10 +134,10 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   const panelHeight = Math.max(120, Math.min(488 * s, height - panelTop - chatBottom - 72 * s));
 
   return <View style={styles.screen} testID="group-experience">
-    <Image source={require('../../assets/images/night-sky.png')} contentFit="cover" style={StyleSheet.absoluteFill} pointerEvents="none" />
-    <DiaryUniverse groupId={group.id} sceneKey={`${revision}:group-${group.id}`} entries={entries} backgroundStarScale={1.4}
+    {/* [2026-11-19] 홈 우주처럼 배경 사진(night-sky.png)을 빼고 단색(#000)+3D 배경 별 한 겹만 보이게 함 */}
+    <DiaryUniverse groupId={group.id} sceneKey={`${revision}:group-${group.id}`} entries={entries} backgroundStarScale={1}
       selection={selection} unreadIds={data?.unread_diary_ids ?? []} onDiaryRead={read}
-      popupInsets={{ top: controlsTop + 52 * s, bottom: chatBottom + 68 * s + (chatExpanded ? chatHistoryHeight : 0) }} />
+      popupInsets={{ top: controlsTop + 52 * s, bottom: chatBottom + 68 * s + (chatOpen ? chatHistoryHeight : 20*s) }} />
     {(loading || error || entries.length === 0) && <View pointerEvents={error ? 'auto' : 'none'} style={styles.empty}>
       <Text style={styles.text}>{error ?? t(loading ? '그룹의 별을 불러오는 중…' : '아직 이 그룹에 공유된 별이 없어요.')}</Text>
       {error && <SpaceButton label={t('다시 불러오기')} onPress={onReload} />}
@@ -129,6 +151,7 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
     <View pointerEvents="box-none" style={[styles.controls, { top: controlsTop, left: layout.chromeLeft + 18 * s, width: layout.chromeWidth - 36 * s }]}>
       <Pressable accessibilityRole="button" accessibilityLabel={t('그룹으로 돌아가기')} onPress={onBack} style={styles.icon}>
         <GroupUniverseIcon kind="back" size={40 * s} />
+        <Text numberOfLines={1} adjustsFontSizeToFit style={{position:'absolute',top:43*s,left:0,width:Math.min(140*s,layout.chromeWidth/2-55*s),fontSize:10*s,color:'#eee'}}>{t('그룹으로 돌아가기')}</Text>
       </Pressable>
       {panel !== 'members' && <Pressable accessibilityRole="button" accessibilityLabel={t('그룹 퀘스트')}
         accessibilityState={{ expanded: panel === 'quest' }} onPress={() => togglePanel('quest')}
@@ -146,7 +169,7 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
 
     {readError && <Text accessibilityRole="alert" style={[styles.readError, { top: panelTop }]}>{readError}</Text>}
     <GroupChatDock key={group.id} groupId={group.id} bottom={chatBottom} left={chatLeft} width={chatWidth} scale={s}
-      unread={data?.chat_unread_count ?? 0} onRead={refresh} initialExpanded={initialChat} onExpandedChange={setChatExpanded} />
+      unread={data?.chat_unread_count ?? 0} onRead={refresh} initialExpanded={initialChat} expanded={chatOpen} onExpandedChange={expanded=>{if(expanded)selection.onChange(null);setChatExpanded(expanded);}} />
 
     {panel && <>
       <Pressable style={styles.backdrop} accessibilityRole="button" accessibilityLabel={t('그룹 패널 닫기')} onPress={() => setPanel(null)} />
@@ -172,7 +195,11 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
             </ScrollView>
             <View style={styles.panelActions}>
               <SpaceButton label={t(pushBusy ? '연결 중…' : pushEnabled ? '그룹 알림 끄기' : '그룹 알림 받기')}
-                onPress={() => void push()} disabled={pushBusy} scale={s} style={styles.notification} />
+                onPress={() => void push()} disabled={pushBusy||checkingPush} scale={s} style={styles.notification} />
+              {pushEnabled&&<>
+                <SpaceButton label={t(checkingPush?'확인 중…':'알림 상태 확인')} onPress={()=>void checkPush()} disabled={pushBusy||checkingPush} scale={s} style={styles.notification}/>
+                <SpaceButton label={t('알림 다시 연결')} onPress={()=>void push(true)} disabled={pushBusy||checkingPush} scale={s} style={styles.notification}/>
+              </>}
               <Pressable accessibilityRole="button" accessibilityState={{ disabled: leaving }} disabled={leaving} style={styles.leave}
                 onPress={() => confirmChoice(t('그룹 나가기'), t('이 그룹의 공유 우주와 채팅에서 나갈까요?'), t('나가기'), () => { void onLeave(); })}>
                 <Text style={styles.leaveText}>{t(leaving ? '나가는 중…' : '그룹 나가기')}</Text>

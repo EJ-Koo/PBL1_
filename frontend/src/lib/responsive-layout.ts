@@ -44,7 +44,7 @@ const navPanels = [
 ] as const;
 
 export function getBottomNavLayout(width: number) {
-  const scale = Math.min(Math.max(0, width) / 774, 1.15) * 0.7;
+  const scale = Math.min(Math.max(0, width) / 774, 1.15) * 0.85;
   const viewWidth = scale > 0 ? width / scale : 774;
   const offset = (viewWidth - 774) / 2;
   const viewHeight = 120;
@@ -56,7 +56,7 @@ export function getBottomNavLayout(width: number) {
   const items = navPanels.map(panel => {
     const x = offset + panel.x;
     const panelWidth = panel.width * scale;
-    const hitWidth = Math.max(Math.min(56, width / 3), panelWidth);
+    const hitWidth = Math.max(Math.min(65, width / 3), panelWidth);
     // Extend small outside buttons toward the stripes, away from the middle button.
     const hitLeft = panel.id === 'diary' ? (x + panel.width) * scale - hitWidth
       : panel.id === 'home' ? (x + panel.width / 2) * scale - hitWidth / 2 : x * scale;
