@@ -157,8 +157,7 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   const titleHeight = titleLines * Math.max(26, 28 * s) * fontScale;
   const headerHeight = titleHeight + 24 * s;
   const controlsTop = layout.headerTop + headerHeight + 9 * s;
-  const clearButtonWidth = 132 * s;
-  const questButtonHeight = Math.max(44, 38 * s);
+  const questButtonSize = { width: 86 * s, height: Math.max(44, 38 * s) };
   const panelTop = controlsTop + Math.max(44, 40 * s) + 4 * s;
   const panelWidth = Math.min(236 * s, layout.chromeWidth - 24 * s);
   const chatWidth = Math.min(460, layout.chromeWidth - 68 * s);
@@ -190,16 +189,16 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
         <Pressable accessibilityRole="button" accessibilityLabel={t('새 별 표시 모두 지우기')}
           accessibilityState={{ disabled: clearingHighlights || unreadIds.length === 0, busy: clearingHighlights }}
           disabled={clearingHighlights || unreadIds.length === 0} onPress={clearHighlights}
-          style={[styles.quest, { width: clearButtonWidth, height: questButtonHeight }, unreadIds.length === 0 && styles.controlDisabled]}>
-          <QuestFrame scale={s * 1.12} width={clearButtonWidth} />
+          style={[styles.quest, questButtonSize, unreadIds.length === 0 && styles.controlDisabled]}>
+          <QuestFrame scale={s * 1.12} />
           <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.questLabel, { paddingHorizontal: 12 * s }]}>
             {clearingHighlights ? <ActivityIndicator size="small" color="#fff" /> :
-              <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.questText, { fontSize: 13 * s }]}>{t('새 별 표시 지우기')}</Text>}
+              <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.questText, { fontSize: 13 * s }]}>{t('표시 지우기')}</Text>}
           </View>
         </Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel={t('그룹 퀘스트')}
           accessibilityState={{ expanded: panel === 'quest' }} onPress={() => togglePanel('quest')}
-          style={[styles.quest, { width: 86 * s, height: questButtonHeight }]}>
+          style={[styles.quest, questButtonSize]}>
           <QuestFrame scale={s * 1.12} />
           <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.questLabel]}>
             <Text style={[styles.questText, { fontSize: 16 * s }]}>Quest</Text>
