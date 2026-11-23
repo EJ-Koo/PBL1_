@@ -4,7 +4,7 @@ type Insets = { top: number; bottom: number; left: number; right: number };
 export function getResponsiveLayout(width: number, height: number, insets: Insets) {
   const availableWidth = Math.max(0, width - insets.left - insets.right);
   const scale = Math.min(availableWidth / 393, 1.15);
-  const hudScale = scale * 0.85;
+  const hudScale = scale * 0.85 * 0.85;
   const hudHeight = 75 * hudScale;
   const contentWidth = 393 * scale;
   const contentLeft = insets.left + (availableWidth - contentWidth) / 2;
@@ -46,7 +46,7 @@ const navPanels = [
 ] as const;
 
 export function getBottomNavLayout(width: number) {
-  const scale = Math.min(Math.max(0, width) / 774, 1.15) * 0.7;
+  const scale = Math.min(Math.max(0, width) / 774, 1.15) * 0.7 * 0.85;
   const viewWidth = scale > 0 ? width / scale : 774;
   const offset = (viewWidth - 774) / 2;
   const viewHeight = 120;
@@ -58,7 +58,7 @@ export function getBottomNavLayout(width: number) {
   const items = navPanels.map(panel => {
     const x = offset + panel.x;
     const panelWidth = panel.width * scale;
-    const hitWidth = Math.max(Math.min(56, width / 3), panelWidth);
+    const hitWidth = Math.max(Math.min(56, Math.max(44, 216 * scale), width / 3), panelWidth);
     // Extend small outside buttons toward the stripes, away from the middle button.
     const hitLeft = panel.id === 'diary' ? (x + panel.width) * scale - hitWidth
       : panel.id === 'home' ? (x + panel.width / 2) * scale - hitWidth / 2 : x * scale;
