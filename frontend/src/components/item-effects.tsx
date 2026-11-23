@@ -40,7 +40,7 @@ export function CometLayer({ effects }: { effects: ItemEffect[] }) {
       progress.setValue(0);
       Animated.timing(progress, {
         toValue: 1,
-        duration: 1000,
+        duration: 600,
         easing: Easing.out(Easing.quad),
         useNativeDriver: false,
       }).start();
