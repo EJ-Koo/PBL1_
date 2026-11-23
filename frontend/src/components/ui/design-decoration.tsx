@@ -37,11 +37,12 @@ export function HomeHudFrame({ scale, width = 393 * scale, wide = false }: { sca
   );
 }
 
-export function QuestFrame({ scale }: { scale: number }) {
+export function QuestFrame({ scale, width = 77 * scale }: { scale: number; width?: number }) {
+  const frameWidth = width / scale;
   return (
-    <Svg width={77 * scale} height={38 * scale} viewBox="0 0 77 38" pointerEvents="none">
+    <Svg width={width} height={38 * scale} viewBox={`0 0 ${frameWidth} 38`} pointerEvents="none">
       <Path
-        d="M11 1H76V27L66 37H1V12Z"
+        d={`M11 1H${frameWidth - 1}V27L${frameWidth - 11} 37H1V12Z`}
         fill={DesignPaint.quest}
         stroke={DesignPaint.ink}
         strokeWidth={1.5}

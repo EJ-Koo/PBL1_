@@ -157,6 +157,8 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   const titleHeight = titleLines * Math.max(26, 28 * s) * fontScale;
   const headerHeight = titleHeight + 24 * s;
   const controlsTop = layout.headerTop + headerHeight + 9 * s;
+  const clearButtonWidth = 132 * s;
+  const questButtonHeight = Math.max(44, 38 * s);
   const panelTop = controlsTop + Math.max(44, 40 * s) + 4 * s;
   const panelWidth = Math.min(236 * s, layout.chromeWidth - 24 * s);
   const chatWidth = Math.min(460, layout.chromeWidth - 68 * s);
@@ -188,13 +190,16 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
         <Pressable accessibilityRole="button" accessibilityLabel={t('새 별 표시 모두 지우기')}
           accessibilityState={{ disabled: clearingHighlights || unreadIds.length === 0, busy: clearingHighlights }}
           disabled={clearingHighlights || unreadIds.length === 0} onPress={clearHighlights}
-          style={[styles.clearHighlights, { paddingHorizontal: 8 * s }, unreadIds.length === 0 && styles.controlDisabled]}>
-          {clearingHighlights ? <ActivityIndicator size="small" color="#FFE8A3" /> :
-            <Text numberOfLines={1} style={styles.clearHighlightsText}>{t('새 별 표시 지우기')}</Text>}
+          style={[styles.quest, { width: clearButtonWidth, height: questButtonHeight }, unreadIds.length === 0 && styles.controlDisabled]}>
+          <QuestFrame scale={s * 1.12} width={clearButtonWidth} />
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.questLabel, { paddingHorizontal: 12 * s }]}>
+            {clearingHighlights ? <ActivityIndicator size="small" color="#fff" /> :
+              <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.questText, { fontSize: 13 * s }]}>{t('새 별 표시 지우기')}</Text>}
+          </View>
         </Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel={t('그룹 퀘스트')}
           accessibilityState={{ expanded: panel === 'quest' }} onPress={() => togglePanel('quest')}
-          style={[styles.quest, { width: 86 * s, height: Math.max(44, 38 * s) }]}>
+          style={[styles.quest, { width: 86 * s, height: questButtonHeight }]}>
           <QuestFrame scale={s * 1.12} />
           <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.questLabel]}>
             <Text style={[styles.questText, { fontSize: 16 * s }]}>Quest</Text>
@@ -272,8 +277,6 @@ const styles = StyleSheet.create({
   controls: { position: 'absolute', zIndex: 7, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   icon: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   rightControls: { flexDirection: 'row', alignItems: 'center', flexShrink: 1 },
-  clearHighlights: { minHeight: 44, minWidth: 44, flexShrink: 1, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#FFE8A3', borderRadius: 8, backgroundColor: '#17140D' },
-  clearHighlightsText: { color: '#FFE8A3', fontSize: 12 },
   controlDisabled: { opacity: 0.45 },
   quest: { alignItems: 'center', justifyContent: 'center' },
   questLabel: { alignItems: 'center', justifyContent: 'center' },
