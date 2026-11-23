@@ -158,6 +158,8 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   const headerHeight = titleHeight + 24 * s;
   const controlsTop = layout.headerTop + headerHeight + 9 * s;
   const questButtonSize = { width: 86 * s, height: Math.max(44, 38 * s) };
+  const clearButtonWidth = (108 * Math.max(1, fontScale) + 16) * s;
+  const clearButtonLabel = t('전체 읽음 표시');
   const panelTop = controlsTop + Math.max(44, 40 * s) + 4 * s;
   const panelWidth = Math.min(236 * s, layout.chromeWidth - 24 * s);
   const chatWidth = Math.min(460, layout.chromeWidth - 68 * s);
@@ -186,14 +188,14 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
         <GroupUniverseIcon kind="back" size={40 * s} />
       </Pressable>
       <View pointerEvents="box-none" style={[styles.rightControls, { gap: 8 * s }]}>
-        <Pressable accessibilityRole="button" accessibilityLabel={t('새 별 표시 모두 지우기')}
+        <Pressable accessibilityRole="button" accessibilityLabel={clearButtonLabel}
           accessibilityState={{ disabled: clearingHighlights || unreadIds.length === 0, busy: clearingHighlights }}
           disabled={clearingHighlights || unreadIds.length === 0} onPress={clearHighlights}
-          style={[styles.quest, questButtonSize, unreadIds.length === 0 && styles.controlDisabled]}>
-          <QuestFrame scale={s * 1.12} />
-          <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.questLabel, { paddingHorizontal: 12 * s }]}>
+          style={[styles.quest, questButtonSize, { width: clearButtonWidth }, unreadIds.length === 0 && styles.controlDisabled]}>
+          <QuestFrame scale={s * 1.12} width={clearButtonWidth} />
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.questLabel, { paddingHorizontal: 8 * s }]}>
             {clearingHighlights ? <ActivityIndicator size="small" color="#fff" /> :
-              <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.questText, { fontSize: 13 * s }]}>{t('표시 지우기')}</Text>}
+              <Text style={[styles.questText, { fontSize: 13 * s, textAlign: 'center' }]}>{clearButtonLabel}</Text>}
           </View>
         </Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel={t('그룹 퀘스트')}
