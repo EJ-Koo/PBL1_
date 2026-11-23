@@ -207,22 +207,33 @@ function Card({
   );
 }
 
-/** 행성 효과·표면 줄 위의 미리보기: 샘플 감정 행성(연분홍 '설렘·애정')에 고른 효과·표면을 실제 3D로 그린다. */
-function EffectPreview({ item, visible, kind }: { item: ShopItem | undefined; visible: boolean; kind: 'effect' | 'surface' }) {
-  const effect = item ? effectOfItem(item) : null;
-  const surface = item ? surfaceOfItem(item) : null;
+/**
+ * 행성 표면·효과 미리보기(하나만): 샘플 감정 행성(연분홍 '설렘·애정')에 고른 표면과 효과를 함께 실제 3D로 그린다.
+ * [2026-11-23] 표면 줄·효과 줄에 하나씩 있던 미리보기를 하나로 합쳤다(표면 + 효과 조합을 바로 볼 수 있게).
+ */
+function PlanetLookPreview({
+  surfaceItem,
+  effectItem,
+  visible,
+}: {
+  surfaceItem: ShopItem | undefined;
+  effectItem: ShopItem | undefined;
+  visible: boolean;
+}) {
+  const { t } = useLanguage();
+  const surface = surfaceItem ? surfaceOfItem(surfaceItem) : null;
+  const effect = effectItem ? effectOfItem(effectItem) : null;
+  const names = [surfaceItem, effectItem].filter(Boolean).map((i) => `${i!.icon} ${i!.name}`);
   return (
-    <View style={styles.preview} testID={`shop-${kind}-preview`}>
+    <View style={styles.preview} testID="shop-planet-preview">
       {/* 행성 꾸미기 팝업이 떠 있으면 3D 화면을 하나만 쓰도록 잠시 내린다 */}
       {visible ? <PlanetPreview id="shop-sample" visual={SAMPLE_PLANET} radius={0.36} effect={effect} surface={surface} /> : null}
       <Text style={styles.previewTag} pointerEvents="none">
-        미리보기 · 샘플 행성
+        {t('미리보기 · 샘플 행성')}
       </Text>
-      {item ? (
-        <Text style={styles.previewName} pointerEvents="none">
-          {item.icon} {item.name}
-        </Text>
-      ) : null}
+      <Text style={styles.previewName} pointerEvents="none" testID="shop-preview-name">
+        {names.length ? names.join('  +  ') : t('기본 행성')}
+      </Text>
     </View>
   );
 }
@@ -235,8 +246,8 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
   const { scale } = useResponsiveLayout();
   const [tabId, setTabId] = useState(TABS[0].id);
   const [busyId, setBusyId] = useState<string | null>(null);
-  // 행성 효과 줄: 미리보기 중인 아이템, 행성 꾸미기 팝업(적용하기)
-  const [previewId, setPreviewId] = useState<string | null>(null);
+  // 행성 표면·효과 줄: 미리보기 중인 표면·효과(하나의 미리보기에 함께), 행성 꾸미기 팝업(적용하기)
+  const [preview, setPreview] = useState<{ surface: string | null; effect: string | null }>({ surface: null, effect: null });
   const [decorating, setDecorating] = useState<{ effect?: SpecialType; surface?: SurfaceStyle } | null>(null);
   // 효과·표면별로 적용된 행성 수 (카드 배지)
   const appliedCount = useMemo(() => {
@@ -338,23 +349,23 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
 
           <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
             {sections.map(({ section, list }, index) => {
+              // 미리보기는 표면·효과 줄 중 첫 줄 위에 하나만
+              const firstPreview = sections.findIndex((x) => x.section.preview && x.list.length > 0) === index;
               const slot = section.defaultCard?.slot;
               const slotInUse = slot ? list.some((i) => i.equipped && i.quantity > 0) : false;
               return (
                 <View key={section.title} testID={`shop-section-${section.title}`}>
                   {index > 0 ? <View style={styles.divider} /> : null}
                   <Text style={styles.sectionTitle}>{t(section.title)}</Text>
-                  {section.preview && list.length > 0 ? (
+                  {firstPreview ? (
                     <>
-                      <EffectPreview
-                        kind={section.preview}
-                        item={list.find((i) => i.id === previewId) ?? list[0]}
+                      <PlanetLookPreview
+                        surfaceItem={items.find((i) => i.id === preview.surface)}
+                        effectItem={items.find((i) => i.id === preview.effect)}
                         visible={visible && decorating === null}
                       />
                       <Text style={styles.previewHint}>
-                        {section.preview === 'surface'
-                          ? t('카드를 누르면 미리 볼 수 있어요. 감정으로 정해진 색과 무늬는 그대로, 표면 재질만 바뀌어요.')
-                          : t('카드를 누르면 미리 볼 수 있어요. 행성 색과 무늬는 그대로, 주변 효과만 더해져요.')}
+                        {t('표면 카드와 효과 카드를 누르면 함께 미리 볼 수 있어요. 한 번 더 누르면 빠져요. 감정으로 정해진 색과 무늬는 그대로예요.')}
                       </Text>
                     </>
                   ) : null}
@@ -392,7 +403,7 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
                             ? (appliedCount.get(`surface:${surface}`) ?? 0)
                             : 0;
                         const left = Math.max(item.quantity - applied, 0);
-                        const previewing = !!section.preview && (previewId ?? list[0]?.id) === item.id;
+                        const previewing = section.preview ? preview[section.preview] === item.id : false;
                         return (
                           <Card
                             key={item.id}
@@ -421,7 +432,14 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
                             }
                             highlighted={item.equipped}
                             previewing={previewing}
-                            onSelect={section.preview ? () => setPreviewId(item.id) : undefined}
+                            onSelect={
+                              section.preview
+                                ? () => {
+                                    const kind = section.preview!;
+                                    setPreview((p) => ({ ...p, [kind]: p[kind] === item.id ? null : item.id }));
+                                  }
+                                : undefined
+                            }
                             action={actionFor(item, balance)}
                             busy={busyId === item.id}
                             disabledAll={busyId !== null}
