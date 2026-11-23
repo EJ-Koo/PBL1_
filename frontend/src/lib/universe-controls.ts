@@ -24,3 +24,8 @@ export function frontView(view: UniverseControls, zoom?: number) {
   view.yaw = Math.round(view.yaw / (Math.PI * 2)) * Math.PI * 2;
   if (zoom != null && Number.isFinite(zoom)) view.zoom = zoom;
 }
+
+// Keep a selected diary readable by limiting camera approach while its popup is open.
+export function limitDiaryZoom(view: UniverseControls) {
+  view.zoom = Math.max(0.6, view.zoom);
+}

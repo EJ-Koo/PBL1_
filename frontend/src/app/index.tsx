@@ -317,8 +317,8 @@ export default function HomeScreen() {
 
   const handleCreateGroup = async () => {
     if (createGroupLock.current) return;
-    if (newGroupName.trim().length > 24) {
-      showMessage('그룹 이름', '그룹 이름은 24자 이내로 입력해주세요.');
+    if (Array.from(newGroupName.trim()).length > 8) {
+      showMessage('그룹 이름', '그룹 이름은 8자 이내로 입력해주세요.');
       return;
     }
     createGroupLock.current = true;

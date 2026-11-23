@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class ProfileCreate(BaseModel):
-    nickname: str = Field(min_length=1, max_length=24)
+    nickname: str = Field(min_length=1, max_length=8)
 
     @field_validator('nickname', mode='before')
     @classmethod
@@ -11,7 +11,7 @@ class ProfileCreate(BaseModel):
 
 
 class ProfileUpdate(ProfileCreate):
-    bio: str = Field(default='', max_length=80)
+    bio: str = Field(default='', max_length=20)
     avatar_path: str | None = Field(default=None, max_length=200)
 
     @field_validator('bio', mode='before')

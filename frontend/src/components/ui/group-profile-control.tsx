@@ -87,6 +87,8 @@ function ProfilePanel({ anchor, token, initial, onSave, onClose }: {
   const save = async () => {
     if (lock.current || !loaded) return;
     if (!nickname.trim()) { setError('닉네임을 입력해주세요.'); return; }
+    if (Array.from(nickname.trim()).length > 8) { setError('닉네임은 8자 이내로 입력해주세요.'); return; }
+    if (Array.from(bio.trim()).length > 20) { setError('한 줄 소개는 20자 이내로 입력해주세요.'); return; }
     lock.current = true; setBusy(true); setError(null);
     try {
       const result = await onSave({ nickname: nickname.trim(), bio: bio.trim(), avatar_path: avatarPath, avatarUri: newPhoto });
@@ -110,9 +112,9 @@ function ProfilePanel({ anchor, token, initial, onSave, onClose }: {
                   <Avatar uri={photo} size={96} /><Text style={styles.text}>{photo ? '사진 변경' : '사진 업로드'}</Text>
                 </Pressable>
                 <Text style={styles.label}>닉네임</Text>
-                <TextInput accessibilityLabel="닉네임" value={nickname} onChangeText={setNickname} maxLength={24} editable={!busy} style={styles.input} placeholder="닉네임 (최대 24자)" placeholderTextColor="#a3a6b2" />
+                <TextInput accessibilityLabel="닉네임" value={nickname} onChangeText={setNickname} maxLength={8} editable={!busy} style={styles.input} placeholder="닉네임 (최대 8자)" placeholderTextColor="#a3a6b2" />
                 <Text style={styles.label}>한 줄 소개</Text>
-                <TextInput accessibilityLabel="한 줄 소개" value={bio} onChangeText={setBio} maxLength={80} editable={!busy} style={styles.input} placeholder="나를 소개해주세요 (최대 80자)" placeholderTextColor="#a3a6b2" />
+                <TextInput accessibilityLabel="한 줄 소개" value={bio} onChangeText={setBio} maxLength={20} editable={!busy} style={styles.input} placeholder="나를 소개해주세요 (최대 20자)" placeholderTextColor="#a3a6b2" />
               </>}
               {error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
               {!loaded ? <Pressable style={styles.save} onPress={() => { setError(null); setLoading(true); setRetry(value => value + 1); }}><Text style={styles.saveText}>다시 불러오기</Text></Pressable>

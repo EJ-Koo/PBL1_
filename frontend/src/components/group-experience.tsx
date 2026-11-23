@@ -151,10 +151,9 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   };
   const members = data?.members ?? group.members.map(item => ({ user_id: item.user_id, nickname: item.nickname ?? t('멤버'), bio: '', avatar_url: null }));
   const fontScale = useFontScale();
-  const titleFontSize = Math.max(16, 21 * s);
-  const titleWidth = Math.min(layout.chromeWidth - 32 * s, Math.max(200 * s, Array.from(group.name).length * titleFontSize * fontScale + 24 * s));
-  const titleLines = Math.max(1, Math.ceil(Array.from(group.name).length * titleFontSize * fontScale / Math.max(1, titleWidth - 16 * s)));
-  const titleHeight = titleLines * Math.max(26, 28 * s) * fontScale;
+  const titleFontSize = Math.max(14, 18 * s);
+  const titleWidth = Math.min(layout.chromeWidth - 32 * s, 260 * s);
+  const titleHeight = Math.max(24, 28 * s) * fontScale;
   const headerHeight = titleHeight + 24 * s;
   const controlsTop = layout.headerTop + headerHeight + 9 * s;
   const questButtonSize = { width: 86 * s, height: Math.max(44, 38 * s) };
@@ -180,7 +179,7 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
 
     <View pointerEvents="none" style={[styles.titleFrame, { top: layout.headerTop, left: layout.chromeLeft, width: layout.chromeWidth, height: headerHeight }]}>
       <GroupUniverseHeaderFrame width={layout.chromeWidth} scale={s} titleWidth={titleWidth} titleHeight={titleHeight} />
-      <Text accessibilityRole="header"
+      <Text accessibilityRole="header" accessibilityLabel={group.name} numberOfLines={1} ellipsizeMode="tail"
         style={[styles.groupName, { left: (layout.chromeWidth - titleWidth) / 2 + 8 * s, width: titleWidth - 16 * s, top: 3 * s, fontSize: titleFontSize, lineHeight: Math.max(26, 28 * s) }]}>{group.name}</Text>
     </View>
     <View pointerEvents="box-none" style={[styles.controls, { top: controlsTop, left: layout.chromeLeft + 18 * s, width: layout.chromeWidth - 36 * s }]}>

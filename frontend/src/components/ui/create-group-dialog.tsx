@@ -31,10 +31,10 @@ export function CreateGroupDialog({ visible, scale, name, defaultName, saving, o
             <Text style={[styles.title, { fontSize: 23 * scale, lineHeight: 32 * scale }]}>{t("우리의 우주 만들기")}</Text>
             <Text style={[styles.muted, { fontSize: 13 * scale, lineHeight: 21 * scale, marginTop: 10 * scale, marginBottom: 24 * scale }]}>{t('함께 쓴 하루가 모여 하나의 우주가 돼요.')} {'\n'}{t('만든 그룹은 일기의 공유 목록에 바로 나타나요.')}</Text>
             <Text style={[styles.text, { fontSize: 13 * scale, marginBottom: 9 * scale }]}>{t("우주의 이름")}</Text>
-            <TextInput accessibilityLabel={t("새 그룹 이름")} value={name} onChangeText={onChangeName} maxLength={24}
+            <TextInput accessibilityLabel={t("새 그룹 이름")} value={name} onChangeText={onChangeName} maxLength={8}
               editable={!saving} placeholder={defaultName} placeholderTextColor="#78818d" returnKeyType="done"
               onSubmitEditing={onCreate} style={[styles.input, { fontSize: 16 * scale, padding: 13 * scale }]} />
-            <Text style={[styles.muted, { fontSize: 11 * scale, textAlign: 'right', marginTop: 7 * scale }]}>{name.length}/24</Text>
+            <Text style={[styles.muted, { fontSize: 11 * scale, textAlign: 'right', marginTop: 7 * scale }]}>{name.length}/8</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 * scale, marginVertical: 22 * scale }}>
               <SpaceIcon kind="star" size={14 * scale} color="#a39bff" />
               <Text style={[styles.muted, { fontSize: 12 * scale, lineHeight: 19 * scale, flex: 1 }]}>{t("내 별부터 시작하는 새로운 우주")}</Text>
