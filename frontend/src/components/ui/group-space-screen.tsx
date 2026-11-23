@@ -13,6 +13,7 @@ import type { MemberStar } from '@/lib/group-attendance';
 import { GroupAddIcon, GroupCardFrame, GroupHeaderFrame, GroupLabelFrame } from './group-decoration';
 
 import { DesignColors, DesignFonts, DesignPaint } from '@/constants/ui-design';
+import { useFontScale } from '@/hooks/use-font-scale';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 
 // 서버 데이터(ApiGroup)를 index.tsx에서 이 뷰모델로 매핑해서 넘긴다.
@@ -52,6 +53,7 @@ function GroupPreview({ stars }: { stars: DiaryEntry[] }) {
 export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup, onJoinByCode }: Props) {
   const { t } = useLanguage();
   const { headerTop, bottomSpace, pageLeft, pageWidth, pagePadding, pageGap, innerWidth, groupCardWidth } = useResponsiveLayout();
+  const fontScale = useFontScale();
   const cardWidth = groupCardWidth;
   const cardScale = cardWidth / 362;
 
@@ -79,7 +81,12 @@ export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup, onJ
             const first = i === 0;
             const allKnown = group.members.length > 0 && group.members.every((member) => member.known);
             const footerTextHeight = Math.max(16, 13 * s) * (allKnown ? 2 : 3);
-            const cardHeight = Math.max(CARD_HEIGHT, 207 + Math.ceil(group.members.length / 6) * 22 + footerTextHeight / s + 8);
+            const nameSize = Math.max(16, 20 * s);
+            const nameLineHeight = Math.max(24, 28 * s);
+            // Reserve enough footer space even for a 24-character name at enlarged text settings.
+            const nameLines = Math.max(1, Math.ceil(Array.from(group.name).length * nameSize * fontScale / (171 * s)));
+            const nameHeight = nameLines * nameLineHeight * fontScale + 4;
+            const cardHeight = Math.max(CARD_HEIGHT, 207 + Math.ceil(group.members.length / 6) * 22 + footerTextHeight / s + 8, 208 + nameHeight / s + 8);
             return (
               <TouchableOpacity
                 key={group.id}
@@ -99,9 +106,9 @@ export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup, onJ
                 <View style={StyleSheet.absoluteFill} pointerEvents="none">
                   <GroupLabelFrame scale={s} first={first} height={cardHeight} />
                 </View>
-                <Text numberOfLines={1} style={[styles.positioned, styles.groupName, {
-                  left: (first ? 20 : 19) * s, top: 208 * s, width: 171 * s, height: 30 * s,
-                  fontSize: Math.max(16, 20 * s), lineHeight: 28 * s,
+                <Text style={[styles.positioned, styles.groupName, {
+                  left: (first ? 20 : 19) * s, top: 208 * s, width: 171 * s, minHeight: nameHeight,
+                  fontSize: nameSize, lineHeight: nameLineHeight,
                 }]}>{group.name}</Text>
                 <View pointerEvents="none" style={{ position: 'absolute', left: 222 * s, top: 205 * s }}>
                   <GroupMemberStars members={group.members} scale={s} readable />

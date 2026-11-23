@@ -31,12 +31,14 @@ type Props = {
   selectedTopic?: string | null;
   onToggleTopic?: (id: string) => void;
   hasBottomNav: boolean;
+  rememberSelections?: boolean;
+  onToggleRemember?: () => void;
 };
 
 export function DiaryWriteScreen({
   diaryText, onChangeText, dateLabel, photoCountLabel, photos, photoBusy, saving,
   onAddPhotos, onRemovePhoto, groups, selectedGroupIds, onSelectPrivate, onToggleGroup,
-  onBack, onSubmit, topics, selectedTopic, onToggleTopic, hasBottomNav,
+  onBack, onSubmit, topics, selectedTopic, onToggleTopic, hasBottomNav, rememberSelections, onToggleRemember,
 }: Props) {
   const insets = useSafeAreaInsets();
   const [preview, setPreview] = useState<Photo | null>(null);
@@ -79,11 +81,21 @@ export function DiaryWriteScreen({
           <Text accessibilityRole="header" style={[styles.text, type(wide ? 36 : 24, wide ? 50 : 32)]}>오늘은 어떤 별일이 있었나요?</Text>
           <View style={[styles.rowBetween, { marginTop: (wide ? 14 : 7) * scale, minHeight: 30 * scale }]}>
             <Text style={[styles.muted, { flexShrink: 1 }, type(wide ? 22 : 18, wide ? 31 : 26)]}>{dateLabel}</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 12 * scale, flexShrink: 1 }}>
             {!!topics?.length && <Pressable accessibilityRole="button" accessibilityLabel="오늘의 주제 선택"
               accessibilityState={{ expanded: topicsOpen }} aria-expanded={topicsOpen} hitSlop={6}
               onPress={() => setTopicsOpen(open => !open)} style={styles.topicToggle}>
-              <Text style={[styles.muted, type(12, 17)]}>{selectedTopicLabel ?? '주제 선택'} {topicsOpen ? '−' : '+'}</Text>
+              <Text style={[styles.muted, type(12, 17)]}>{selectedTopicLabel ?? '주제 선택'} {topicsOpen ? '⌄' : '›'}</Text>
             </Pressable>}
+              {rememberSelections !== undefined && <Pressable accessibilityRole="checkbox" accessibilityLabel="이전 주제와 공유 그룹 선택 기억하기"
+                accessibilityState={{ checked: rememberSelections, disabled: saving }} disabled={saving} onPress={onToggleRemember}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 7, minHeight: 44, flexShrink: 1, paddingVertical: 4 }}>
+                <View style={{ width: 20, height: 20, borderWidth: 1, borderColor: '#ddd', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={[styles.text, { fontSize: 14, lineHeight: 18 }]}>{rememberSelections ? '✓' : ''}</Text>
+                </View>
+                <Text style={[styles.muted, { fontSize: Math.max(13, 13 * scale), lineHeight: Math.max(20, 20 * scale), flexShrink: 1 }]}>이전 선택 기억하기</Text>
+              </Pressable>}
+            </View>
           </View>
           {topicsOpen && topics && <View style={[styles.chips, { marginVertical: 8 * scale }]}>
             {topics.map(topic => {

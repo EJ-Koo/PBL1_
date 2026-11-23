@@ -175,10 +175,10 @@ function Card({
         {imageSource ? <Image source={imageSource} style={styles.cursorImage} resizeMode="contain" accessibilityLabel={name} />
           : <Text style={styles.icon}>{icon}</Text>}
       </View>
-      <Text style={styles.name} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+      <Text style={styles.name}>
         {name}
       </Text>
-      <Text style={styles.desc} numberOfLines={2}>
+      <Text style={styles.desc}>
         {description}
       </Text>
       {/* 가격 줄은 항상 같은 높이 → 구매 후에도 버튼 위치가 그대로 */}
@@ -578,9 +578,9 @@ const styles = StyleSheet.create({
   artwork: { minHeight: 64, alignItems: 'center', justifyContent: 'center' },
   icon: { fontSize: 46, lineHeight: 56 },
   cursorImage: { width: 56, height: 56 },
-  name: { fontSize: 14, lineHeight: 18, marginBottom: 4, color: '#fff', textAlign: 'center' },
-  desc: { fontSize: 12, lineHeight: 14, color: '#A7A7AC', textAlign: 'center', marginBottom: 6, minHeight: 28 },
-  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 18, marginBottom: 6 },
+  name: { alignSelf: 'stretch', fontSize: 14, lineHeight: 22, marginBottom: 6, color: '#fff', textAlign: 'center', flexShrink: 0 },
+  desc: { alignSelf: 'stretch', fontSize: 13, lineHeight: 20, color: '#C4C4CA', textAlign: 'center', marginBottom: 10, minHeight: 40, flexShrink: 0 },
+  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 22, marginBottom: 6, marginTop: 'auto' },
   price: { fontSize: 12, lineHeight: 18, color: '#fff' },
   button: {
     backgroundColor: '#D9D9D9',
@@ -599,7 +599,7 @@ const styles = StyleSheet.create({
   buttonGhost: { backgroundColor: 'transparent' },
   buttonInactive: { backgroundColor: 'transparent' },
   buttonDisabled: { backgroundColor: '#858589', borderColor: '#858589' },
-  buttonText: { fontSize: 12, color: '#000' },
+  buttonText: { fontSize: 13, lineHeight: 20, color: '#000', textAlign: 'center', flexShrink: 1 },
   buttonTextLight: { color: '#fff' },
   buttonTextDisabled: { color: '#555' },
   reset: {

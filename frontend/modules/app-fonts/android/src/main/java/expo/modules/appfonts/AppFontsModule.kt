@@ -19,8 +19,8 @@ class AppFontsModule : Module() {
       val assets = appContext.reactContext?.assets
       if (Build.VERSION.SDK_INT < 29 || assets == null) return@Constant false
       try {
-        register(assets, "AppMixedRegular", "Orbitron-Regular.ttf", "SCDream4.otf")
-        register(assets, "AppMixedBold", "Orbitron-Bold.ttf", "SCDream6.otf")
+        register(assets, "AppMixedRegular", "Orbitron-Regular.ttf", "EliceDigitalBaeum_Regular.ttf")
+        register(assets, "AppMixedBold", "Orbitron-Bold.ttf", "EliceDigitalBaeum_Bold.ttf")
         true
       } catch (error: IOException) {
         Log.w("AppFonts", "Could not load bundled font fallback", error)

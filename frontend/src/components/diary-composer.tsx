@@ -4,6 +4,9 @@
 //  - 새 일기: 홈 화면의 왼쪽(일기) 탭
 //  - 수정: 행성 상세의 "수정" → /write?id=... (작성한 날에만)
 import { useEffect, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { authSession } from '@/lib/auth-session';
+import { availableDiaryGroups, diaryWritePreferencesKey, parseDiaryWritePreferences } from '@/lib/diary-write-preferences';
 
 import { DiaryWriteScreen } from '@/components/ui/diary-write-screen';
 import { showMessage } from '@/lib/feedback';
@@ -28,18 +31,41 @@ function dateLabelOf(timestamp: number) {
 }
 
 export function DiaryComposer({ editId, onBack, onSaved }: Props) {
-  const { addEntry, updateEntry, getEntry, groups } = useDiary();
+  const { addEntry, updateEntry, getEntry, groups, dataLoading } = useDiary();
   const editing = editId ? getEntry(editId) : undefined;
 
   const [text, setText] = useState(editing?.text ?? '');
   const [photos, setPhotos] = useState<DiaryPhoto[]>(editing?.photos ?? []);
   const [groupIds, setGroupIds] = useState<string[]>([]);
   // 오늘의 주제는 선택 사항(안 골라도 저장). [2026-11-13] 일기에 저장해 별자리에 쓰고, 수정할 때도 바꿀 수 있다.
-  const [topic, setTopic] = useState<DiaryTopic | null>(editing?.topic ?? null);
+  const [topic, setTopic] = useState<DiaryTopic | null>(editing?.topic ?? 'other');
   const [photoBusy, setPhotoBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [openedAt] = useState(() => Date.now());
   const busy = useRef(false);
+  const owner = authSession.getSnapshot().session?.user_id;
+  const [remember, setRemember] = useState(false);
+  const [preferencesReady, setPreferencesReady] = useState(!!editId);
+  useEffect(() => {
+    if (editId || !owner) return;
+    let active = true;
+    AsyncStorage.getItem(diaryWritePreferencesKey(owner)).then(raw => {
+      if (!active) return;
+      const saved = parseDiaryWritePreferences(raw);
+      setRemember(saved.enabled);
+      setTopic(saved.enabled ? saved.topic : 'other');
+      setGroupIds(saved.enabled ? saved.groupIds : []);
+    }).catch(() => {}).finally(() => { if (active) setPreferencesReady(true); });
+    return () => { active = false; };
+  }, [owner, editId]);
+  const toggleRemember = () => {
+    if (!owner || !preferencesReady || saving) return;
+    const enabled = !remember;
+    setRemember(enabled);
+    void AsyncStorage.setItem(diaryWritePreferencesKey(owner), JSON.stringify({
+      enabled, topic: enabled ? topic ?? 'other' : 'other', groupIds: enabled ? groupIds : [],
+    })).catch(() => {});
+  };
 
   // 안드로이드는 사진 선택창이 열린 사이 앱이 다시 만들어질 수 있어서, 고르던 사진을 복구한다 (fffju 동작 유지).
   useEffect(() => {
@@ -66,7 +92,7 @@ export function DiaryComposer({ editId, onBack, onSaved }: Props) {
   };
 
   const submit = async () => {
-    if (busy.current) return;
+    if (busy.current || !preferencesReady || dataLoading) return;
     const content = text.trim();
     if (!content) {
       showMessage('확인해주세요', '오늘의 이야기를 입력해주세요.');
@@ -76,12 +102,13 @@ export function DiaryComposer({ editId, onBack, onSaved }: Props) {
     setSaving(true);
     // fffju 디자인에는 공개범위 3종 UI가 없고 "비공개 ↔ 그룹 공유"만 있다.
     // 그룹을 하나도 안 고르면 private, 하나라도 고르면 friends(공유)로 저장한다. 수정할 때는 기존 값 유지.
+    const selectedGroups = availableDiaryGroups(groupIds, groups.map(group => group.id));
     const visibility: Visibility = editing
       ? editing.visibility
-      : groupIds.length > 0 ? 'friends' : 'private';
+      : selectedGroups.length > 0 ? 'friends' : 'private';
     const result = editing
       ? await updateEntry(editing.id, content, photos, visibility, topic !== editing.topic ? topic : undefined)
-      : await addEntry(content, photos, visibility, groupIds, topic);
+      : await addEntry(content, photos, visibility, selectedGroups, topic ?? 'other');
     busy.current = false;
     setSaving(false);
     if (!result.ok) {
@@ -91,8 +118,13 @@ export function DiaryComposer({ editId, onBack, onSaved }: Props) {
     if (!editing) {
       setText('');
       setPhotos([]);
-      setGroupIds([]);
-      setTopic(null);
+      if (owner) {
+        void AsyncStorage.setItem(diaryWritePreferencesKey(owner), JSON.stringify({
+          enabled: remember, topic: remember ? topic ?? 'other' : 'other', groupIds: remember ? selectedGroups : [],
+        })).catch(() => {});
+      }
+      setGroupIds(remember ? selectedGroups : []);
+      setTopic(remember ? topic ?? 'other' : 'other');
     }
     onSaved('entryId' in result && typeof result.entryId === 'string' ? result.entryId : undefined);
   };
@@ -106,7 +138,9 @@ export function DiaryComposer({ editId, onBack, onSaved }: Props) {
       photoCountLabel={`${photos.length}/${MAX_PHOTOS}`}
       photos={photos}
       photoBusy={photoBusy}
-      saving={saving}
+      saving={saving || !preferencesReady || dataLoading}
+      rememberSelections={editId ? undefined : remember}
+      onToggleRemember={toggleRemember}
       onAddPhotos={addPhotos}
       onRemovePhoto={(id) => setPhotos((prev) => prev.filter((p) => p.id !== id))}
       // 수정할 때는 공유 그룹을 바꿀 수 없어서(서버 미지원) 그룹 선택지를 숨긴다.
@@ -121,7 +155,7 @@ export function DiaryComposer({ editId, onBack, onSaved }: Props) {
       // '오늘의 주제'(선택) 줄. [2026-11-13] 수정할 때도 보인다(서버 PATCH topic). 끄고 켜기: lib/special-planet.ts 의 SHOW_TOPIC_PICKER
       topics={SHOW_TOPIC_PICKER ? DIARY_TOPICS : undefined}
       selectedTopic={topic}
-      onToggleTopic={(id) => setTopic((prev) => (prev === id ? null : (id as DiaryTopic)))}
+      onToggleTopic={(id) => setTopic((prev) => (prev === id ? 'other' : (id as DiaryTopic)))}
     />
   );
 }

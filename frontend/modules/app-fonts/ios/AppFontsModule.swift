@@ -8,8 +8,8 @@ private extension UIFont {
     guard let font = appFont(named: name, size: size) else { return nil }
     let fallbackName: String
     switch name {
-    case "Orbitron-Regular": fallbackName = "S-CoreDream-4Regular"
-    case "Orbitron-Bold": fallbackName = "S-CoreDream-6Bold"
+    case "Orbitron-Regular": fallbackName = "EliceDigitalBaeum"
+    case "Orbitron-Bold": fallbackName = "EliceDigitalBaeum-Bd"
     default: return font
     }
     let fallback = UIFontDescriptor(name: fallbackName, size: size)

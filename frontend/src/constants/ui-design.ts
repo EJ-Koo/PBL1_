@@ -62,8 +62,8 @@ export const DesignFonts = {
 } as const;
 
 export const KoreanFonts = {
-  regular: 'S-CoreDream-4Regular',
-  bold: 'S-CoreDream-6Bold',
+  regular: 'EliceDigitalBaeum',
+  bold: 'EliceDigitalBaeum-Bd',
 } as const;
 
 export const WebFonts = {

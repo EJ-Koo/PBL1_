@@ -11,6 +11,7 @@ import { GroupPanelFrame, GroupUniverseHeaderFrame, GroupUniverseIcon } from '@/
 import { SpaceButton } from '@/components/ui/space-ui';
 import { DesignFonts } from '@/constants/ui-design';
 import { useGroupSocial } from '@/hooks/use-group-social';
+import { useFontScale } from '@/hooks/use-font-scale';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import type { ApiGroup } from '@/lib/api';
 import { authSession } from '@/lib/auth-session';
@@ -124,7 +125,13 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
     setPanel(old => old === next ? null : next);
   };
   const members = data?.members ?? group.members.map(item => ({ user_id: item.user_id, nickname: item.nickname ?? t('멤버'), bio: '', avatar_url: null }));
-  const controlsTop = layout.headerTop + 57 * s;
+  const fontScale = useFontScale();
+  const titleFontSize = Math.max(16, 21 * s);
+  const titleWidth = Math.min(layout.chromeWidth - 32 * s, Math.max(200 * s, Array.from(group.name).length * titleFontSize * fontScale + 24 * s));
+  const titleLines = Math.max(1, Math.ceil(Array.from(group.name).length * titleFontSize * fontScale / Math.max(1, titleWidth - 16 * s)));
+  const titleHeight = titleLines * Math.max(26, 28 * s) * fontScale;
+  const headerHeight = titleHeight + 24 * s;
+  const controlsTop = layout.headerTop + headerHeight + 9 * s;
   const panelTop = controlsTop + 48 * s;
   const panelWidth = Math.min(236 * s, layout.chromeWidth - 24 * s);
   const chatWidth = Math.min(460, layout.chromeWidth - 68 * s);
@@ -143,10 +150,10 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
       {error && <SpaceButton label={t('다시 불러오기')} onPress={onReload} />}
     </View>}
 
-    <View pointerEvents="none" style={[styles.titleFrame, { top: layout.headerTop, left: layout.chromeLeft, width: layout.chromeWidth, height: 48 * s }]}>
-      <GroupUniverseHeaderFrame width={layout.chromeWidth} scale={s} />
-      <Text accessibilityRole="header" numberOfLines={1} adjustsFontSizeToFit
-        style={[styles.groupName, { left: layout.chromeWidth / 2 - 72 * s, width: 144 * s, top: 3 * s, fontSize: 21 * s, lineHeight: 28 * s }]}>{group.name}</Text>
+    <View pointerEvents="none" style={[styles.titleFrame, { top: layout.headerTop, left: layout.chromeLeft, width: layout.chromeWidth, height: headerHeight }]}>
+      <GroupUniverseHeaderFrame width={layout.chromeWidth} scale={s} titleWidth={titleWidth} titleHeight={titleHeight} />
+      <Text accessibilityRole="header"
+        style={[styles.groupName, { left: (layout.chromeWidth - titleWidth) / 2 + 8 * s, width: titleWidth - 16 * s, top: 3 * s, fontSize: titleFontSize, lineHeight: Math.max(26, 28 * s) }]}>{group.name}</Text>
     </View>
     <View pointerEvents="box-none" style={[styles.controls, { top: controlsTop, left: layout.chromeLeft + 18 * s, width: layout.chromeWidth - 36 * s }]}>
       <Pressable accessibilityRole="button" accessibilityLabel={t('그룹으로 돌아가기')} onPress={onBack} style={styles.icon}>
@@ -186,8 +193,8 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
               {members.map((member, index) => <View key={member.user_id} style={[styles.member, index > 0 && styles.memberDivider, { minHeight: 88 * s, gap: 18 * s }]}>
                 <Avatar uri={member.avatar_url} size={40 * s} />
                 <View style={styles.memberDetails}>
-                  <Text style={[styles.memberName, { fontSize: 16 * s }]} numberOfLines={1}>{member.nickname}</Text>
-                  <Text style={[styles.bio, { fontSize: 10 * s, lineHeight: 16 * s }]} numberOfLines={2}>{member.bio || t('한줄소개')}</Text>
+                  <Text style={[styles.memberName, { fontSize: Math.max(16, 16 * s), lineHeight: Math.max(24, 24 * s) }]}>{member.nickname}</Text>
+                  <Text style={[styles.bio, { fontSize: Math.max(13, 13 * s), lineHeight: Math.max(20, 20 * s) }]}>{member.bio || t('한줄소개')}</Text>
                 </View>
               </View>)}
               {socialError && <Pressable accessibilityRole="button" onPress={refresh}><Text style={styles.warning}>{t('추가 정보를 불러오지 못했어요. 다시 시도')}</Text></Pressable>}
@@ -247,7 +254,7 @@ const styles = StyleSheet.create({
   memberDivider: { borderTopWidth: 1, borderColor: '#ffffff60' },
   memberDetails: { flex: 1, minWidth: 0, gap: 7 },
   memberName: { color: '#fff' },
-  bio: { color: '#f0f0f4', fontSize: 11, lineHeight: 18 },
+  bio: { color: '#f0f0f4', fontSize: 13, lineHeight: 20 },
   warning: { color: '#ffe2d5', fontSize: 11, lineHeight: 18, paddingVertical: 8 },
   panelActions: { paddingHorizontal: 4 },
   notification: { borderColor: '#ffffffa0', backgroundColor: '#ffffff0a' },
