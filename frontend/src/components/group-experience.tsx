@@ -49,6 +49,8 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   const [pushBusy, setPushBusy] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [readError, setReadError] = useState<string | null>(null);
+  const [clearingHighlights, setClearingHighlights] = useState(false);
+  const clearHighlightsLock = useRef(false);
   const { data, error: socialError, refresh, forgetUnread } = useGroupSocial(group.id);
   const lastReload = useRef('');
   const alive = useRef(true);
@@ -86,6 +88,29 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
       if (alive.current && revision === authSession.getRevision()) setReadError(t('읽음 표시를 저장하지 못했어요. 별을 다시 열어주세요.'));
     }
   }, [accessToken, group.id, revision, forgetUnread, t]);
+
+  const unreadIds = data?.unread_diary_ids ?? [];
+  const clearHighlights = async () => {
+    if (!accessToken || clearHighlightsLock.current || unreadIds.length === 0) return;
+    clearHighlightsLock.current = true;
+    setClearingHighlights(true);
+    setReadError(null);
+    const isCurrent = () => alive.current && revision === authSession.getRevision();
+    let failed = false;
+    try {
+      for (let offset = 0; offset < unreadIds.length && isCurrent(); offset += 5) {
+        const results = await Promise.allSettled(unreadIds.slice(offset, offset + 5).map(async id => {
+          await markDiaryRead(accessToken, group.id, id);
+          if (isCurrent()) forgetUnread(id);
+        }));
+        if (results.some(result => result.status === 'rejected')) failed = true;
+      }
+      if (failed && isCurrent()) setReadError(t('일부 새 별 표시를 지우지 못했어요. 다시 눌러주세요.'));
+    } finally {
+      clearHighlightsLock.current = false;
+      if (isCurrent()) setClearingHighlights(false);
+    }
+  };
 
   const push = async (reconnect=false) => {
     if (pushBusy || !accessToken || !profile?.user_id) return;
@@ -132,7 +157,7 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   const titleHeight = titleLines * Math.max(26, 28 * s) * fontScale;
   const headerHeight = titleHeight + 24 * s;
   const controlsTop = layout.headerTop + headerHeight + 9 * s;
-  const panelTop = controlsTop + 48 * s;
+  const panelTop = controlsTop + Math.max(44, 40 * s) + 4 * s;
   const panelWidth = Math.min(236 * s, layout.chromeWidth - 24 * s);
   const chatWidth = Math.min(460, layout.chromeWidth - 68 * s);
   const chatLeft = layout.chromeLeft + (layout.chromeWidth - chatWidth) / 2;
@@ -143,8 +168,8 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   return <View style={styles.screen} testID="group-experience">
     {/* [2026-11-19] 홈 우주처럼 배경 사진(night-sky.png)을 빼고 단색(#000)+3D 배경 별 한 겹만 보이게 함 */}
     <DiaryUniverse groupId={group.id} sceneKey={`${revision}:group-${group.id}`} entries={entries} backgroundStarScale={1}
-      selection={selection} unreadIds={data?.unread_diary_ids ?? []} onDiaryRead={read}
-      popupInsets={{ top: controlsTop + 52 * s, bottom: chatBottom + 68 * s + (chatOpen ? chatHistoryHeight : 20*s) }} />
+      selection={selection} unreadIds={unreadIds} onDiaryRead={read}
+      popupInsets={{ top: panelTop + 4 * s, bottom: chatBottom + 68 * s + (chatOpen ? chatHistoryHeight : 20*s) }} />
     {(loading || error || entries.length === 0) && <View pointerEvents={error ? 'auto' : 'none'} style={styles.empty}>
       <Text style={styles.text}>{error ?? t(loading ? '그룹의 별을 불러오는 중…' : '아직 이 그룹에 공유된 별이 없어요.')}</Text>
       {error && <SpaceButton label={t('다시 불러오기')} onPress={onReload} />}
@@ -159,18 +184,27 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
       <Pressable accessibilityRole="button" accessibilityLabel={t('그룹으로 돌아가기')} onPress={onBack} style={styles.icon}>
         <GroupUniverseIcon kind="back" size={40 * s} />
       </Pressable>
-      {panel !== 'members' && <Pressable accessibilityRole="button" accessibilityLabel={t('그룹 퀘스트')}
-        accessibilityState={{ expanded: panel === 'quest' }} onPress={() => togglePanel('quest')}
-        style={[styles.quest, { left: (layout.chromeWidth - 36 * s) / 2 - 43 * s, width: 86 * s, height: Math.max(44, 38 * s) }]}>
-        <QuestFrame scale={s * 1.12} />
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.questLabel]}>
-          <Text style={[styles.questText, { fontSize: 16 * s }]}>Quest</Text>
-        </View>
-      </Pressable>}
-      <Pressable accessibilityRole="button" accessibilityLabel={t('그룹 멤버 목록')}
-        accessibilityState={{ expanded: panel === 'members' }} onPress={() => togglePanel('members')} style={styles.icon}>
-        <GroupUniverseIcon kind="members" size={40 * s} />
-      </Pressable>
+      <View pointerEvents="box-none" style={[styles.rightControls, { gap: 8 * s }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('새 별 표시 모두 지우기')}
+          accessibilityState={{ disabled: clearingHighlights || unreadIds.length === 0, busy: clearingHighlights }}
+          disabled={clearingHighlights || unreadIds.length === 0} onPress={clearHighlights}
+          style={[styles.clearHighlights, { paddingHorizontal: 8 * s }, unreadIds.length === 0 && styles.controlDisabled]}>
+          {clearingHighlights ? <ActivityIndicator size="small" color="#FFE8A3" /> :
+            <Text numberOfLines={1} style={styles.clearHighlightsText}>{t('새 별 표시 지우기')}</Text>}
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('그룹 퀘스트')}
+          accessibilityState={{ expanded: panel === 'quest' }} onPress={() => togglePanel('quest')}
+          style={[styles.quest, { width: 86 * s, height: Math.max(44, 38 * s) }]}>
+          <QuestFrame scale={s * 1.12} />
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.questLabel]}>
+            <Text style={[styles.questText, { fontSize: 16 * s }]}>Quest</Text>
+          </View>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('그룹 멤버 목록')}
+          accessibilityState={{ expanded: panel === 'members' }} onPress={() => togglePanel('members')} style={styles.icon}>
+          <GroupUniverseIcon kind="members" size={40 * s} />
+        </Pressable>
+      </View>
     </View>
 
     {readError && <Text accessibilityRole="alert" style={[styles.readError, { top: panelTop }]}>{readError}</Text>}
@@ -180,7 +214,7 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
     {panel && <>
       <Pressable style={styles.backdrop} accessibilityRole="button" accessibilityLabel={t('그룹 패널 닫기')} onPress={() => setPanel(null)} />
       <View accessibilityViewIsModal testID={`group-${panel}-panel`} style={[styles.panel, {
-        left: panel === 'quest' ? layout.chromeLeft + (layout.chromeWidth - panelWidth) / 2 : layout.chromeLeft + layout.chromeWidth - panelWidth - 10 * s,
+        left: layout.chromeLeft + layout.chromeWidth - panelWidth - 10 * s,
         top: panelTop, width: panelWidth, height: panelHeight,
       }]}>
         <View pointerEvents="none" style={StyleSheet.absoluteFill}><GroupPanelFrame /></View>
@@ -237,7 +271,11 @@ const styles = StyleSheet.create({
   groupName: { position: 'absolute', color: '#fff', fontFamily: DesignFonts.bold, textAlign: 'center', includeFontPadding: false },
   controls: { position: 'absolute', zIndex: 7, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   icon: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  quest: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
+  rightControls: { flexDirection: 'row', alignItems: 'center', flexShrink: 1 },
+  clearHighlights: { minHeight: 44, minWidth: 44, flexShrink: 1, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#FFE8A3', borderRadius: 8, backgroundColor: '#17140D' },
+  clearHighlightsText: { color: '#FFE8A3', fontSize: 12 },
+  controlDisabled: { opacity: 0.45 },
+  quest: { alignItems: 'center', justifyContent: 'center' },
   questLabel: { alignItems: 'center', justifyContent: 'center' },
   questText: { color: '#fff', fontFamily: DesignFonts.bold },
   empty: { position: 'absolute', top: '38%', left: 28, right: 28, alignItems: 'center', gap: 12 },
