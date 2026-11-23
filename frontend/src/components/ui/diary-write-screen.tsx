@@ -9,6 +9,7 @@ import { DesignFonts, DesignPaint } from '@/constants/ui-design';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { MAX_PHOTOS, type Photo } from '@/lib/journal';
 import { DiaryBackFrame, DiaryInputFrame, DiaryLockIcon, DiaryPhotoAddFrame, DiaryPhotoEmptyFrame, DiarySubmitFrame } from './diary-decoration';
+import { PhotoScrollStrip } from './photo-scroll-strip';
 
 type Props = {
   diaryText: string;
@@ -30,12 +31,14 @@ type Props = {
   selectedTopic?: string | null;
   onToggleTopic?: (id: string) => void;
   hasBottomNav: boolean;
+  rememberSelections?: boolean;
+  onToggleRemember?: () => void;
 };
 
 export function DiaryWriteScreen({
   diaryText, onChangeText, dateLabel, photoCountLabel, photos, photoBusy, saving,
   onAddPhotos, onRemovePhoto, groups, selectedGroupIds, onSelectPrivate, onToggleGroup,
-  onBack, onSubmit, topics, selectedTopic, onToggleTopic, hasBottomNav,
+  onBack, onSubmit, topics, selectedTopic, onToggleTopic, hasBottomNav, rememberSelections, onToggleRemember,
 }: Props) {
   const insets = useSafeAreaInsets();
   const [preview, setPreview] = useState<Photo | null>(null);
@@ -48,7 +51,7 @@ export function DiaryWriteScreen({
   const sideWidth = wide ? Math.max(210, bodyWidth * 0.298) : bodyWidth;
   const photoGap = (wide ? 24 : 12) * scale;
   const photoSize = wide ? (sideWidth - photoGap) / 2 : Math.min(128 * scale, (sideWidth - photoGap) / 2);
-  const tile = { width: photoSize, height: photoSize };
+  const tile = { width: photoSize, height: photoSize, flexShrink: 0 };
   const addDisabled = photoBusy || saving || photos.length >= MAX_PHOTOS;
   const type = (size: number, line: number) => ({ fontSize: size * scale, lineHeight: line * scale });
   const selectedTopicLabel = topics?.find(topic => topic.id === selectedTopic)?.label;
@@ -78,11 +81,21 @@ export function DiaryWriteScreen({
           <Text accessibilityRole="header" style={[styles.text, type(wide ? 36 : 24, wide ? 50 : 32)]}>오늘은 어떤 별일이 있었나요?</Text>
           <View style={[styles.rowBetween, { marginTop: (wide ? 14 : 7) * scale, minHeight: 30 * scale }]}>
             <Text style={[styles.muted, { flexShrink: 1 }, type(wide ? 22 : 18, wide ? 31 : 26)]}>{dateLabel}</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 12 * scale, flexShrink: 1 }}>
             {!!topics?.length && <Pressable accessibilityRole="button" accessibilityLabel="오늘의 주제 선택"
               accessibilityState={{ expanded: topicsOpen }} aria-expanded={topicsOpen} hitSlop={6}
               onPress={() => setTopicsOpen(open => !open)} style={styles.topicToggle}>
-              <Text style={[styles.muted, type(12, 17)]}>{selectedTopicLabel ?? '주제 선택'} {topicsOpen ? '−' : '+'}</Text>
+              <Text style={[styles.muted, type(12, 17)]}>{selectedTopicLabel ?? '주제 선택'} {topicsOpen ? '⌄' : '›'}</Text>
             </Pressable>}
+              {rememberSelections !== undefined && <Pressable accessibilityRole="checkbox" accessibilityLabel="이전 주제와 공유 그룹 선택 기억하기"
+                accessibilityState={{ checked: rememberSelections, disabled: saving }} disabled={saving} onPress={onToggleRemember}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 7, minHeight: 44, flexShrink: 1, paddingVertical: 4 }}>
+                <View style={{ width: 20, height: 20, borderWidth: 1, borderColor: '#ddd', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={[styles.text, { fontSize: 14, lineHeight: 18 }]}>{rememberSelections ? '✓' : ''}</Text>
+                </View>
+                <Text style={[styles.muted, { fontSize: Math.max(13, 13 * scale), lineHeight: Math.max(20, 20 * scale), flexShrink: 1 }]}>이전 선택 기억하기</Text>
+              </Pressable>}
+            </View>
           </View>
           {topicsOpen && topics && <View style={[styles.chips, { marginVertical: 8 * scale }]}>
             {topics.map(topic => {
@@ -115,29 +128,24 @@ export function DiaryWriteScreen({
                 <Text style={[styles.text, type(wide ? 20 : 18, 26)]}>오늘의 장면</Text>
                 <Text style={[styles.muted, type(16, 24)]}>{photoCountLabel}</Text>
               </View>
-              <View style={[styles.photoRow, { gap: photoGap }]}>
+              <PhotoScrollStrip height={photoSize} gap={photoGap} scale={scale}>
                 <Pressable accessibilityRole="button" accessibilityLabel="일기 사진 추가" onPress={onAddPhotos}
                   disabled={addDisabled} style={[tile, addDisabled && styles.dimmed]}>
                   <DiaryPhotoAddFrame wide={wide} />
                   <Text numberOfLines={1} style={[styles.photoCaption, styles.text, type(16, 22)]}>{photoBusy ? '불러오는 중' : '사진 추가'}</Text>
                 </Pressable>
-                {photos.length === 0 ? <View style={tile}><DiaryPhotoEmptyFrame /></View> : (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1, minWidth: 0, height: photoSize }}
-                    keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8 * scale }}>
-                    {photos.map((photo, index) => (
-                      <View key={photo.id} style={tile}>
-                        <Pressable accessibilityRole="button" accessibilityLabel={`첨부 사진 ${index + 1} 확대`} onPress={() => setPreview(photo)} style={styles.photo}>
-                          <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-                        </Pressable>
-                        <Pressable accessibilityRole="button" accessibilityLabel={`첨부 사진 ${index + 1} 삭제`} disabled={saving}
-                          onPress={() => onRemovePhoto(photo.id)} style={styles.removePhoto}>
-                          <Text style={[styles.text, type(19, 25)]}>×</Text>
-                        </Pressable>
-                      </View>
-                    ))}
-                  </ScrollView>
-                )}
-              </View>
+                {photos.length === 0 ? <View style={tile}><DiaryPhotoEmptyFrame /></View> : photos.map((photo, index) => (
+                  <View key={photo.id} style={tile}>
+                    <Pressable accessibilityRole="button" accessibilityLabel={`첨부 사진 ${index + 1} 확대`} onPress={() => setPreview(photo)} style={styles.photo}>
+                      <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                    </Pressable>
+                    <Pressable accessibilityRole="button" accessibilityLabel={`첨부 사진 ${index + 1} 삭제`} disabled={saving}
+                      onPress={() => onRemovePhoto(photo.id)} style={styles.removePhoto}>
+                      <Text style={[styles.text, type(19, 25)]}>×</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </PhotoScrollStrip>
 
               <View accessibilityLabel="일기 공유 범위" style={[styles.chips, { marginTop: (wide ? 40 : 16) * scale }]}>
                 <Pressable accessibilityRole="button" accessibilityLabel="비공개, 나의 우주에만 별 띄우기"
@@ -192,7 +200,6 @@ const styles = StyleSheet.create({
   rule: { flex: 1, height: 1, backgroundColor: '#666' },
   mobileRule: { backgroundColor: '#ccc' },
   input: { padding: 0, textAlignVertical: 'top' },
-  photoRow: { flexDirection: 'row', alignItems: 'flex-start' },
   photoCaption: { position: 'absolute', bottom: '15%', width: '100%', textAlign: 'center' },
   photo: { flex: 1, borderWidth: 1, borderColor: '#bbb' },
   removePhoto: { position: 'absolute', right: 2, top: 2, width: 36, height: 36, borderRadius: 18, backgroundColor: '#000b', alignItems: 'center', justifyContent: 'center' },

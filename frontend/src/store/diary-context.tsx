@@ -359,7 +359,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
         photos: DiaryPhoto[],
         visibility: Visibility,
         groupIds: string[] = [],
-        topic: DiaryTopic | null = null
+        topic: DiaryTopic | null = 'other'
       ): Promise<CreateEntryResult> => {
         if (!accessToken) {
           return { ok: false, error: '로그인이 필요합니다.' };
@@ -371,8 +371,8 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
             photo_paths,
             visibility,
             group_ids: groupIds,
-            // 주제는 선택 사항. 고르지 않으면 보내지 않는다(예전 요청과 같음)
-            ...(topic ? { topic } : {}),
+            // 주제를 고르지 않은 새 일기도 기타 별자리에 포함한다.
+            topic: topic ?? 'other',
           });
           // 별/그룹 재조회는 보조. 하나가 실패(예: /groups 미배포)해도 일기 추가는 진행한다.
           const starList = await apiListStars(accessToken).catch(() => []);
@@ -384,7 +384,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
           }
           const entry = toEntry(created, entries.length, star);
           // 서버가 주제를 아직 못 돌려줘도(AI 서비스 지연 등) 방금 고른 주제로 별자리에 바로 반영한다
-          if (!entry.topic && topic) entry.topic = topic;
+          if (!entry.topic) entry.topic = topic ?? 'other';
           setEntries((prev) => [entry, ...prev]);
           return { ok: true, entryId: entry.id };
         } catch (err) {

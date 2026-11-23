@@ -1,10 +1,15 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from uuid import UUID
 
 
 class GroupCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=50)
+    name: str = Field(min_length=1, max_length=8)
     request_id: UUID | None = None
+
+    @field_validator('name', mode='before')
+    @classmethod
+    def trim_name(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
 
 class GroupJoin(BaseModel):

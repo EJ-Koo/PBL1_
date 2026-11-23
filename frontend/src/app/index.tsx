@@ -207,7 +207,7 @@ export default function HomeScreen() {
   const constellationInsets = useMemo(() => {
     const h = Math.max(responsive.height, 1);
     const w = Math.max(windowWidth, 1);
-    const top = responsive.headerTop + 75 * rScale + 12;
+    const top = responsive.headerTop + responsive.hudHeight + 12;
     const toggleTopInset = constellationToggleBottom + constellationToggleHeight + 12;
     if (responsive.wide) {
       const left = panelBox.left + panelBox.width + 16;
@@ -215,7 +215,7 @@ export default function HomeScreen() {
     }
     const bottom = constellationPanelBottom + panelHeight + 12;
     return { top: Math.min(top / h, 0.45), bottom: Math.min(bottom / h, 0.6), left: 0.04, right: 0.04 };
-  }, [responsive.height, responsive.headerTop, responsive.wide, rScale, constellationToggleBottom,
+  }, [responsive.height, responsive.headerTop, responsive.hudHeight, responsive.wide, rScale, constellationToggleBottom,
     constellationToggleHeight, constellationPanelBottom, panelHeight, windowWidth, panelBox.left, panelBox.width]);
   const constellationRequest: ConstellationRequest | null = useMemo(
     () =>
@@ -317,8 +317,8 @@ export default function HomeScreen() {
 
   const handleCreateGroup = async () => {
     if (createGroupLock.current) return;
-    if (newGroupName.trim().length > 24) {
-      showMessage('그룹 이름', '그룹 이름은 24자 이내로 입력해주세요.');
+    if (Array.from(newGroupName.trim()).length > 8) {
+      showMessage('그룹 이름', '그룹 이름은 8자 이내로 입력해주세요.');
       return;
     }
     createGroupLock.current = true;
@@ -379,7 +379,7 @@ export default function HomeScreen() {
             onNewStarFound={() => setNewStar(null)}
             constellation={constellationRequest}
             frontViewRequest={frontViewRequest}
-            popupInsets={{ top: headerTop + 84 * rScale, bottom: constellationToggleBottom + constellationToggleHeight + 12 }}
+            popupInsets={{ top: headerTop + responsive.hudHeight + 9 * rScale, bottom: constellationToggleBottom + constellationToggleHeight + 12 }}
           />
 
           {entries.length === 0 && (

@@ -1,17 +1,19 @@
 import Svg, { Circle, G, Path } from 'react-native-svg';
 
-export function GroupUniverseHeaderFrame({ width, scale }: { width: number; scale: number }) {
+export function GroupUniverseHeaderFrame({ width, scale, titleWidth = 148 * scale, titleHeight = 24 * scale }: { width: number; scale: number; titleWidth?: number; titleHeight?: number }) {
   const w = scale > 0 ? width / scale : 393;
   const center = w / 2;
-  const notch = Math.min(74, w / 4);
+  const notch = Math.min(titleWidth / Math.max(scale, 0.01) / 2, w / 2 - 12);
+  const bottom = titleHeight / Math.max(scale, 0.01) + 7;
+  const height = bottom + 17;
   const stripes = Math.max(0, Math.floor((center - notch - 12) / 9));
-  return <Svg width={width} height={48 * scale} viewBox={`0 0 ${w} 48`} pointerEvents="none">
+  return <Svg width={width} height={height * scale} viewBox={`0 0 ${w} ${height}`} pointerEvents="none">
     <Path d={`M0 16H${center - notch - 8} M${center + notch + 8} 16H${w}
-      M0 27H${center - notch - 8}L${center - notch} 35H${center + notch}L${center + notch + 8} 27H${w}`}
+      M0 ${bottom - 8}H${center - notch - 8}L${center - notch} ${bottom}H${center + notch}L${center + notch + 8} ${bottom - 8}H${w}`}
       fill="none" stroke="#eee" strokeWidth={1} />
     <G stroke="#ffffff40" strokeWidth={0.8}>
       {Array.from({ length: stripes }, (_, i) => <Path key={i}
-        d={`M${3 + i * 9} 44l8 -8 M${w - 3 - i * 9} 44l-8 -8`} />)}
+        d={`M${3 + i * 9} ${height - 4}l8 -8 M${w - 3 - i * 9} ${height - 4}l-8 -8`} />)}
     </G>
   </Svg>;
 }

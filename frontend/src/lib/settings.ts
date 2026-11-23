@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const FONT_KEY = 'settings:fontScale';
 export const FONT_SCALE_MIN = 0.8;
-export const FONT_SCALE_MAX = 1.4;
+export const FONT_SCALE_MAX = 1.2;
 let fontScale = 1;
 const fontListeners = new Set<() => void>();
 export const getFontScale = () => fontScale;
@@ -52,6 +52,7 @@ export function loadSettings(): Promise<void> {
     if (rotate !== null && Number.isFinite(Number(rotate))) rotateSensitivity = clamp(Number(rotate));
     if (font !== null && Number.isFinite(Number(font))) {
       const next = normalizeFontScale(Number(font));
+      if (next !== Number(font)) void AsyncStorage.setItem(FONT_KEY, String(next)).catch(() => {});
       if (next !== fontScale) {
         fontScale = next;
         fontListeners.forEach(listener => listener());

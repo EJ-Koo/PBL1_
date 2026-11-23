@@ -67,7 +67,7 @@ import {
   layoutConstellation,
   type ConstellationTemplate,
 } from '@/lib/constellation';
-import { controlsFor, frontView, rotateView, setView, zoomView, type UniverseControls } from '@/lib/universe-controls';
+import { controlsFor, frontView, limitDiaryZoom, rotateView, setView, zoomView, type UniverseControls } from '@/lib/universe-controls';
 import { getRotateSensitivity, loadSettings } from '@/lib/settings';
 import { newStarGlow, unreadStarGlow, type NewStarHighlight } from '@/lib/new-star-highlight';
 import type { StarPopupAnchor } from '@/lib/star-popup-layout';
@@ -1214,6 +1214,7 @@ export function UniverseScene({
   });
 
   useFrame((state, delta) => {
+    if (selectedEntryId) limitDiaryZoom(controls.current);
     if (!synced.current && groupRef.current) {
       groupRef.current.rotation.y = controls.current.yaw;
       groupRef.current.rotation.x = controls.current.pitch;

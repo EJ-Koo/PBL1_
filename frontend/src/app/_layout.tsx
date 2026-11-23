@@ -20,8 +20,8 @@ export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     [DesignFonts.regular]: require('../../assets/fonts/Orbitron-Regular.ttf'),
     [DesignFonts.bold]: require('../../assets/fonts/Orbitron-Bold.ttf'),
-    [KoreanFonts.regular]: require('../../assets/fonts/SCDream4.otf'),
-    [KoreanFonts.bold]: require('../../assets/fonts/SCDream6.otf'),
+    [KoreanFonts.regular]: require('../../assets/fonts/EliceDigitalBaeum_Regular.ttf'),
+    [KoreanFonts.bold]: require('../../assets/fonts/EliceDigitalBaeum_Bold.ttf'),
   });
   if (!fontsLoaded && !fontError) return null;
 

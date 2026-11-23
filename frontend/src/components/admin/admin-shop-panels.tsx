@@ -57,6 +57,7 @@ function Field({
   onChange,
   numeric,
   multiline,
+  maxLength,
   testID,
 }: {
   label: string;
@@ -64,6 +65,7 @@ function Field({
   onChange: (v: string) => void;
   numeric?: boolean;
   multiline?: boolean;
+  maxLength?: number;
   testID?: string;
 }) {
   return (
@@ -76,6 +78,8 @@ function Field({
         onChangeText={onChange}
         keyboardType={numeric ? 'numeric' : 'default'}
         multiline={multiline}
+        maxLength={maxLength}
+        accessibilityLabel={label}
         autoCapitalize="none"
         placeholderTextColor="#666"
       />
@@ -135,6 +139,7 @@ const toForm = (i?: AdminItem): ItemForm => ({
 
 /** 폼 → 서버로 보낼 값. 숫자·JSON 이 잘못되면 오류 문장을 돌려준다. */
 function fromForm(f: ItemForm): { ok: true; value: Partial<AdminItem> } | { ok: false; error: string } {
+  if (f.description.length > 200) return { ok: false, error: '아이템 설명은 200자 이내로 입력해주세요.' };
   const price = Number(f.price);
   const sort = Number(f.sort_order);
   if (!Number.isInteger(price) || price < 0) return { ok: false, error: '가격은 0 이상의 정수여야 합니다.' };
@@ -192,21 +197,22 @@ function ItemEditor({ initial, isNew, onSave, onCancel }: {
         <View style={styles.flex1}><Field label="아이콘" value={f.icon} onChange={set('icon')} /></View>
         <View style={styles.flex3}><Field label="이름" value={f.name} onChange={set('name')} testID="item-name" /></View>
       </View>
-      <Field label="설명" value={f.description} onChange={set('description')} />
+      <Field label="아이템 설명 (최대 200자)" value={f.description} onChange={set('description')} multiline maxLength={200} testID="item-description" />
+      <Text style={styles.help}>{f.description.length}/200자 · 줄바꿈을 사용할 수 있어요. 저장 후 상점을 다시 열면 반영됩니다.</Text>
       <View style={styles.rowWrap}>
         <View style={styles.flex1}><Field label="가격" value={f.price} onChange={set('price')} numeric testID="item-price" /></View>
         <View style={styles.flex1}><Field label="정렬 순서" value={f.sort_order} onChange={set('sort_order')} numeric /></View>
         <View style={styles.flex1}><Field label={f.kind === 'equip' ? '칸(slot)' : '칸(선택, 행성 효과는 planet_effect)'} value={f.slot} onChange={set('slot')} /></View>
       </View>
       {f.slot.trim() === 'cursor' ? <>
-        <Text style={styles.fieldLabel}>커서 입자 모양</Text>
+        <Text style={styles.fieldLabel}>커서 모양</Text>
         <View style={styles.rowWrap}>
           {(Object.keys(CURSOR_STYLES) as CursorStyle[]).map(style =>
             <Button key={style} label={CURSOR_STYLES[style]} testID={`cursor-style-${style}`}
               kind={f.cursorStyle === style ? 'primary' : 'ghost'}
               onPress={() => setF(prev => ({ ...prev, cursorStyle: style }))} />)}
         </View>
-        <Field label="빛 색상 (#RRGGBB)" value={f.cursorColor} onChange={set('cursorColor')} testID="cursor-color" />
+        {f.cursorStyle !== 'astronaut_blue' && <Field label="빛 색상 (#RRGGBB)" value={f.cursorColor} onChange={set('cursorColor')} testID="cursor-color" />}
       </> : <Field label='효과 JSON (예: {"type":"background","tint":"#0B2A6B","opacity":0.45})' value={f.effect} onChange={set('effect')} multiline />}
       <View style={styles.switchRow}>
         <Text style={styles.fieldLabel}>상점에서 판매</Text>
@@ -271,6 +277,7 @@ export function AdminItemsPanel({ token }: { token: string }) {
               <Text style={styles.rowTitle}>
                 {item.name} · {item.id === STARTER_CURSOR_ID ? '기본 제공' : `🪙 ${item.price} ${item.is_active ? '' : '(판매 중지)'}`}
               </Text>
+              <Text style={styles.itemDescription}>{item.description || '등록된 설명이 없습니다.'}</Text>
               <Text style={styles.rowMeta}>
                 {item.id} · {item.kind === 'equip' ? `장착(${item.slot})` : item.slot ? `소모품(${item.slot})` : '소모품'} · {JSON.stringify(item.effect)}
               </Text>
@@ -485,7 +492,8 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#14142A', borderRadius: 10, borderWidth: 1, borderColor: '#2A2A45', padding: 12, gap: 6 },
   rowInfo: { flex: 1, gap: 3 },
   rowTitle: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
-  rowMeta: { color: '#9C9CC0', fontSize: 12 },
+  itemDescription: { color: '#D4D4E5', fontSize: 13, lineHeight: 20, marginVertical: 6 },
+  rowMeta: { color: '#9C9CC0', fontSize: 12, lineHeight: 18 },
   icon: { fontSize: 26 },
   coins: { color: '#FED240', fontSize: 15, fontWeight: '700' },
   editor: { backgroundColor: '#1B1B36', borderRadius: 10, padding: 12, gap: 8, borderWidth: 1, borderColor: '#7C6CF6' },
