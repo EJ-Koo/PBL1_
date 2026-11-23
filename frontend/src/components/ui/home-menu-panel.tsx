@@ -46,8 +46,8 @@ export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, 
   const fontScale = useFontScale();
   const [expanded, setExpanded] = useState<Partial<Record<AccordionId, boolean>>>({});
   const [sensitivityPreview, setSensitivityPreview] = useState<number | null>(null);
-  const { height, chromeLeft, chromeWidth, headerTop, bottomSpace } = useResponsiveLayout();
-  const top = headerTop + 79 * scale;
+  const { height, chromeLeft, chromeWidth, headerTop, bottomSpace, hudHeight } = useResponsiveLayout();
+  const top = headerTop + hudHeight + 4 * scale;
   const panelWidth = Math.min(352 * scale * Math.max(1, fontScale), chromeWidth - 30 * scale);
   const visibleHeight = Math.min(688 * scale, Math.max(0, height - top - bottomSpace - 14 * scale));
   const type = (fontSize = 19, lineHeight = 28) => ({ fontSize: fontSize * scale, lineHeight: lineHeight * scale });

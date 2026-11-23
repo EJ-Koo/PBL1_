@@ -151,7 +151,6 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
     <View pointerEvents="box-none" style={[styles.controls, { top: controlsTop, left: layout.chromeLeft + 18 * s, width: layout.chromeWidth - 36 * s }]}>
       <Pressable accessibilityRole="button" accessibilityLabel={t('그룹으로 돌아가기')} onPress={onBack} style={styles.icon}>
         <GroupUniverseIcon kind="back" size={40 * s} />
-        <Text numberOfLines={1} adjustsFontSizeToFit style={{position:'absolute',top:43*s,left:0,width:Math.min(140*s,layout.chromeWidth/2-55*s),fontSize:10*s,color:'#eee'}}>{t('그룹으로 돌아가기')}</Text>
       </Pressable>
       {panel !== 'members' && <Pressable accessibilityRole="button" accessibilityLabel={t('그룹 퀘스트')}
         accessibilityState={{ expanded: panel === 'quest' }} onPress={() => togglePanel('quest')}
