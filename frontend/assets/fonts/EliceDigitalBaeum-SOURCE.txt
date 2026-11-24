@@ -1,0 +1,4 @@
+Elice Digital Baeum Regular / Bold
+Official brand page: https://elice.io/en/resources/brand
+Original, unmodified font files: https://cdn-front-door.elice.io/font/static/downloads/EliceDigitalBaeum_TTF.zip
+License: EliceDigitalBaeum-License.pdf

@@ -7,8 +7,14 @@ import ts from 'typescript';
 function apiClient(env = {}) {
   const requests = [];
   const modules = new Map();
+  const fetchMock = async (url, init) => {
+    requests.push({ url, init });
+    return { ok: true, status: 200, json: async () => ({ access_token: 'test-token', coins: 50 }) };
+  };
   function load(name) {
+    if (name.startsWith('@/lib/')) name = './' + name.slice('@/lib/'.length);
     if (name === 'react-native') return { Platform: { OS: 'web' } };
+    if (name === './auth-session') return { apiFetch: fetchMock };
     if (modules.has(name)) return modules.get(name);
     const source = readFileSync(new URL(`../src/lib/${name.slice(2)}.ts`, import.meta.url), 'utf8');
     const code = ts.transpileModule(source, {
@@ -18,10 +24,7 @@ function apiClient(env = {}) {
     modules.set(name, exports);
     vm.runInNewContext(code, {
       exports, require: load, process: { env },
-      fetch: async (url, init) => {
-        requests.push({ url, init });
-        return { ok: true, status: 200, json: async () => ({ access_token: 'test-token', coins: 50 }) };
-      },
+      fetch: fetchMock,
     });
     return exports;
   }
