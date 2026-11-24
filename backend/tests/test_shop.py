@@ -432,10 +432,14 @@ def test_admin_cursor_create_edit_and_starter_protection(fake):
     assert reserved.value.status_code == 422
 
 
-def test_astronaut_cursor_can_be_sold_owned_and_managed(fake):
-    effect = {"type": "cursor", "style": "astronaut_blue", "color": "#48DFFF"}
+@pytest.mark.parametrize("style,name,color", [
+    ("astronaut_blue", "우주비행사(blue)", "#48DFFF"),
+    ("ufo_mint", "UFO(민트)", "#70FFE0"),
+])
+def test_sprite_cursor_can_be_sold_owned_and_managed(fake, style, name, color):
+    effect = {"type": "cursor", "style": style, "color": color}
     item = AdminItemCreate(
-        id="cursor_astronaut_blue", name="우주비행사(blue)", price=50,
+        id=f"cursor_{style}", name=name, price=50,
         kind="equip", slot="cursor", effect=effect,
     )
     assert admin_shop.admin_create_item(item, admin_id="a")["effect"] == effect

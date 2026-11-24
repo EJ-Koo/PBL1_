@@ -22,6 +22,7 @@ import { GroupsScreen } from '@/components/groups-screen';
 import { ShopScreen } from '@/components/shop-screen';
 import { UniverseCanvas } from '@/components/universe-scene';
 import { useDiary } from '@/store/diary-context';
+import { useShop } from '@/store/shop-context';
 
 const { width, height } = Dimensions.get('window');
 // fffju 디자인대로 스와이프 3면: 왼쪽=일기 작성 / 가운데=나의 우주 / 오른쪽=그룹.
@@ -116,6 +117,7 @@ export default function HomeScreen() {
 // frontend/index.jsx의 3D 우주(react-three-fiber) 렌더링으로 통째로 교체.
 function UniversePage() {
   const { entries } = useDiary();
+  const { coins } = useShop();
   const [questVisible, setQuestVisible] = useState(false);
   const [shopVisible, setShopVisible] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
@@ -136,7 +138,7 @@ function UniversePage() {
           <Text style={styles.iconButtonText}>☰</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.statsPill} onPress={() => setShopVisible(true)}>
-          <Text style={styles.statsText}>★ {entries.length}   🪙 999   ✔️ 2</Text>
+          <Text style={styles.statsText}>★ {entries.length}   🪙 {coins ?? '—'}   ✔️ 2</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.questButton} onPress={() => setQuestVisible(true)}>
           <Text style={styles.questText}>퀘스트</Text>

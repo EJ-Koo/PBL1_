@@ -47,7 +47,7 @@ def _validate_cursor(row: dict):
     effect = row.get("effect") or {}
     color = effect.get("color", "#FFFFFF")
     if (row.get("kind") != "equip" or effect.get("type") != "cursor"
-            or effect.get("style", "stardust") not in ("stardust", "dots", "diamond", "astronaut_blue")
+            or effect.get("style", "stardust") not in ("stardust", "dots", "diamond", "astronaut_blue", "ufo_mint")
             or not isinstance(color, str) or not re.fullmatch(r"#[0-9A-Fa-f]{6}", color)):
         raise HTTPException(status_code=422, detail="커서 종류와 모양, 색상(#RRGGBB)을 확인해주세요.")
 
