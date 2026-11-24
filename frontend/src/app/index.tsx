@@ -20,7 +20,7 @@ import { Text } from '@/components/app-text';
 //    만든 결과는 서버에 저장되고, 볼 때는 저장된 좌표만 불러와 기존 별자리 애니메이션으로 그린다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { AppState, Modal, StyleSheet, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { AppState, Modal, Platform, StyleSheet, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
 import { CreateGroupDialog } from '@/components/ui/create-group-dialog';
 import { getMemberStars, groupDayKey } from '@/lib/group-attendance';
@@ -77,7 +77,10 @@ export default function HomeScreen() {
   const constellationToggleBottom = responsive.navBottom + responsive.navHeight + 12 * rScale;
   const constellationPanelBottom = constellationToggleBottom + constellationToggleHeight + 10 * rScale;
 
-  const [screen, setScreen] = useState<Screen>('home');
+  const { tab: routeTab, groupId: routeGroupId, diaryId: routeDiaryId, chat: routeChat, groupListEntry } = useLocalSearchParams<{
+    tab?: string; groupId?: string; diaryId?: string; chat?: string; groupListEntry?: string;
+  }>();
+  const [screen, setScreen] = useState<Screen>(routeTab === 'group' || routeGroupId ? 'group' : 'home');
   const [newStar, setNewStar] = useState<NewStarHighlight | null>(null);
   const [questVisible, setQuestVisible] = useState(false);
   // [MODIFIED 2026-11-10] 상점은 별도 화면이 아니라 아래에서 올라오는 팝업
@@ -89,8 +92,8 @@ export default function HomeScreen() {
   const [newGroupName, setNewGroupName] = useState('');
   const [creatingGroup, setCreatingGroup] = useState(false);
   const createGroupLock = useRef(false);
-  const { groupId: routeGroupId, diaryId: routeDiaryId, chat: routeChat } = useLocalSearchParams<{ groupId?: string; diaryId?: string; chat?: string }>();
-  const [activeGroupId, setActiveGroupId] = useState<string | null>(routeGroupId ?? null);
+  const [nativeGroupId, setActiveGroupId] = useState<string | null>(routeGroupId ?? null);
+  const activeGroupId = Platform.OS === 'web' ? routeGroupId ?? null : nativeGroupId;
   // 그룹 공유 우주: 그룹을 열면 멤버 전체의 별을 서버에서 받아온다(본인 것만이 아님).
   const { entries: groupStars, loading: groupLoading, error: groupError, reload: reloadGroup } = useGroupUniverse(activeGroupId);
   // 그룹 우주에서 별을 눌러 행성 상세로 갈 때, 돌아오면 목록이 아니라 그 그룹 우주로 복귀하려고 기억해둔다.
@@ -294,7 +297,11 @@ export default function HomeScreen() {
   // Keep this callback stable: setting the return target must not reopen the modal before navigation.
   useFocusEffect(useCallback(() => {
     const groupId = routeGroupId;
-    if (groupId) { setScreen('group'); setActiveGroupId(groupId); if(routeDiaryId)setSharedDiaryId(routeDiaryId); }
+    if (groupId) {
+      setScreen('group');
+      if (Platform.OS !== 'web') setActiveGroupId(groupId);
+      if (routeDiaryId) setSharedDiaryId(routeDiaryId);
+    }
   }, [routeGroupId,routeDiaryId]));
 
   useEffect(() => {
@@ -351,6 +358,17 @@ export default function HomeScreen() {
     setJoinVisible(false);
   };
 
+  const closeGroup = () => {
+    setSharedDiaryId(null);
+    if (Platform.OS !== 'web') {
+      setActiveGroupId(null);
+    } else if (groupListEntry === '1' && router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace({ pathname: '/', params: { tab: 'group' } });
+    }
+  };
+
   const handleLeaveGroup = async () => {
     if (leaving || !activeGroup) return;
     setLeaving(true);
@@ -360,7 +378,7 @@ export default function HomeScreen() {
       showMessage('나가기 실패', result.error);
       return;
     }
-    setActiveGroupId(null); // 상세 화면도 닫는다
+    closeGroup();
   };
 
   return (
@@ -469,7 +487,14 @@ export default function HomeScreen() {
               members: getMemberStars(g, entries, today),
               stars: groupEntries(g.diary_ids),
             }))}
-            onSelectGroup={(g) => { setSharedDiaryId(null); setActiveGroupId(g.id); }}
+            onSelectGroup={(g) => {
+              setSharedDiaryId(null);
+              if (Platform.OS === 'web') {
+                router.push({ pathname: '/', params: { groupId: g.id, groupListEntry: '1' } });
+              } else {
+                setActiveGroupId(g.id);
+              }
+            }}
             onAddGroup={() => setCreateGroupVisible(true)}
             onJoinByCode={() => setJoinVisible(true)}
           />
@@ -480,9 +505,9 @@ export default function HomeScreen() {
       <ShopSheet visible={shopVisible} width={frameWidth} onClose={() => setShopVisible(false)} />
 
       {/* ===== 그룹 카드를 눌렀을 때: 그 그룹의 우주를 3D로 크게 보기 ===== */}
-      <Modal transparent={false} visible={activeGroup !== null} animationType="slide" onRequestClose={() => sharedDiaryId ? setSharedDiaryId(null) : setActiveGroupId(null)}>
+      <Modal transparent={false} visible={activeGroup !== null} animationType="slide" onRequestClose={() => sharedDiaryId ? setSharedDiaryId(null) : closeGroup()}>
         {activeGroup && <GroupExperience key={`${authSession.getRevision()}:${activeGroup.id}`} group={activeGroup} entries={groupStars}
-          loading={groupLoading} error={groupError} onReload={reloadGroup} onBack={()=>setActiveGroupId(null)}
+          loading={groupLoading} error={groupError} onReload={reloadGroup} onBack={closeGroup}
           onLeave={handleLeaveGroup} leaving={leaving} selection={{id:sharedDiaryId,onChange:setSharedDiaryId}} initialChat={routeChat==='1'} />}
       </Modal>
 
@@ -505,7 +530,13 @@ export default function HomeScreen() {
         activeScreen={screen}
         onDiary={() => setScreen('diary')}
         onHome={() => setScreen('home')}
-        onGroup={() => setScreen('group')}
+        onGroup={() => {
+          if (Platform.OS === 'web' && screen !== 'group' && routeTab !== 'group') {
+            router.push({ pathname: '/', params: { tab: 'group' } });
+          } else {
+            setScreen('group');
+          }
+        }}
       />
 
       {/* ===== 새 그룹 만들기 팝업 (✕ · 바깥 · 취소로 닫힘) ===== */}
