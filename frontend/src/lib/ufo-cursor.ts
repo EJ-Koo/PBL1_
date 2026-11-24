@@ -2,7 +2,7 @@ import type { UfoPose } from './ufo-art';
 import { mountCursorLayer } from '../../public/cursor-layer.js';
 
 type Frame = { uri: string; width: number; height: number; left: number; top: number };
-const SIZE = 57.6;
+const SIZE = 52;
 const REST_DELAY = 180;
 const BEAM_DURATION = 420;
 const FOLLOW_TIME = 65; // Match the astronaut's time-based follow response.
