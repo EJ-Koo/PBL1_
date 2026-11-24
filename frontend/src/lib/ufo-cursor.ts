@@ -71,6 +71,7 @@ export function startUfoCursor(frames: Record<UfoPose, Frame>) {
   let displayedPose: UfoPose = 'idle';
   let swimUntil = 0;
   let beamUntil = 0;
+  let beamPending = false;
   let pressed = false;
   let animation = 0;
   let suspended = false;
@@ -116,10 +117,16 @@ export function startUfoCursor(frames: Record<UfoPose, Frame>) {
     const following = Math.hypot(target.x - position.x, target.y - position.y) > SETTLE_DISTANCE;
     const swimming = now < swimUntil || Math.abs(target.x - position.x) > SETTLE_DISTANCE;
     if (!following) position = target;
-    const requested: UfoPose = pressed || now < beamUntil ? 'beam' : swimming ? 'swim' : 'idle';
+    const requested: UfoPose = pressed || beamPending || now < beamUntil ? 'beam' : swimming ? 'swim' : 'idle';
     // A state change must not hide the loaded sprite while another PNG loads.
     const pose = ready(requested) ? requested : ready('idle') ? 'idle' : POSES.find(ready);
     if (!pose) { layer.style.display = 'none'; lastFrame = null; return; }
+    if (pose === 'beam' && beamPending) {
+      // Start the pulse when it can be shown, rather than while the image or
+      // first animation frame is still waiting. Each click renews this pulse.
+      beamPending = false;
+      beamUntil = now + BEAM_DURATION;
+    }
     setPose(pose);
     if (renderedDirection !== direction) {
       renderedDirection = direction;
@@ -147,6 +154,7 @@ export function startUfoCursor(frames: Record<UfoPose, Frame>) {
     lastFrame = null;
     if (forgetPointer) { point = position = null; turnX = null; }
     pressed = false;
+    beamPending = false;
     swimUntil = beamUntil = 0;
     layer.style.display = 'none';
     setPose('idle');
@@ -177,7 +185,7 @@ export function startUfoCursor(frames: Record<UfoPose, Frame>) {
     suspended = false;
     point = { x: event.clientX, y: event.clientY };
     pressed = true;
-    beamUntil = performance.now() + BEAM_DURATION;
+    beamPending = true;
     schedule();
   }
 
@@ -190,7 +198,16 @@ export function startUfoCursor(frames: Record<UfoPose, Frame>) {
   function cancel(event: PointerEvent) {
     if (event.pointerType !== 'mouse') return;
     pressed = false;
+    beamPending = false;
     swimUntil = beamUntil = 0;
+    if (point) schedule();
+  }
+
+  function releaseCapture(event: PointerEvent) {
+    if (event.pointerType !== 'mouse') return;
+    // Capture is also released after normal pointerup, or transferred during a
+    // drag. Neither event cancels the click pulse that is still due to appear.
+    if ((event.buttons & 1) === 0) pressed = false;
     if (point) schedule();
   }
 
@@ -220,7 +237,7 @@ export function startUfoCursor(frames: Record<UfoPose, Frame>) {
   window.addEventListener('pointerdown', down, options);
   window.addEventListener('pointerup', up, options);
   window.addEventListener('pointercancel', cancel, options);
-  window.addEventListener('lostpointercapture', cancel, options);
+  window.addEventListener('lostpointercapture', releaseCapture, options);
   window.addEventListener('pointerout', leave, options);
   window.addEventListener('blur', suspend, options);
   window.addEventListener('focus', resume, options);

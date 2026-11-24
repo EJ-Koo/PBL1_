@@ -160,6 +160,106 @@ test('click beam takes priority over swimming, stays visible after a quick click
   cleanup();
 });
 
+for (const firstFrame of [false, true]) {
+  test(`normal pointer capture release preserves a click beam ${firstFrame ? 'after' : 'before'} its first frame`, () => {
+    const env = setup();
+    env.pointer('pointerdown', 200, 200, { buttons: 1 });
+    if (firstFrame) env.tick(16);
+    env.pointer('pointerup', 200, 200, { buttons: 0 });
+    env.pointer('lostpointercapture', 200, 200, { buttons: 0 });
+    env.advance(16);
+    assert.equal(env.layer.dataset.pose, 'beam');
+    assert.equal(env.image('beam').style.opacity, '1');
+    env.advance(300);
+    assert.equal(env.layer.dataset.pose, 'beam', 'Normal release must not cut the pulse short');
+    env.advance(200);
+    assert.equal(env.layer.dataset.pose, 'idle');
+    env.cleanup();
+  });
+}
+
+test('capture transfer while the primary mouse button is still held does not stop the beam', () => {
+  const env = setup();
+  env.pointer('pointerdown', 200, 200, { buttons: 1 });
+  env.tick(0);
+  env.pointer('lostpointercapture', 200, 200, { buttons: 1 });
+  env.advance(1000);
+  assert.equal(env.layer.dataset.pose, 'beam');
+  env.pointer('pointerup', 200, 200, { buttons: 0 });
+  env.advance(16);
+  assert.equal(env.layer.dataset.pose, 'idle');
+  env.cleanup();
+});
+
+test('a fast click survives a delayed first render and gets a full visible beam pulse', () => {
+  const env = setup();
+  env.pointer('pointerdown', 200, 200);
+  env.pointer('pointerup', 200, 200);
+  env.tick(600); // The page was busy longer than the old input-based deadline.
+  assert.equal(env.layer.dataset.pose, 'beam');
+  env.advance(400);
+  assert.equal(env.layer.dataset.pose, 'beam');
+  env.advance(32);
+  assert.equal(env.layer.dataset.pose, 'idle');
+  env.cleanup();
+});
+
+test('a released click waits for a slow beam image, without spinning frames while it loads', () => {
+  const env = setup();
+  env.image('beam').complete = false;
+  env.image('beam').naturalWidth = 0;
+  env.pointer('pointerdown', 200, 200);
+  env.pointer('pointerup', 200, 200);
+  env.tick(0);
+  assert.equal(env.layer.dataset.pose, 'idle');
+  assert.equal(env.frames.size, 0);
+  env.advance(600);
+  env.image('beam').complete = true;
+  env.image('beam').naturalWidth = 1200;
+  env.image('beam').dispatch('load');
+  env.advance(16);
+  assert.equal(env.layer.dataset.pose, 'beam');
+  env.advance(400);
+  assert.equal(env.layer.dataset.pose, 'beam');
+  env.advance(32);
+  assert.equal(env.layer.dataset.pose, 'idle');
+  env.cleanup();
+});
+
+test('rapid clicks restart the visible beam duration instead of cancelling each other', () => {
+  const env = setup();
+  env.pointer('pointerdown', 200, 200);
+  env.pointer('pointerup', 200, 200);
+  env.tick(0);
+  env.advance(300);
+  env.pointer('pointerdown', 200, 200);
+  env.pointer('pointerup', 200, 200);
+  env.pointer('lostpointercapture', 200, 200, { buttons: 0 });
+  env.advance(316);
+  assert.equal(env.layer.dataset.pose, 'beam');
+  env.advance(200);
+  assert.equal(env.layer.dataset.pose, 'idle');
+  env.cleanup();
+});
+
+test('a real cancellation or viewport exit discards a click queued behind image loading', () => {
+  for (const event of ['pointercancel', 'pointerout']) {
+    const env = setup();
+    env.image('beam').complete = false;
+    env.image('beam').naturalWidth = 0;
+    env.pointer('pointerdown', 200, 200);
+    env.pointer('pointerup', 200, 200);
+    env.tick(0);
+    env.pointer(event, event === 'pointerout' ? -1 : 200, 200, { relatedTarget: null });
+    env.image('beam').complete = true;
+    env.image('beam').naturalWidth = 1200;
+    env.image('beam').dispatch('load');
+    env.advance(16);
+    assert.notEqual(env.layer.dataset.pose, 'beam', `${event} must discard a pending beam`);
+    env.cleanup();
+  }
+});
+
 test('holding a click retains the beam without a continuous animation loop', () => {
   const { layer, pointer, tick, frames, cleanup } = setup();
   pointer('pointerdown', 100, 100);
