@@ -24,7 +24,8 @@ function setup({ reducedMotion = false } = {}) {
       signal?.addEventListener('abort', () => handlers.delete(handler), { once: true });
     }
     dispatch(name, event = {}) {
-      for (const handler of this.events.get(name) ?? []) handler(event);
+      const dispatched = { target: this, ...event };
+      for (const handler of this.events.get(name) ?? []) handler(dispatched);
     }
   }
   class Element extends Target {
@@ -158,6 +159,86 @@ test('click beam takes priority over swimming, stays visible after a quick click
   advance(600);
   assert.equal(layer.dataset.pose, 'idle');
   cleanup();
+});
+
+for (const direction of ['left', 'right']) {
+  test(`clicking a button while swimming ${direction} transitions directly to the beam through internal focus changes`, () => {
+    const env = setup();
+    const start = direction === 'right' ? 100 : 500;
+    const end = direction === 'right' ? 400 : 200;
+    env.pointer('pointermove', start, 200);
+    env.tick(0);
+    env.pointer('pointermove', end, 200);
+    env.advance(16);
+    assert.equal(env.layer.dataset.pose, 'swim');
+    const before = env.position()[0];
+    const input = env.document.createElement('input');
+    const button = env.document.createElement('button');
+    env.pointer('pointerdown', end, 200);
+    // Captured element blur/focus is not a loss of focus by the browser window.
+    env.window.dispatch('blur', { target: input, relatedTarget: button });
+    assert.equal(env.layer.dataset.pose, 'swim', 'A button focus change must not reset the cursor to idle');
+    assert.equal(env.layer.style.display, 'block');
+    env.window.dispatch('focus', { target: button, relatedTarget: input });
+    env.pointer('pointerup', end, 200);
+    env.pointer('lostpointercapture', end, 200, { buttons: 0 });
+    env.advance(16);
+    assert.equal(env.layer.dataset.pose, 'beam');
+    assert.equal(env.image('beam').style.opacity, '1');
+    assert.equal(env.image('idle').style.opacity, '0');
+    const after = env.position()[0];
+    assert(direction === 'right' ? after > before : after < before);
+    assert.notEqual(after, end + 12, 'Selecting the beam must preserve smooth position interpolation');
+    env.cleanup();
+  });
+}
+
+test('a click keeps the current swimming image while the beam loads, even after swimming would normally end', () => {
+  const env = setup();
+  env.pointer('pointermove', 100, 200);
+  env.tick(0);
+  env.pointer('pointermove', 400, 200);
+  env.advance(16);
+  env.image('beam').complete = false;
+  env.image('beam').naturalWidth = 0;
+  env.pointer('pointerdown', 400, 200);
+  env.pointer('pointerup', 400, 200);
+  env.pointer('lostpointercapture', 400, 200, { buttons: 0 });
+  env.advance(16);
+  assert.equal(env.layer.dataset.pose, 'swim', 'Waiting for a beam must not introduce an idle image');
+  assert.equal(env.image('swim').style.opacity, '1');
+  assert.equal(env.image('idle').style.opacity, '0');
+  env.advance(700);
+  assert.equal(env.layer.dataset.pose, 'swim');
+  assert.equal(env.frames.size, 0, 'Waiting for an image must not keep a JS loop alive');
+  env.image('beam').complete = true;
+  env.image('beam').naturalWidth = 1200;
+  env.image('beam').dispatch('load');
+  env.advance(16);
+  assert.equal(env.layer.dataset.pose, 'beam');
+  assert.equal(env.image('idle').style.opacity, '0');
+  env.advance(400);
+  assert.equal(env.layer.dataset.pose, 'beam');
+  env.advance(32);
+  assert.equal(env.layer.dataset.pose, 'idle');
+  env.cleanup();
+});
+
+test('interrupting the idle-to-swim fade only fades swimming and beam images, keeping idle out of the click transition', () => {
+  const env = setup();
+  env.pointer('pointermove', 100, 200);
+  env.tick(0);
+  env.pointer('pointermove', 400, 200);
+  env.advance(16);
+  env.pointer('pointerdown', 400, 200);
+  env.advance(16); // The previous 100ms fade has not finished yet.
+  assert.equal(env.layer.dataset.pose, 'beam');
+  assert.equal(env.image('idle').style.opacity, '0');
+  assert.equal(env.image('idle').style.transition, 'none', 'An interrupted fade must not leave the idle image on screen');
+  assert.match(env.image('swim').style.transition, /opacity/);
+  assert.match(env.image('beam').style.transition, /opacity/);
+  assert.match(env.sprite.style.animation, /infinite/);
+  env.cleanup();
 });
 
 for (const firstFrame of [false, true]) {

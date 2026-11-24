@@ -85,9 +85,16 @@ export function startUfoCursor(frames: Record<UfoPose, Frame>) {
 
   function setPose(pose: UfoPose) {
     if (displayedPose === pose) return;
+    const previous = displayedPose;
     displayedPose = pose;
     layer.dataset.pose = pose;
-    for (const key of POSES) images[key].style.opacity = key === pose ? '1' : '0';
+    for (const key of POSES) {
+      // Only the outgoing and incoming frames may fade. Stop a third frame's
+      // interrupted fade so idle cannot linger during a swim-to-beam click.
+      images[key].style.transition = !motion.matches && (key === previous || key === pose)
+        ? 'opacity 100ms ease-out' : 'none';
+      images[key].style.opacity = key === pose ? '1' : '0';
+    }
   }
 
   function updateMotion() {
@@ -118,8 +125,10 @@ export function startUfoCursor(frames: Record<UfoPose, Frame>) {
     const swimming = now < swimUntil || Math.abs(target.x - position.x) > SETTLE_DISTANCE;
     if (!following) position = target;
     const requested: UfoPose = pressed || beamPending || now < beamUntil ? 'beam' : swimming ? 'swim' : 'idle';
-    // A state change must not hide the loaded sprite while another PNG loads.
-    const pose = ready(requested) ? requested : ready('idle') ? 'idle' : POSES.find(ready);
+    // A pending click holds the current sprite until the beam is ready, rather
+    // than inserting an idle frame between swimming and the click response.
+    const fallback: UfoPose = requested === 'beam' && ready(displayedPose) ? displayedPose : 'idle';
+    const pose = ready(requested) ? requested : ready(fallback) ? fallback : POSES.find(ready);
     if (!pose) { layer.style.display = 'none'; lastFrame = null; return; }
     if (pose === 'beam' && beamPending) {
       // Start the pulse when it can be shown, rather than while the image or
@@ -239,8 +248,10 @@ export function startUfoCursor(frames: Record<UfoPose, Frame>) {
   window.addEventListener('pointercancel', cancel, options);
   window.addEventListener('lostpointercapture', releaseCapture, options);
   window.addEventListener('pointerout', leave, options);
-  window.addEventListener('blur', suspend, options);
-  window.addEventListener('focus', resume, options);
+  // Captured blur/focus also comes from buttons and inputs within the page.
+  // Those internal focus changes must never reset a swimming or pending beam.
+  window.addEventListener('blur', event => { if (event.target === window) suspend(); }, options);
+  window.addEventListener('focus', event => { if (event.target === window) resume(); }, options);
   window.addEventListener('resize', () => { if (point) schedule(); }, options);
   document.addEventListener('visibilitychange', () => { if (document.hidden) suspend(); else resume(); }, options);
 
