@@ -56,7 +56,8 @@ export function startUfoCursor(frames: Record<UfoPose, Frame>) {
     sprite.appendChild(image);
     images[pose] = image;
   }
-  images.swim.style.transform = 'none';
+  // The supplied swimming art banks left; mirror it for rightward movement.
+  images.swim.style.transform = 'scaleX(-1)';
   // Native dialogs sit above body content regardless of its z-index. Share the
   // existing cursor host so opening or removing a dialog cannot bury the UFO.
   const host = mountCursorLayer(layer);
@@ -122,7 +123,7 @@ export function startUfoCursor(frames: Record<UfoPose, Frame>) {
     setPose(pose);
     if (renderedDirection !== direction) {
       renderedDirection = direction;
-      images.swim.style.transform = direction < 0 ? 'scaleX(-1)' : 'none';
+      images.swim.style.transform = direction > 0 ? 'scaleX(-1)' : 'none';
     }
     layer.dataset.direction = direction > 0 ? 'right' : 'left';
     layer.style.transform = `translate3d(${position.x.toFixed(2)}px,${position.y.toFixed(2)}px,0)`;

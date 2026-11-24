@@ -123,21 +123,25 @@ test('uses the three supplied poses; only horizontal movement starts swimming', 
   cleanup();
 });
 
-test('mirrors swimming for left movement and batches pointer updates into one frame', () => {
+test('keeps the left-facing swimming art for left movement and mirrors it for right movement', () => {
   const { layer, image, pointer, tick, frames, cleanup } = setup();
   pointer('pointermove', 100, 100);
   tick(0);
+  pointer('pointermove', 120, 100);
+  tick(16);
+  assert.equal(layer.dataset.direction, 'right');
+  assert.equal(image('swim').style.transform, 'scaleX(-1)', 'The first rightward movement must already use the mirrored art');
   pointer('pointermove', 90, 100);
   pointer('pointermove', 80, 100);
   assert.equal(frames.size, 1);
-  tick(16);
+  tick(32);
   assert.equal(layer.dataset.direction, 'left');
-  assert.match(image('swim').style.transform, /scaleX\(-1\)/);
+  assert.equal(image('swim').style.transform, 'none');
   assert.doesNotMatch(layer.style.transform, /scaleX/, 'Facing changes do not alter the follow transform');
   pointer('pointermove', 140, 100);
-  tick(32);
+  tick(48);
   assert.equal(layer.dataset.direction, 'right');
-  assert.doesNotMatch(image('swim').style.transform, /scaleX/);
+  assert.equal(image('swim').style.transform, 'scaleX(-1)');
   cleanup();
 });
 
