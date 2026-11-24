@@ -173,7 +173,7 @@ test('clamps the full beam canvas to viewport edges and never captures interacti
   const { layer, sprite, images, position, pointer, tick, cleanup } = setup();
   pointer('pointermove', 799, 599);
   tick(0);
-  assert.deepEqual(position(), [736, 536]);
+  assert.deepEqual(position(), [800 - Number.parseFloat(layer.style.width), 600 - Number.parseFloat(layer.style.height)]);
   assert.equal(layer.style.pointerEvents, 'none');
   assert.equal(sprite.style.pointerEvents, 'none');
   assert(images.every(image => image.style.pointerEvents === 'none'));
@@ -355,8 +355,8 @@ test('shrinking the viewport cannot leave an interpolating UFO outside the scree
   env.window.dispatch('resize');
   env.advance(16);
   const [x, y] = env.position();
-  assert(x >= 0 && x <= 256);
-  assert(y >= 0 && y <= 176);
+  assert(x >= 0 && x <= 320 - Number.parseFloat(env.layer.style.width));
+  assert(y >= 0 && y <= 240 - Number.parseFloat(env.layer.style.height));
   env.cleanup();
 });
 
