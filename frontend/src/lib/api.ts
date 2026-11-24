@@ -1,9 +1,8 @@
 import { Platform } from 'react-native';
 
-// 기본값은 Railway 서버. 로컬 백엔드로 테스트할 때만 실행 시 EXPO_PUBLIC_API_URL로 바꾼다.
-// 예) $env:EXPO_PUBLIC_API_URL="http://localhost:8000"; npx expo start --web
-export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ?? 'https://diary-galaxy-backend-production-b42c.up.railway.app';
+import { API_BASE_URL } from './api-config';
+
+export { API_BASE_URL } from './api-config';
 
 export type ApiVisibility = 'public' | 'friends' | 'private';
 
