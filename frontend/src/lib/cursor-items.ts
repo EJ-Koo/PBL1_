@@ -2,7 +2,7 @@ import type { ItemEffect, ShopItem } from './shop-api';
 
 export const STARTER_CURSOR_ID = 'cursor_stardust';
 export const CURSOR_CACHE_PREFIX = 'star2day:cursor:v1:';
-export const CURSOR_STYLES = { stardust: '별빛', dots: '빛점', diamond: '다이아몬드', astronaut_blue: '우주비행사(blue)', ufo_mint: 'UFO(민트)' } as const;
+export const CURSOR_STYLES = { stardust: '별빛', dots: '빛점', diamond: '다이아몬드', astronaut_blue: '우주비행사(blue)', astronaut_pink: '우주비행사(pink)', ufo_mint: 'UFO(민트)' } as const;
 export type CursorStyle = keyof typeof CURSOR_STYLES;
 export type CursorEffect = { type: 'cursor'; style: CursorStyle; color: string };
 export const STARDUST: CursorEffect = { type: 'cursor', style: 'stardust', color: '#FFFFFF' };

@@ -430,15 +430,18 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
                             : 0;
                         const left = Math.max(item.quantity - applied, 0);
                         const previewing = section.preview ? preview[section.preview] === item.id : false;
+                        const cursor = item.slot === 'cursor' ? cursorEffect(item.effect) : null;
                         return (
                           <Card
                             key={item.id}
                             testID={`shop-item-${item.id}`}
                             width={cardWidth}
                             icon={item.icon}
-                            imageSource={item.slot === 'cursor' && cursorEffect(item.effect)?.style === 'astronaut_blue'
-                              ? require('../../public/cursors/astronaut-blue-idle.png') : undefined}
-                            artwork={item.slot === 'cursor' && cursorEffect(item.effect)?.style === 'ufo_mint'
+                            imageSource={cursor?.style === 'astronaut_blue'
+                              ? require('../../public/cursors/astronaut-blue-idle.png')
+                              : cursor?.style === 'astronaut_pink'
+                                ? require('../../public/cursors/astronaut-pink-idle.png') : undefined}
+                            artwork={cursor?.style === 'ufo_mint'
                               ? <UfoSprite pose="idle" size={56} /> : undefined}
                             name={item.id === STARTER_CURSOR_ID ? t(item.name) : item.name}
                             description={item.id === STARTER_CURSOR_ID ? t(item.description) : item.description}

@@ -434,6 +434,7 @@ def test_admin_cursor_create_edit_and_starter_protection(fake):
 
 @pytest.mark.parametrize("style,name,color", [
     ("astronaut_blue", "우주비행사(blue)", "#48DFFF"),
+    ("astronaut_pink", "우주비행사(pink)", "#FF85C1"),
     ("ufo_mint", "UFO(민트)", "#70FFE0"),
 ])
 def test_sprite_cursor_can_be_sold_owned_and_managed(fake, style, name, color):

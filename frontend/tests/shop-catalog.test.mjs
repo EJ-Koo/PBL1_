@@ -61,6 +61,7 @@ test('cursor records accept supported shapes and hex colors only', () => {
 
 for (const [style, name, color] of [
   ['astronaut_blue', '우주비행사(blue)', '#48DFFF'],
+  ['astronaut_pink', '우주비행사(pink)', '#FF85C1'],
   ['ufo_mint', 'UFO(민트)', '#70FFE0'],
 ]) test(`${name} uses the same ownership and single-cursor equipment rules as particle cursors`, () => {
   const starter = starterItem(true);
