@@ -11,7 +11,7 @@ const layerCode = ts.transpileModule(readFileSync(new URL('../public/cursor-laye
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 
-function setup() {
+function setup({ reducedMotion = false } = {}) {
   const frames = new Map();
   let time = 0;
   let frameId = 0;
@@ -61,8 +61,10 @@ function setup() {
   document.activeElement = document.body;
   const descendants = (root = document.body) => root.children.flatMap(child => [child, ...descendants(child)]);
   document.querySelector = () => descendants().find(node => node instanceof Dialog && node.open) ?? null;
+  const media = Object.assign(new Target(), { matches: reducedMotion });
   const window = Object.assign(new Target(), {
     innerWidth: 800, innerHeight: 600,
+    matchMedia: () => media,
     requestAnimationFrame: fn => { frames.set(++frameId, fn); return frameId; },
     cancelAnimationFrame: id => frames.delete(id),
   });
@@ -87,12 +89,21 @@ function setup() {
   const pointer = (name, x, y, extra = {}) => window.dispatch(name, {
     pointerType: 'mouse', button: 0, clientX: x, clientY: y, ...extra,
   });
-  return { window, document, layer, frames, tick, pointer, cleanup, Dialog, observers };
+  const images = descendants(layer).filter(node => 'ufoPose' in node.dataset);
+  const advance = (ms, step = 16) => {
+    const end = time + ms;
+    while (time < end) tick(Math.min(time + step, end));
+  };
+  const position = () => layer.style.transform.match(/translate3d\(([-.\d]+)px,([-.\d]+)px,0\)/).slice(1).map(Number);
+  return { window, document, layer, frames, tick, pointer, cleanup, Dialog, observers, images,
+    image: pose => images.find(node => node.dataset.ufoPose === pose), advance, position, media,
+    get sprite() { return layer.children.find(node => 'ufoSprite' in node.dataset); },
+  };
 }
 
 test('uses the three supplied poses; only horizontal movement starts swimming', () => {
-  const { layer, pointer, tick, frames, cleanup } = setup();
-  assert.equal(layer.children.length, 3);
+  const { layer, images, pointer, tick, advance, frames, cleanup } = setup();
+  assert.equal(images.length, 3);
   pointer('pointermove', 100, 100);
   tick(0);
   assert.equal(layer.dataset.pose, 'idle');
@@ -101,15 +112,19 @@ test('uses the three supplied poses; only horizontal movement starts swimming', 
   tick(10);
   assert.equal(layer.dataset.pose, 'swim');
   assert.equal(layer.dataset.direction, 'right');
-  pointer('pointermove', 130, 160);
-  tick(200);
+  advance(700);
   assert.equal(layer.dataset.pose, 'idle');
+  assert.equal(frames.size, 0);
+  pointer('pointermove', 130, 160);
+  advance(16);
+  assert.equal(layer.dataset.pose, 'idle', 'Vertical following alone does not start swimming');
+  advance(700);
   assert.equal(frames.size, 0);
   cleanup();
 });
 
 test('mirrors swimming for left movement and batches pointer updates into one frame', () => {
-  const { layer, pointer, tick, frames, cleanup } = setup();
+  const { layer, image, pointer, tick, frames, cleanup } = setup();
   pointer('pointermove', 100, 100);
   tick(0);
   pointer('pointermove', 90, 100);
@@ -117,16 +132,17 @@ test('mirrors swimming for left movement and batches pointer updates into one fr
   assert.equal(frames.size, 1);
   tick(16);
   assert.equal(layer.dataset.direction, 'left');
-  assert.match(layer.style.transform, /scaleX\(-1\)/);
+  assert.match(image('swim').style.transform, /scaleX\(-1\)/);
+  assert.doesNotMatch(layer.style.transform, /scaleX/, 'Facing changes do not alter the follow transform');
   pointer('pointermove', 140, 100);
   tick(32);
   assert.equal(layer.dataset.direction, 'right');
-  assert.doesNotMatch(layer.style.transform, /scaleX/);
+  assert.doesNotMatch(image('swim').style.transform, /scaleX/);
   cleanup();
 });
 
 test('click beam takes priority over swimming, stays visible after a quick click, and returns to idle', () => {
-  const { layer, pointer, tick, cleanup } = setup();
+  const { layer, image, pointer, tick, advance, cleanup } = setup();
   pointer('pointerdown', 100, 100);
   tick(0);
   assert.equal(layer.dataset.pose, 'beam');
@@ -134,8 +150,8 @@ test('click beam takes priority over swimming, stays visible after a quick click
   pointer('pointerup', 150, 100);
   tick(100);
   assert.equal(layer.dataset.pose, 'beam');
-  assert.equal(layer.children.find(image => image.dataset.ufoPose === 'beam').style.visibility, 'visible');
-  tick(450);
+  assert.equal(image('beam').style.opacity, '1');
+  advance(600);
   assert.equal(layer.dataset.pose, 'idle');
   cleanup();
 });
@@ -154,12 +170,13 @@ test('holding a click retains the beam without a continuous animation loop', () 
 });
 
 test('clamps the full beam canvas to viewport edges and never captures interaction', () => {
-  const { layer, pointer, tick, cleanup } = setup();
+  const { layer, sprite, images, position, pointer, tick, cleanup } = setup();
   pointer('pointermove', 799, 599);
   tick(0);
-  assert.equal(layer.style.transform, 'translate3d(736px,536px,0)');
+  assert.deepEqual(position(), [736, 536]);
   assert.equal(layer.style.pointerEvents, 'none');
-  assert(layer.children.every(image => image.style.pointerEvents === 'none'));
+  assert.equal(sprite.style.pointerEvents, 'none');
+  assert(images.every(image => image.style.pointerEvents === 'none'));
   cleanup();
 });
 
@@ -255,8 +272,7 @@ test('focus and visibility restore a known pointer without requiring extra movem
 });
 
 test('a slow or broken state image keeps the loaded UFO visible until its replacement is ready', () => {
-  const { layer, pointer, tick, cleanup } = setup();
-  const image = pose => layer.children.find(node => node.dataset.ufoPose === pose);
+  const { image, pointer, tick, cleanup } = setup();
   image('swim').complete = false;
   image('swim').naturalWidth = 0;
   image('beam').complete = false;
@@ -265,26 +281,26 @@ test('a slow or broken state image keeps the loaded UFO visible until its replac
   tick(0);
   pointer('pointermove', 220, 200);
   tick(16);
-  assert.equal(image('idle').style.visibility, 'visible', 'Swimming must not hide the only loaded image');
+  assert.equal(image('idle').style.opacity, '1', 'Swimming must not hide the only loaded image');
   pointer('pointerdown', 220, 200);
   tick(32);
-  assert.equal(image('idle').style.visibility, 'visible');
+  assert.equal(image('idle').style.opacity, '1');
   image('beam').complete = true;
   image('beam').naturalWidth = 1200;
   image('beam').dispatch('load');
   tick(48);
-  assert.equal(image('beam').style.visibility, 'visible', 'A loaded held-click beam appears without another pointer event');
+  assert.equal(image('beam').style.opacity, '1', 'A loaded held-click beam appears without another pointer event');
   pointer('pointerup', 220, 200);
   tick(500);
   image('swim').complete = true; // Failed images may be complete but have no natural width.
   pointer('pointermove', 240, 200);
   tick(516);
-  assert.equal(image('idle').style.visibility, 'visible');
+  assert.equal(image('idle').style.opacity, '1');
   cleanup();
 });
 
 test('reattaches a removed layer on the next pointer event and cleans up all observers', () => {
-  const { document, layer, pointer, tick, cleanup, observers } = setup();
+  const { document, layer, images, pointer, tick, cleanup, observers } = setup();
   layer.remove();
   pointer('pointermove', 200, 200);
   tick(0);
@@ -293,5 +309,103 @@ test('reattaches a removed layer on the next pointer event and cleans up all obs
   cleanup();
   assert.equal(document.body.children.length, 0);
   assert(observers.every(observer => !observer.active));
-  assert(layer.children.every(image => [...image.events.values()].every(handlers => handlers.size === 0)));
+  assert(images.every(image => [...image.events.values()].every(handlers => handlers.size === 0)));
+});
+
+test('glides between sparse mouse events and settles without a continuous idle JS loop', () => {
+  const env = setup();
+  env.pointer('pointermove', 100, 100);
+  env.tick(0);
+  env.pointer('pointermove', 400, 100);
+  env.advance(16);
+  const first = env.position()[0];
+  assert(first > 112 && first < 412, 'The first frame must interpolate instead of jumping to the pointer');
+  assert.equal(env.frames.size, 1);
+  env.advance(16);
+  assert(env.position()[0] > first && env.position()[0] < 412, 'It must keep moving between pointer samples');
+  env.advance(1000);
+  assert.equal(env.position()[0], 412);
+  assert.equal(env.frames.size, 0, 'A resting UFO must not keep a JS animation loop alive');
+  assert.match(env.sprite.style.animation, /infinite/, 'Idle hovering is handled by CSS');
+  env.cleanup();
+});
+
+test('equal elapsed time gives the same follow position at 60 Hz and 120 Hz', () => {
+  const follow = hz => {
+    const env = setup();
+    env.pointer('pointermove', 100, 100);
+    env.tick(0);
+    env.pointer('pointermove', 600, 300);
+    env.advance(250, 1000 / hz);
+    const point = env.position();
+    env.cleanup();
+    return point;
+  };
+  const at60 = follow(60), at120 = follow(120);
+  assert(Math.abs(at60[0] - at120[0]) < 0.05);
+  assert(Math.abs(at60[1] - at120[1]) < 0.05);
+});
+
+test('shrinking the viewport cannot leave an interpolating UFO outside the screen', () => {
+  const env = setup();
+  env.pointer('pointermove', 799, 599);
+  env.tick(0);
+  env.window.innerWidth = 320;
+  env.window.innerHeight = 240;
+  env.window.dispatch('resize');
+  env.advance(16);
+  const [x, y] = env.position();
+  assert(x >= 0 && x <= 256);
+  assert(y >= 0 && y <= 176);
+  env.cleanup();
+});
+
+test('minor horizontal jitter does not repeatedly flip the swimming art', () => {
+  const env = setup();
+  env.pointer('pointermove', 200, 200);
+  env.tick(0);
+  env.pointer('pointermove', 240, 200);
+  env.advance(16);
+  for (const x of [239, 240, 239, 240]) {
+    env.pointer('pointermove', x, 200);
+    env.advance(16);
+    assert.equal(env.layer.dataset.direction, 'right');
+  }
+  env.pointer('pointermove', 230, 200);
+  env.advance(16);
+  assert.equal(env.layer.dataset.direction, 'left', 'A deliberate reversal still changes direction');
+  env.cleanup();
+});
+
+test('a held click keeps the beam while the position glides and stops scheduling once settled', () => {
+  const env = setup();
+  env.pointer('pointerdown', 100, 100);
+  env.tick(0);
+  env.pointer('pointermove', 400, 100);
+  env.advance(16);
+  assert.equal(env.layer.dataset.pose, 'beam');
+  assert(env.position()[0] > 112 && env.position()[0] < 412);
+  assert.equal(env.frames.size, 1, 'Holding a click must not interrupt follow frames');
+  env.advance(1000);
+  assert.equal(env.layer.dataset.pose, 'beam');
+  assert.equal(env.position()[0], 412);
+  assert.equal(env.frames.size, 0);
+  env.cleanup();
+});
+
+test('reduced motion disables easing, hover, and fading, including when preferences change', () => {
+  const env = setup({ reducedMotion: true });
+  env.pointer('pointermove', 100, 100);
+  env.tick(0);
+  env.pointer('pointermove', 400, 100);
+  env.advance(16);
+  assert.equal(env.position()[0], 412);
+  assert.equal(env.sprite.style.animation, 'none');
+  assert(env.images.every(image => image.style.transition === 'none'));
+  env.media.matches = false;
+  env.media.dispatch('change');
+  assert.match(env.sprite.style.animation, /infinite/);
+  assert(env.images.every(image => /opacity/.test(image.style.transition)));
+  env.cleanup();
+  assert([...env.media.events.values()].every(handlers => handlers.size === 0));
 });
