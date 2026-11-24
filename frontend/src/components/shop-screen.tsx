@@ -237,10 +237,21 @@ function PlanetLookPreview({
   const surface = surfaceItem ? surfaceOfItem(surfaceItem) : null;
   const effect = effectItem ? effectOfItem(effectItem) : null;
   const names = [surfaceItem, effectItem].filter(Boolean).map((i) => `${i!.icon} ${i!.name}`);
+  // 세로로 긴 칸(왼쪽 미리보기)에서는 카메라 화각이 세로 기준이라 행성·고리가 좌우로 넘친다 → 가로 폭에 맞춰 줄인다.
+  // 3D 카메라 설정은 처음 만들 때만 적용되므로, 칸 크기를 잰 뒤에 그리고 비율이 바뀌면(0.05 단위) 다시 만든다.
+  const [zoom, setZoom] = useState<number | null>(null);
   return (
-    <View style={styles.preview} testID="shop-planet-preview">
+    <View
+      style={styles.preview}
+      testID="shop-planet-preview"
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        if (width > 0 && height > 0) setZoom(Math.round(Math.min(1, width / height) * 20) / 20);
+      }}>
       {/* 행성 꾸미기 팝업이 떠 있으면 3D 화면을 하나만 쓰도록 잠시 내린다 */}
-      {visible ? <PlanetPreview id="shop-sample" visual={SAMPLE_PLANET} radius={0.36} effect={effect} surface={surface} /> : null}
+      {visible && zoom !== null ? (
+        <PlanetPreview key={zoom} id="shop-sample" visual={SAMPLE_PLANET} radius={0.36} effect={effect} surface={surface} zoom={zoom} />
+      ) : null}
       <Text style={styles.previewTag} pointerEvents="none">
         {t('미리보기 · 샘플 행성')}
       </Text>
@@ -285,6 +296,113 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
         .filter(({ section, list }) => list.length > 0 || section.defaultCard || section.emptyText),
     [tab, items]
   );
+
+  // 상품 줄 하나(제목 + 가로로 넘겨 보는 카드). index 는 탭 안에서의 순서(testID 에 쓴다)
+  const renderSection = ({ section, list }: (typeof sections)[number], index: number) => {
+    const slot = section.defaultCard?.slot;
+    const slotInUse = slot ? list.some((i) => i.equipped && i.quantity > 0) : false;
+    return (
+      <View key={section.title} style={styles.section} testID={`shop-section-${section.title}`}>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, compact && styles.sectionTitleCompact]}>{t(section.title)}</Text>
+          <ShopSectionRule />
+        </View>
+        {list.length === 0 && !section.defaultCard ? (
+          <Text style={styles.empty}>{t(section.emptyText??'')}</Text>
+        ) : (
+          <ScrollArea horizontal hideScrollbarWhenNotScrollable contentContainerStyle={styles.row} scrollStep={cardWidth + CARD_GAP}
+            label={t('{title} 상품 목록', { title: t(section.title) })}
+            scrollbarLabel={t('{title} 가로 스크롤', { title: t(section.title) })} testID={`shop-row-${tab.id}-${index}`}>
+            {section.defaultCard ? (
+              <Card
+                testID={`shop-item-default-${slot}`}
+                width={cardWidth}
+                icon={section.defaultCard.icon}
+                name={t(section.defaultCard.name)}
+                description={t(section.defaultCard.description)}
+                priceText="무료"
+                badge={slotInUse ? undefined : '사용 중'}
+                highlighted={!slotInUse}
+                action={slotInUse ? { label: '사용', kind: 'equip', disabled: false } : { label: '사용 중', kind: 'none', disabled: true }}
+                busy={busyId === `default-${slot}`}
+                disabledAll={busyId !== null}
+                onPress={() => {
+                  const current = list.find((i) => i.equipped && i.quantity > 0);
+                  if (current) run(`default-${slot}`, () => setEquipped(current.id, false));
+                }}
+              />
+            ) : null}
+            {list.map((item) => {
+              const owned = item.quantity > 0;
+              const effect = section.preview === 'effect' ? effectOfItem(item) : null;
+              const surface = section.preview === 'surface' ? surfaceOfItem(item) : null;
+              const perPlanet = effect ?? surface;
+              // 행성 효과·표면: 남은 개수 = 산 개수 − 적용 중인 행성 수
+              const applied = effect
+                ? (appliedCount.get(`effect:${effect}`) ?? 0)
+                : surface
+                  ? (appliedCount.get(`surface:${surface}`) ?? 0)
+                  : 0;
+              const left = Math.max(item.quantity - applied, 0);
+              const previewing = section.preview ? preview[section.preview] === item.id : false;
+              return (
+                <Card
+                  key={item.id}
+                  testID={`shop-item-${item.id}`}
+                  width={cardWidth}
+                  icon={item.icon}
+                  imageSource={item.slot === 'cursor' && cursorEffect(item.effect)?.style === 'astronaut_blue'
+                    ? require('../../public/cursors/astronaut-blue-idle.png') : undefined}
+                  name={item.id === STARTER_CURSOR_ID ? t(item.name) : item.name}
+                  description={item.id === STARTER_CURSOR_ID ? t(item.description) : item.description}
+                  priceText={item.id === STARTER_CURSOR_ID ? '기본 제공' : item.kind === 'equip' && owned ? '보유 중' : String(item.price)}
+                  badge={
+                    perPlanet
+                      ? owned
+                        ? left > 0
+                          ? t('남은 {left}/{total}개',{left,total:item.quantity})
+                          : '모두 사용 중'
+                        : undefined
+                      : item.equipped
+                        ? '장착 중'
+                        : item.kind === 'consumable' && owned
+                          ? t('보유 {count}개',{count:item.quantity})
+                          : undefined
+                  }
+                  secondary={
+                    perPlanet && left > 0
+                      ? { label: '적용', onPress: () => setDecorating(effect ? { effect } : { surface: surface ?? undefined }) }
+                      : undefined
+                  }
+                  highlighted={item.equipped}
+                  previewing={previewing}
+                  onSelect={
+                    section.preview
+                      ? () => {
+                          const kind = section.preview!;
+                          setPreview((p) => ({ ...p, [kind]: p[kind] === item.id ? null : item.id }));
+                        }
+                      : undefined
+                  }
+                  action={actionFor(item, balance)}
+                  busy={busyId === item.id}
+                  disabledAll={busyId !== null}
+                  onPress={() => onItemPress(item)}
+                />
+              );
+            })}
+          </ScrollArea>
+        )}
+        {list.length === 0 && section.defaultCard && section.emptyText ? (
+          <Text style={styles.empty}>{t(section.emptyText??'')}</Text>
+        ) : null}
+      </View>
+    );
+  };
+
+  // [2026-11-24] 소모품 탭: 행성 표면·효과 줄은 [미리보기 | 표면 줄 / 효과 줄] 배치로 묶는다(좁은 화면은 위아래로)
+  const indexed = sections.map((entry, index) => ({ entry, index }));
+  const lookSections = indexed.filter(({ entry }) => entry.section.preview);
 
   const run = async (id: string, task: () => Promise<{ ok: true } | { ok: false; error: string }>) => {
     setBusyId(id);
@@ -366,121 +484,24 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
 
           <ScrollArea key={tab.id} style={[styles.body, compact && styles.bodyCompact]} contentContainerStyle={styles.bodyContent}
             label={t('상점 상품 목록')} scrollbarLabel={t('상점 세로 스크롤')} testID="shop-scroll">
-            {sections.map(({ section, list }, index) => {
-              // 미리보기는 표면·효과 줄 중 첫 줄 위에 하나만
-              const firstPreview = sections.findIndex((x) => x.section.preview && x.list.length > 0) === index;
-              const slot = section.defaultCard?.slot;
-              const slotInUse = slot ? list.some((i) => i.equipped && i.quantity > 0) : false;
-              return (
-                <View key={section.title} style={styles.section} testID={`shop-section-${section.title}`}>
-                  <View style={styles.sectionHeader}>
-                    <Text style={[styles.sectionTitle, compact && styles.sectionTitleCompact]}>{t(section.title)}</Text>
-                    <ShopSectionRule />
-                  </View>
-                  {firstPreview ? (
-                    <>
-                      <PlanetLookPreview
-                        surfaceItem={items.find((i) => i.id === preview.surface)}
-                        effectItem={items.find((i) => i.id === preview.effect)}
-                        visible={visible && decorating === null}
-                      />
-                      <Text style={styles.previewHint}>
-                        {t('표면 카드와 효과 카드를 누르면 함께 미리 볼 수 있어요. 한 번 더 누르면 빠져요. 감정으로 정해진 색과 무늬는 그대로예요.')}
-                      </Text>
-                    </>
-                  ) : null}
-                  {list.length === 0 && !section.defaultCard ? (
-                    <Text style={styles.empty}>{t(section.emptyText??'')}</Text>
-                  ) : (
-                    <ScrollArea horizontal hideScrollbarWhenNotScrollable contentContainerStyle={styles.row} scrollStep={cardWidth + CARD_GAP}
-                      label={t('{title} 상품 목록', { title: t(section.title) })}
-                      scrollbarLabel={t('{title} 가로 스크롤', { title: t(section.title) })} testID={`shop-row-${tab.id}-${index}`}>
-                      {section.defaultCard ? (
-                        <Card
-                          testID={`shop-item-default-${slot}`}
-                          width={cardWidth}
-                          icon={section.defaultCard.icon}
-                          name={t(section.defaultCard.name)}
-                          description={t(section.defaultCard.description)}
-                          priceText="무료"
-                          badge={slotInUse ? undefined : '사용 중'}
-                          highlighted={!slotInUse}
-                          action={slotInUse ? { label: '사용', kind: 'equip', disabled: false } : { label: '사용 중', kind: 'none', disabled: true }}
-                          busy={busyId === `default-${slot}`}
-                          disabledAll={busyId !== null}
-                          onPress={() => {
-                            const current = list.find((i) => i.equipped && i.quantity > 0);
-                            if (current) run(`default-${slot}`, () => setEquipped(current.id, false));
-                          }}
-                        />
-                      ) : null}
-                      {list.map((item) => {
-                        const owned = item.quantity > 0;
-                        const effect = section.preview === 'effect' ? effectOfItem(item) : null;
-                        const surface = section.preview === 'surface' ? surfaceOfItem(item) : null;
-                        const perPlanet = effect ?? surface;
-                        // 행성 효과·표면: 남은 개수 = 산 개수 − 적용 중인 행성 수
-                        const applied = effect
-                          ? (appliedCount.get(`effect:${effect}`) ?? 0)
-                          : surface
-                            ? (appliedCount.get(`surface:${surface}`) ?? 0)
-                            : 0;
-                        const left = Math.max(item.quantity - applied, 0);
-                        const previewing = section.preview ? preview[section.preview] === item.id : false;
-                        return (
-                          <Card
-                            key={item.id}
-                            testID={`shop-item-${item.id}`}
-                            width={cardWidth}
-                            icon={item.icon}
-                            imageSource={item.slot === 'cursor' && cursorEffect(item.effect)?.style === 'astronaut_blue'
-                              ? require('../../public/cursors/astronaut-blue-idle.png') : undefined}
-                            name={item.id === STARTER_CURSOR_ID ? t(item.name) : item.name}
-                            description={item.id === STARTER_CURSOR_ID ? t(item.description) : item.description}
-                            priceText={item.id === STARTER_CURSOR_ID ? '기본 제공' : item.kind === 'equip' && owned ? '보유 중' : String(item.price)}
-                            badge={
-                              perPlanet
-                                ? owned
-                                  ? left > 0
-                                    ? t('남은 {left}/{total}개',{left,total:item.quantity})
-                                    : '모두 사용 중'
-                                  : undefined
-                                : item.equipped
-                                  ? '장착 중'
-                                  : item.kind === 'consumable' && owned
-                                    ? t('보유 {count}개',{count:item.quantity})
-                                    : undefined
-                            }
-                            secondary={
-                              perPlanet && left > 0
-                                ? { label: '적용', onPress: () => setDecorating(effect ? { effect } : { surface: surface ?? undefined }) }
-                                : undefined
-                            }
-                            highlighted={item.equipped}
-                            previewing={previewing}
-                            onSelect={
-                              section.preview
-                                ? () => {
-                                    const kind = section.preview!;
-                                    setPreview((p) => ({ ...p, [kind]: p[kind] === item.id ? null : item.id }));
-                                  }
-                                : undefined
-                            }
-                            action={actionFor(item, balance)}
-                            busy={busyId === item.id}
-                            disabledAll={busyId !== null}
-                            onPress={() => onItemPress(item)}
-                          />
-                        );
-                      })}
-                    </ScrollArea>
-                  )}
-                  {list.length === 0 && section.defaultCard && section.emptyText ? (
-                    <Text style={styles.empty}>{t(section.emptyText??'')}</Text>
-                  ) : null}
+            {indexed.filter(({ entry }) => !entry.section.preview).map(({ entry, index }) => renderSection(entry, index))}
+            {lookSections.length > 0 ? (
+              <View style={[styles.look, compact && styles.lookCompact]} testID="shop-planet-look">
+                <View style={[styles.lookPreview, compact && styles.lookPreviewCompact]}>
+                  <PlanetLookPreview
+                    surfaceItem={items.find((i) => i.id === preview.surface)}
+                    effectItem={items.find((i) => i.id === preview.effect)}
+                    visible={visible && decorating === null}
+                  />
+                  <Text style={styles.previewHint}>
+                    {t('표면 카드와 효과 카드를 누르면 함께 미리 볼 수 있어요. 한 번 더 누르면 빠져요. 감정으로 정해진 색과 무늬는 그대로예요.')}
+                  </Text>
                 </View>
-              );
-            })}
+                <View style={styles.lookRows}>
+                  {lookSections.map(({ entry, index }) => renderSection(entry, index))}
+                </View>
+              </View>
+            ) : null}
 
             {resetAllowed && items.length > 0 ? (
               <TouchableOpacity
@@ -574,8 +595,14 @@ const styles = StyleSheet.create({
   topRight: { top: -1, right: -1, borderTopWidth: 3, borderRightWidth: 3 },
   bottomLeft: { bottom: -1, left: -1, borderBottomWidth: 3, borderLeftWidth: 3 },
   bottomRight: { bottom: -1, right: -1, borderBottomWidth: 3, borderRightWidth: 3 },
+  look: { flexDirection: 'row', alignItems: 'stretch', gap: 16 },
+  lookCompact: { flexDirection: 'column', gap: 0 },
+  lookPreview: { width: '36%', paddingBottom: 18 },
+  lookPreviewCompact: { width: '100%', paddingBottom: 0 },
+  lookRows: { flex: 1, minWidth: 0 },
   preview: {
-    height: 170,
+    flex: 1,
+    minHeight: 200,
     overflow: 'hidden',
     backgroundColor: '#17181D',
     borderWidth: 1,
