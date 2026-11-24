@@ -1,5 +1,0 @@
-{
-  "platforms": ["apple", "android"],
-  "apple": { "modules": ["AppFontsModule"] },
-  "android": { "modules": ["expo.modules.appfonts.AppFontsModule"] }
-}
