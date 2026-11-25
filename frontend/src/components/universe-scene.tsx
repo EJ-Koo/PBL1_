@@ -9,6 +9,7 @@
 //  - 회전 민감도: 메뉴 설정값(lib/settings.ts)을 드래그 회전에 곱함
 //  - 화면 복귀: 상세·검색에 갔다 오면 보던 각도·거리 그대로(처음 맞춘 화면 위치는 화면별로 기억)
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { groupPreviewLayout } from '@/lib/group-preview-layout';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber/native';
 import { AccessibilityInfo, Platform, View, useWindowDimensions } from 'react-native';
 import {
@@ -44,7 +45,6 @@ import {
   planetBandStrip,
   planetPalette,
   planetRadiusForText,
-  planetScaleForText,
   seededRandoms,
   type PlanetQuality,
   type PlanetVisual,
@@ -1365,8 +1365,8 @@ export function UniverseScene({
         <Starfield count={QUALITY_SETTINGS[quality].stars} sizeScale={backgroundStarScale} />
 
         <group position={[-center[0], -center[1], -center[2]]}>
-          <ConstellationLines runtimeRef={runtimeRef} />
-          <ConstellationTrails runtimeRef={runtimeRef} maxPlanets={CONSTELLATION_CONFIG.thresholds[3]} />
+          <ConstellationLines runtimeRef={runtimeRef} maxLines={sceneKey.includes(':group-') ? 120 : CONSTELLATION_CONFIG.maxLines} />
+          <ConstellationTrails runtimeRef={runtimeRef} maxPlanets={sceneKey.includes(':group-') ? 60 : CONSTELLATION_CONFIG.thresholds[3]} />
           {entries.map((entry) => (
             <Planet
               key={entry.id}
@@ -1500,18 +1500,18 @@ export function PlanetPreview({
 
 /** Static group thumbnails use the same surface colors and patterns as the universe. */
 function PlanetField({ entries }: { entries: DiaryEntry[] }) {
-  const viewport = useThree(state => state.viewport);
-  const unit = Math.min(viewport.width / 329, viewport.height / 186);
-  return <>
-    {entries.map(entry => <Planet key={entry.id} id={entry.id}
-      position={[
-        Math.max(-1, Math.min(1, entry.position[0] / 12)) * viewport.width * 0.4,
-        Math.max(-1, Math.min(1, entry.position[1] / 12)) * viewport.height * 0.4,
-        0,
-      ]}
-      radius={10 * planetScaleForText(entry.text) * unit} visual={entry.planet} brightness={entry.brightness}
-      quality="low" shared={PREVIEW_UNIFORMS} />)}
-  </>;
+  const size = useThree(state => state.size);
+  const camera = useThree(state => state.camera);
+  const invalidate = useThree(state => state.invalidate);
+  const radii = useMemo(() => capRadiiByNeighbors(entries.map(e=>e.position),entries.map(e=>planetRadiusForText(e.text))),[entries]);
+  const framing = useMemo(() => groupPreviewLayout(entries.map((e,i)=>({position:e.position,radius:radii[i],ring:e.planet.ring.visible})),size.width/Math.max(1,size.height)),[entries,radii,size.width,size.height]);
+  useEffect(() => {
+    camera.position.set(0,0,framing.distance);camera.lookAt(0,0,0);camera.updateProjectionMatrix();invalidate();
+  },[camera,framing,invalidate]);
+  return <group position={[-framing.center[0],-framing.center[1],-framing.center[2]]}>
+    {entries.map((entry,i) => <Planet key={entry.id} id={entry.id} position={entry.position}
+      radius={radii[i]} visual={entry.planet} brightness={entry.brightness} quality="low" special={effectToDraw(entry.effect)} surface={surfaceToDraw(entry.surface)} effectTier={0} surfaceTier={0} shared={PREVIEW_UNIFORMS} />)}
+  </group>;
 }
 
 export function PlanetFieldPreview({ entries }: { entries: DiaryEntry[] }) {

@@ -3,6 +3,7 @@ import { DiaryUniverse } from '@/components/diary-universe';
 import { JoinGroupDialog } from '@/components/ui/join-group-dialog';
 import { NEW_STAR_HIGHLIGHT_MS, type NewStarHighlight } from '@/lib/new-star-highlight';
 import { authSession } from '@/lib/auth-session';
+import { useGroupPreviews } from '@/hooks/use-group-previews';
 import { useGroupUniverse } from '@/hooks/use-group-universe';
 import { useQuest } from '@/store/quest-context';
 import { QuestRewardAnimation } from '@/components/quest-reward-animation';
@@ -18,7 +19,7 @@ import { Text } from '@/components/app-text';
 //    별자리는 화면 표시만 바꾼다(행성 원래 좌표·DB는 그대로). 규칙: lib/constellation.ts
 //  - [ADDED 2026-11-15] Level 4 나만의 별자리: 같은 주제 일기 30개 이상이면 동의 후 서버(LLM)가 만든다.
 //    만든 결과는 서버에 저장되고, 볼 때는 저장된 좌표만 불러와 기존 별자리 애니메이션으로 그린다.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { AppState, Modal, Platform, StyleSheet, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
@@ -56,6 +57,8 @@ import {
   apiListPersonalConstellations,
   type ApiPersonalConstellation,
 } from '@/lib/api';
+import { reduceHomeOverlay } from '@/lib/home-overlay';
+import { homeTabFromParams, homeTabHref } from '@/lib/home-route';
 import { localDateKey } from '@/lib/journal';
 import type { DiaryTopic } from '@/lib/special-planet';
 import { getRotateSensitivity, loadSettings, setRotateSensitivity } from '@/lib/settings';
@@ -80,11 +83,15 @@ export default function HomeScreen() {
   const { tab: routeTab, groupId: routeGroupId, diaryId: routeDiaryId, chat: routeChat, groupListEntry } = useLocalSearchParams<{
     tab?: string; groupId?: string; diaryId?: string; chat?: string; groupListEntry?: string;
   }>();
-  const [screen, setScreen] = useState<Screen>(routeTab === 'group' || routeGroupId ? 'group' : 'home');
+  const [screen, setScreen] = useState<Screen>(homeTabFromParams({tab:routeTab,groupId:routeGroupId}));
+  const groupPreviews = useGroupPreviews(groups, screen === 'group' && isLoggedIn);
   const [newStar, setNewStar] = useState<NewStarHighlight | null>(null);
-  const [questVisible, setQuestVisible] = useState(false);
+  const [homeOverlay, dispatchHomeOverlay] = useReducer(reduceHomeOverlay, null);
+  const questVisible = homeOverlay?.kind === 'quest';
+  const setQuestVisible = (visible:boolean) => dispatchHomeOverlay(visible?{type:'open',panel:'quest'}:{type:'close',panel:'quest'});
   // [MODIFIED 2026-11-10] 상점은 별도 화면이 아니라 아래에서 올라오는 팝업
-  const [shopVisible, setShopVisible] = useState(false);
+  const shopVisible = homeOverlay?.kind === 'shop';
+  const setShopVisible = (visible:boolean) => dispatchHomeOverlay(visible?{type:'open',panel:'shop'}:{type:'close',panel:'shop'});
   // [ADDED 2026-11-12] 검색 팝업: null=닫힘, keyword=키워드 검색, calendar=달력으로 열기.
   // 열 때마다 key 를 바꿔 새로 시작하고, 행성 상세에 갔다 와도 닫지 않아 검색어·결과가 남는다.
   const [searchPopup, setSearchPopup] = useState<{ mode: 'keyword' | 'calendar'; key: number } | null>(null);
@@ -301,8 +308,11 @@ export default function HomeScreen() {
       setScreen('group');
       if (Platform.OS !== 'web') setActiveGroupId(groupId);
       if (routeDiaryId) setSharedDiaryId(routeDiaryId);
+    } else if (Platform.OS === 'web') {
+      setScreen(homeTabFromParams({tab:routeTab}));
+      setSharedDiaryId(null);
     }
-  }, [routeGroupId,routeDiaryId]));
+  }, [routeGroupId,routeDiaryId,routeTab]));
 
   useEffect(() => {
     if (!newStar) return;
@@ -315,6 +325,17 @@ export default function HomeScreen() {
   const checkCount = new Set(entries.map((e) => localDateKey(new Date(e.createdAt)))).size;
   const groupEntries = (diaryIds: string[]) => entries.filter((e) => diaryIds.includes(e.id));
   const activeGroup = groups.find((g) => g.id === activeGroupId) ?? null;
+
+  const navigateTab = (next: Screen) => {
+    setScreen(next);
+    dispatchHomeOverlay({type:'reset'});
+    setSharedDiaryId(null);
+    setActiveGroupId(null);
+    setQuestVisible(false);
+    setShopVisible(false);
+    setSearchPopup(null);
+    if (Platform.OS === 'web') router.replace(homeTabHref(next));
+  };
 
   const handleLogout = () => {
     setNewStar(null);
@@ -392,6 +413,7 @@ export default function HomeScreen() {
           <CometLayer effects={activeEffects} />
           <DiaryUniverse
             sceneKey={`${authSession.getRevision()}:home`}
+            selection={{id:homeOverlay?.kind==='diary'?homeOverlay.id:null,onChange:id=>dispatchHomeOverlay({type:'select-diary',id})}}
             entries={entries}
             newStar={newStar ?? undefined}
             onNewStarFound={() => setNewStar(null)}
@@ -411,6 +433,8 @@ export default function HomeScreen() {
           {/* HUD는 fffju 반응형(전체 뷰포트). 520 프레임으로 감싸지 않는다. */}
           <HomeHud
             scale={rScale}
+            menuVisible={homeOverlay?.kind==='menu'} onToggleMenu={()=>dispatchHomeOverlay({type:'toggle-menu'})}
+            onCloseMenu={()=>dispatchHomeOverlay({type:'close',panel:'menu'})}
             starCount={entries.length}
             coinCount={coins ?? 0}
             checkCount={checkCount}
@@ -473,7 +497,7 @@ export default function HomeScreen() {
 
       {/* ===== 왼쪽: 일기 작성 — 다른 탭에 갔다 와도 쓰던 내용이 남도록 화면을 숨기기만 한다 ===== */}
       <View style={[styles.fill, screen !== 'diary' && styles.hidden]}>
-        <DiaryComposer onBack={() => setScreen('home')} onSaved={id => { if (id) setNewStar({ id, startedAt: Date.now() }); setScreen('home'); }} />
+        <DiaryComposer onBack={() => navigateTab('home')} onSaved={id => { if (id) setNewStar({ id, startedAt: Date.now() }); navigateTab('home'); }} />
       </View>
 
       {/* ===== 오른쪽: 그룹 우주 (반응형 그리드 — 전체 뷰포트, useResponsiveLayout 사용) ===== */}
@@ -485,7 +509,7 @@ export default function HomeScreen() {
               id: g.id,
               name: g.name,
               members: getMemberStars(g, entries, today),
-              stars: groupEntries(g.diary_ids),
+              stars: groupPreviews[g.id] ?? groupEntries(g.diary_ids),
             }))}
             onSelectGroup={(g) => {
               setSharedDiaryId(null);
@@ -520,7 +544,7 @@ export default function HomeScreen() {
       {/* ===== 퀘스트 (서버 진행률·보상 기록) ===== */}
       <Modal transparent visible={questVisible} animationType="fade" onRequestClose={() => setQuestVisible(false)}>
         <QuestPanel scale={rScale}
-          onWriteDiary={() => { setQuestVisible(false); setScreen('diary'); }}
+          onWriteDiary={() => navigateTab('diary')}
           onClose={() => setQuestVisible(false)} />
       </Modal>
 
@@ -528,15 +552,9 @@ export default function HomeScreen() {
       {rewardEvent && <QuestRewardAnimation key={rewardEvent.id} event={rewardEvent} onDone={clearReward} />}
       <UniverseBottomNav
         activeScreen={screen}
-        onDiary={() => setScreen('diary')}
-        onHome={() => setScreen('home')}
-        onGroup={() => {
-          if (Platform.OS === 'web' && screen !== 'group' && routeTab !== 'group') {
-            router.push({ pathname: '/', params: { tab: 'group' } });
-          } else {
-            setScreen('group');
-          }
-        }}
+        onDiary={() => navigateTab('diary')}
+        onHome={() => navigateTab('home')}
+        onGroup={() => navigateTab('group')}
       />
 
       {/* ===== 새 그룹 만들기 팝업 (✕ · 바깥 · 취소로 닫힘) ===== */}
