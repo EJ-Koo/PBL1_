@@ -178,7 +178,8 @@ class StardustCursorTrail extends HTMLElement {
     const cacheKey = (id) => id ? this.dataset.cachePrefix + id : null;
     const update = () => {
       if (effect && eligible.matches && !document.hidden) {
-        stopTrail ??= effect.style === 'astronaut_blue' ? startAstronautCursor() : startTrail(effect);
+        stopTrail ??= effect.style === 'astronaut_blue' || effect.style === 'astronaut_pink'
+          ? startAstronautCursor(effect.style === 'astronaut_pink' ? 'pink' : 'blue') : startTrail(effect);
       } else {
         stopTrail?.();
         stopTrail = undefined;
@@ -188,7 +189,7 @@ class StardustCursorTrail extends HTMLElement {
     const apply = (next) => {
       // Cache entries only describe appearance. The shop API verifies ownership and equipment.
       if (next === undefined) next = starter;
-      if (next?.type !== 'cursor' || !['stardust', 'dots', 'diamond', 'astronaut_blue'].includes(next.style)
+      if (next?.type !== 'cursor' || !['stardust', 'dots', 'diamond', 'astronaut_blue', 'astronaut_pink'].includes(next.style)
           || !/^#[\da-f]{6}$/i.test(next.color)) next = null;
       if (next?.color !== effect?.color || next?.style !== effect?.style) {
         stopTrail?.();

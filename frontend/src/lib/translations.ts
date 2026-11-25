@@ -99,6 +99,7 @@ export const ENGLISH: Readonly<Record<string, string>> = {
   "다시 불러오기": "Reload",
   "그룹으로 돌아가기": "Back to groups",
   "그룹 퀘스트": "Group quest",
+  "모두 읽음": "Mark all read",
   "전체 읽음 표시": "Mark all read",
   "일부 새 별 표시를 지우지 못했어요. 다시 눌러주세요.": "Could not clear some new star highlights. Please try again.",
   "그룹 멤버 목록": "Group members",

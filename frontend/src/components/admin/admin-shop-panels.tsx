@@ -212,7 +212,7 @@ function ItemEditor({ initial, isNew, onSave, onCancel }: {
               kind={f.cursorStyle === style ? 'primary' : 'ghost'}
               onPress={() => setF(prev => ({ ...prev, cursorStyle: style }))} />)}
         </View>
-        {f.cursorStyle !== 'astronaut_blue' && <Field label="빛 색상 (#RRGGBB)" value={f.cursorColor} onChange={set('cursorColor')} testID="cursor-color" />}
+        {!['astronaut_blue', 'astronaut_pink', 'ufo_mint'].includes(f.cursorStyle) && <Field label="빛 색상 (#RRGGBB)" value={f.cursorColor} onChange={set('cursorColor')} testID="cursor-color" />}
       </> : <Field label='효과 JSON (예: {"type":"background","tint":"#0B2A6B","opacity":0.45})' value={f.effect} onChange={set('effect')} multiline />}
       <View style={styles.switchRow}>
         <Text style={styles.fieldLabel}>상점에서 판매</Text>

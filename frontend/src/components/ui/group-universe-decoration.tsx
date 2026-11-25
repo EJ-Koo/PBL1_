@@ -31,6 +31,28 @@ export function GroupUniverseIcon({ kind, size = 40 }: { kind: 'back' | 'members
   </Svg>;
 }
 
+export function GroupReadAllIcon({ size = 24 }: { size?: number }) {
+  return <Svg width={size} height={size} viewBox="0 0 24 24" pointerEvents="none" aria-hidden>
+    <Path d="M2 12l4 4L16 6 M12 16L22 6" fill="none" stroke="#ddd" strokeWidth={1.5}
+      strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>;
+}
+
+export function GroupQuestIcon({ size = 24 }: { size?: number }) {
+  return <Svg width={size} height={size} viewBox="0 0 24 24" pointerEvents="none" aria-hidden>
+    <Path d="M5 2.5h14v19H5Z M9 7h6 M9 11h6 M9 15h4" fill="none" stroke="#ddd"
+      strokeWidth={1.4} strokeLinecap="square" />
+  </Svg>;
+}
+
+export function GroupQuestEdgeFrame({ width, height, scale }: { width: number; height: number; scale: number }) {
+  const cut = 12 * scale;
+  return <Svg width={width} height={height} pointerEvents="none" aria-hidden>
+    <Path d={`M${width} ${scale / 2}H${cut}L${scale / 2} ${cut}V${height - cut}L${cut} ${height - scale / 2}H${width}`}
+      fill="#202024" stroke="#ddd" strokeWidth={scale} />
+  </Svg>;
+}
+
 export function GroupPanelFrame() {
   return <Svg width="100%" height="100%" viewBox="0 0 236 488" preserveAspectRatio="none" pointerEvents="none">
     <Path d="M15 1H88L94 5H154L160 1H220L235 17V471L220 487H154L148 483H86L80 487H14L1 472V17Z"

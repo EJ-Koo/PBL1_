@@ -5,9 +5,11 @@ const GAP = 12;
 const EDGE = 8;
 const REST_DELAY = 180;
 
-export function startAstronautCursor() {
+export function startAstronautCursor(theme = 'blue') {
+  const variant = theme === 'pink' ? 'pink' : 'blue';
   const element = document.createElement('div');
   element.dataset.astronautCursor = '';
+  element.dataset.astronautTheme = variant;
   element.dataset.pose = 'idle';
   element.setAttribute('aria-hidden', 'true');
   Object.assign(element.style, {
@@ -22,13 +24,15 @@ export function startAstronautCursor() {
   Object.assign(floating.style, {
     width: '100%', height: '100%', position: 'relative', pointerEvents: 'none',
     animation: 'star2day-astronaut-float 2.8s ease-in-out infinite',
-    filter: 'drop-shadow(0 2px 5px rgba(72,223,255,0.2))',
+    filter: variant === 'pink'
+      ? 'drop-shadow(0 2px 5px rgba(255,133,193,0.2))'
+      : 'drop-shadow(0 2px 5px rgba(72,223,255,0.2))',
   });
   element.appendChild(floating);
   const images = {};
   for (const pose of ['idle', 'swim']) {
     const image = document.createElement('img');
-    image.src = `/cursors/astronaut-blue-${pose}.png`;
+    image.src = `/cursors/astronaut-${variant}-${pose}.png`;
     image.alt = '';
     image.draggable = false;
     image.dataset.astronautPose = pose;

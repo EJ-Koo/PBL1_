@@ -14,7 +14,7 @@ import { Text } from '@/components/app-text';
 //      [구매]로 개수를 늘리고, 남은 개수가 있으면 [적용]으로 원하는 일기 행성에 적용(해제·변경하면 1개가 돌아온다)
 //  - [ADDED 2026-11-21] slot=planet_surface → 소모품 탭 '행성 표면' 줄 (오팔 유리·솜사탕 구름·진주 실크·크리스탈 프리즘·오로라 리본)
 //      행성 효과와 같은 규칙(소모품, 1개 = 행성 1개). 행성 하나에 표면 하나 + 효과 하나를 따로 고른다.
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, TouchableOpacity, useWindowDimensions, View, type ImageSourcePropType } from 'react-native';
 
 import { ShopFrame, ShopSectionRule } from '@/components/ui/shop-frame';
@@ -29,6 +29,7 @@ import { PLANET_EFFECT_SLOT, SAMPLE_PLANET, effectOfItem, type SpecialType } fro
 import { PLANET_SURFACE_SLOT, surfaceOfItem, type SurfaceStyle } from '@/lib/surface-style';
 import { useDiary } from '@/store/diary-context';
 import { useShop } from '@/store/shop-context';
+import { UfoSprite } from '@/components/ufo-sprite';
 
 const KNOWN_SLOTS = ['effect', 'background', 'music', 'cursor', PLANET_EFFECT_SLOT, PLANET_SURFACE_SLOT];
 
@@ -123,6 +124,7 @@ function actionFor(item: ShopItem, coins: number): Action {
 function Card({
   icon,
   imageSource,
+  artwork,
   name,
   description,
   priceText,
@@ -140,6 +142,7 @@ function Card({
 }: {
   icon: string;
   imageSource?: ImageSourcePropType;
+  artwork?: ReactNode;
   name: string;
   description: string;
   priceText: string;
@@ -172,8 +175,8 @@ function Card({
       </View>
       {badge && !highlighted ? <Text style={styles.badge}>{t(badge)}</Text> : null}
       <View style={styles.artwork}>
-        {imageSource ? <Image source={imageSource} style={styles.cursorImage} resizeMode="contain" accessibilityLabel={name} />
-          : <Text style={styles.icon}>{icon}</Text>}
+        {artwork ?? (imageSource ? <Image source={imageSource} style={styles.cursorImage} resizeMode="contain" accessibilityLabel={name} />
+          : <Text style={styles.icon}>{icon}</Text>)}
       </View>
       <Text style={styles.name}>
         {name}
@@ -345,14 +348,18 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
                   : 0;
               const left = Math.max(item.quantity - applied, 0);
               const previewing = section.preview ? preview[section.preview] === item.id : false;
+              const cursor = item.slot === 'cursor' ? cursorEffect(item.effect) : null;
               return (
                 <Card
                   key={item.id}
                   testID={`shop-item-${item.id}`}
                   width={cardWidth}
                   icon={item.icon}
-                  imageSource={item.slot === 'cursor' && cursorEffect(item.effect)?.style === 'astronaut_blue'
-                    ? require('../../public/cursors/astronaut-blue-idle.png') : undefined}
+                  imageSource={cursor?.style === 'astronaut_blue'
+                    ? require('../../public/cursors/astronaut-blue-idle.png')
+                    : cursor?.style === 'astronaut_pink'
+                      ? require('../../public/cursors/astronaut-pink-idle.png') : undefined}
+                  artwork={cursor?.style === 'ufo_mint' ? <UfoSprite pose="idle" size={56} /> : undefined}
                   name={item.id === STARTER_CURSOR_ID ? t(item.name) : item.name}
                   description={item.id === STARTER_CURSOR_ID ? t(item.description) : item.description}
                   priceText={item.id === STARTER_CURSOR_ID ? '기본 제공' : item.kind === 'equip' && owned ? '보유 중' : String(item.price)}
