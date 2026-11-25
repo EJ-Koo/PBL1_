@@ -66,7 +66,7 @@ export function DiaryHistory() {
     disabled={item.locked} accessibilityState={{ disabled: item.locked }}
     onPress={() => router.push({ pathname: '/archive', params: { period: item.id, year: String(selectedYear) } })}
     style={({ pressed }) => [styles.card, wide ? { height: wideCardHeight } : { flex: 1, minHeight: minCardHeight, maxHeight: Math.max(145, minCardHeight) }, { opacity: pressed ? 0.75 : 1 }]}>
-    <ArchiveCardArt index={item.quarter - 1} locked={item.locked} />
+    <ArchiveCardArt year={item.year} index={item.quarter - 1} locked={item.locked} />
     <View style={[styles.cardCopy, item.locked && styles.lockedCopy]}>
       <Text style={[styles.year, { fontSize: (compact ? 10 : 12) * cardScale }]}>{item.year}</Text>
       <Text numberOfLines={1} style={[styles.period, { fontSize: (compact ? 17 : 21) * cardScale }]}>{ARCHIVE_QUARTERS[item.quarter - 1].label}</Text>

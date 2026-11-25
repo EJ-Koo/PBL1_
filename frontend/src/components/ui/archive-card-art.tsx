@@ -7,9 +7,28 @@ const backgrounds = [
   require('../../../assets/images/archive/quarter-2.png'),
   require('../../../assets/images/archive/quarter-3.png'),
   require('../../../assets/images/archive/quarter-4.png'),
+  require('../../../assets/images/archive/alternate-1.png'),
+  require('../../../assets/images/archive/alternate-2.png'),
+  require('../../../assets/images/archive/alternate-3.png'),
+  require('../../../assets/images/archive/alternate-4.png'),
 ];
 
-export function ArchiveCardArt({ index, locked }: { index: number; locked: boolean }) {
+function backgroundFor(year: number, index: number) {
+  // Combination zero is the approved 2026 set. Other years select four distinct
+  // images in a stable order from the shared pool.
+  const available = [...backgrounds];
+  const combinationCount = 8 * 7 * 6 * 5;
+  // A coprime stride spreads neighboring years across the available orders.
+  const yearOffset = (year - 2026) * 463;
+  let combination = ((yearOffset % combinationCount) + combinationCount) % combinationCount;
+  for (let quarter = 0; quarter < index; quarter++) {
+    available.splice(combination % available.length, 1);
+    combination = Math.floor(combination / (available.length + 1));
+  }
+  return available[combination % available.length];
+}
+
+export function ArchiveCardArt({ year, index, locked }: { year: number; index: number; locked: boolean }) {
   const id = 'archive-' + useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const [{ width: w, height: h }, setSize] = useState({ width: 400, height: 120 });
   const scale = Math.min(1.3, w / 400);
@@ -27,7 +46,7 @@ export function ArchiveCardArt({ index, locked }: { index: number; locked: boole
       </Defs>
       <G clipPath={`url(#${id}c)`}>
         <Rect width={w} height={h} fill="#08090f" />
-        <SvgImage href={backgrounds[index % backgrounds.length]} width={w} height={h} preserveAspectRatio="xMidYMid slice" />
+        <SvgImage href={backgroundFor(year, index)} width={w} height={h} preserveAspectRatio="xMidYMid slice" />
         <Rect width={w} height={h} fill={`url(#${id}s)`} />
         <Path d={`M${w * 0.61} ${h - 1}L${w * 0.7} ${h - 35 * scale}H${w - 1}V${h - 1}Z`}
           fill="#10121d" fillOpacity="0.55" stroke="#9397a3" strokeWidth={0.7 * scale} />
