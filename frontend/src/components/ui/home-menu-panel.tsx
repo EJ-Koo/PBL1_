@@ -5,6 +5,8 @@ import { ScrollView } from '@/components/app-scroll-view';
 import { Text } from '@/components/app-text';
 import { DesignFonts, DesignPaint } from '@/constants/ui-design';
 import { useFontScale } from '@/hooks/use-font-scale';
+import { useNativeBack } from '@/hooks/use-native-back';
+import { useAppLayout } from '@/hooks/use-app-layout';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useLanguage } from '@/lib/language';
 import { FONT_SCALE_MIN, FONT_SCALE_MAX, setFontScale, ROTATE_SENSITIVITY_MAX, ROTATE_SENSITIVITY_MIN } from '@/lib/settings';
@@ -41,7 +43,10 @@ function MenuAccordion({ scale, title, expanded, onToggle, children }: {
   </View>;
 }
 
-export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, sensitivity, onSensitivity }: Props) {
+export function HomeMenuPanel({ scale: webScale, onClose, onSearch, onCalendar, onLogout, sensitivity, onSensitivity }: Props) {
+  useNativeBack(onClose);
+  const app = useAppLayout();
+  const scale = app.native ? app.menuScale * 0.86 : webScale;
   const { t, language, setLanguage } = useLanguage();
   const fontScale = useFontScale();
   const [expanded, setExpanded] = useState<Partial<Record<AccordionId, boolean>>>({});
@@ -49,12 +54,12 @@ export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, 
   const { height, chromeLeft, chromeWidth, headerTop, bottomSpace, hudHeight } = useResponsiveLayout();
   const top = headerTop + hudHeight + 4 * scale;
   const panelWidth = Math.min(352 * scale * Math.max(1, fontScale), chromeWidth - 30 * scale);
-  const visibleHeight = Math.min(688 * scale, Math.max(0, height - top - bottomSpace - 14 * scale));
+  const visibleHeight = Math.min(app.native ? app.menuHeight : 688 * scale, Math.max(0, height - top - bottomSpace - 14 * scale));
   const type = (fontSize = 19, lineHeight = 28) => ({ fontSize: fontSize * scale, lineHeight: lineHeight * scale });
   const toggle = (id: AccordionId) => setExpanded(value => ({ ...value, [id]: !value[id] }));
   const heading = (text: string) => <Text accessibilityRole="header" style={[styles.label, styles.heading, { marginLeft: 16 * scale }, type(26, 36)]}>{t(text)}</Text>;
   const divider = <View style={{ height: 1.5 * scale, marginTop: 8 * scale, marginBottom: 20 * scale, backgroundColor: DesignPaint.menuText }} />;
-  const volumeRow = (label: string, value: number) => <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44 * scale, marginLeft: 16 * scale, gap: 10 * scale }}>
+  const volumeRow = (label: string, value: number) => <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: Math.max(44, 44 * scale), marginLeft: 16 * scale, gap: 10 * scale }}>
     <Text style={[styles.label, { width: 72 * scale * Math.max(1, fontScale) }, type()]}>{t(label)}</Text>
     <MenuSlider scale={scale} label={t(label)} value={value} disabled onPreview={() => {}} onChange={() => {}} />
     <Text style={[styles.label, { width: 46 * scale * Math.max(1, fontScale), textAlign: 'right' }, type(17, 26)]}>{value}%</Text>

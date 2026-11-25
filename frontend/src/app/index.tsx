@@ -18,7 +18,7 @@ import { Text } from '@/components/app-text';
 //    별자리는 화면 표시만 바꾼다(행성 원래 좌표·DB는 그대로). 규칙: lib/constellation.ts
 //  - [ADDED 2026-11-15] Level 4 나만의 별자리: 같은 주제 일기 30개 이상이면 동의 후 서버(LLM)가 만든다.
 //    만든 결과는 서버에 저장되고, 볼 때는 저장된 좌표만 불러와 기존 별자리 애니메이션으로 그린다.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { AppState, Modal, Platform, StyleSheet, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
@@ -56,6 +56,7 @@ import {
   apiListPersonalConstellations,
   type ApiPersonalConstellation,
 } from '@/lib/api';
+import { reduceHomeOverlay } from '@/lib/home-overlay';
 import { localDateKey } from '@/lib/journal';
 import type { DiaryTopic } from '@/lib/special-planet';
 import { getRotateSensitivity, loadSettings, setRotateSensitivity } from '@/lib/settings';
@@ -82,9 +83,12 @@ export default function HomeScreen() {
   }>();
   const [screen, setScreen] = useState<Screen>(routeTab === 'group' || routeGroupId ? 'group' : 'home');
   const [newStar, setNewStar] = useState<NewStarHighlight | null>(null);
-  const [questVisible, setQuestVisible] = useState(false);
+  const [homeOverlay, dispatchHomeOverlay] = useReducer(reduceHomeOverlay, null);
+  const questVisible = homeOverlay?.kind === 'quest';
+  const setQuestVisible = (visible: boolean) => dispatchHomeOverlay(visible ? { type: 'open', panel: 'quest' } : { type: 'close', panel: 'quest' });
   // [MODIFIED 2026-11-10] 상점은 별도 화면이 아니라 아래에서 올라오는 팝업
-  const [shopVisible, setShopVisible] = useState(false);
+  const shopVisible = homeOverlay?.kind === 'shop';
+  const setShopVisible = (visible: boolean) => dispatchHomeOverlay(visible ? { type: 'open', panel: 'shop' } : { type: 'close', panel: 'shop' });
   // [ADDED 2026-11-12] 검색 팝업: null=닫힘, keyword=키워드 검색, calendar=달력으로 열기.
   // 열 때마다 key 를 바꿔 새로 시작하고, 행성 상세에 갔다 와도 닫지 않아 검색어·결과가 남는다.
   const [searchPopup, setSearchPopup] = useState<{ mode: 'keyword' | 'calendar'; key: number } | null>(null);
@@ -392,6 +396,8 @@ export default function HomeScreen() {
           <CometLayer effects={activeEffects} />
           <DiaryUniverse
             sceneKey={`${authSession.getRevision()}:home`}
+            selection={{ id: homeOverlay?.kind === 'diary' ? homeOverlay.id : null,
+              onChange: id => dispatchHomeOverlay({ type: 'select-diary', id }) }}
             entries={entries}
             newStar={newStar ?? undefined}
             onNewStarFound={() => setNewStar(null)}
@@ -411,6 +417,9 @@ export default function HomeScreen() {
           {/* HUD는 fffju 반응형(전체 뷰포트). 520 프레임으로 감싸지 않는다. */}
           <HomeHud
             scale={rScale}
+            menuVisible={homeOverlay?.kind === 'menu'}
+            onToggleMenu={() => dispatchHomeOverlay({ type: 'toggle-menu' })}
+            onCloseMenu={() => dispatchHomeOverlay({ type: 'close', panel: 'menu' })}
             starCount={entries.length}
             coinCount={coins ?? 0}
             checkCount={checkCount}
@@ -528,9 +537,10 @@ export default function HomeScreen() {
       {rewardEvent && <QuestRewardAnimation key={rewardEvent.id} event={rewardEvent} onDone={clearReward} />}
       <UniverseBottomNav
         activeScreen={screen}
-        onDiary={() => setScreen('diary')}
-        onHome={() => setScreen('home')}
+        onDiary={() => { dispatchHomeOverlay({ type: 'reset' }); setScreen('diary'); }}
+        onHome={() => { dispatchHomeOverlay({ type: 'reset' }); setScreen('home'); }}
         onGroup={() => {
+          dispatchHomeOverlay({ type: 'reset' });
           if (Platform.OS === 'web' && screen !== 'group' && routeTab !== 'group') {
             router.push({ pathname: '/', params: { tab: 'group' } });
           } else {

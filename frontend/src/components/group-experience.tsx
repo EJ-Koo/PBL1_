@@ -5,6 +5,7 @@ import { ScrollView } from '@/components/app-scroll-view';
 import { Text } from '@/components/app-text';
 import { DiaryUniverse } from '@/components/diary-universe';
 import { GroupChatDock } from '@/components/group-chat-dock';
+import { useAppLayout } from '@/hooks/use-app-layout';
 import { GroupQuestDrawer } from '@/components/group-quest-drawer';
 import { Avatar } from '@/components/ui/group-profile-control';
 import { GroupPanelFrame, GroupReadAllIcon, GroupUniverseHeaderFrame, GroupUniverseIcon } from '@/components/ui/group-universe-decoration';
@@ -151,6 +152,7 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   };
   const members = data?.members ?? group.members.map(item => ({ user_id: item.user_id, nickname: item.nickname ?? t('멤버'), bio: '', avatar_url: null }));
   const fontScale = useFontScale();
+  const app = useAppLayout();
   const titleFontSize = Math.max(14, 18 * s);
   const titleWidth = Math.min(layout.chromeWidth - 32 * s, 260 * s);
   const titleHeight = Math.max(24, 28 * s) * fontScale;
@@ -159,11 +161,11 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   const clearButtonLabel = t('모두 읽음');
   const panelTop = controlsTop + Math.max(44, 40 * s) + 4 * s;
   const panelWidth = Math.min(236 * s, layout.chromeWidth - 24 * s);
-  const chatWidth = Math.min(460, layout.chromeWidth - 68 * s);
+  const chatWidth = Math.min(460, (app.native ? app.contentWidth : layout.chromeWidth - 68 * s));
   const chatLeft = layout.chromeLeft + (layout.chromeWidth - chatWidth) / 2;
-  const chatBottom = layout.navBottom + 24 * s;
+  const chatBottom = layout.navBottom + (app.native ? 12 : 24 * s);
   const chatHistoryHeight = Math.max(72, Math.min(176 * s, height * 0.24));
-  const panelHeight = Math.max(120, Math.min(488 * s, height - panelTop - chatBottom - 72 * s));
+  const panelHeight = Math.max(120, Math.min(app.native ? app.questHeight : 488 * s, height - panelTop - chatBottom - 72 * s));
   const questPanelWidth = Math.min(312 * s, layout.chromeWidth - 68 * s);
 
   return <View style={styles.screen} testID="group-experience">

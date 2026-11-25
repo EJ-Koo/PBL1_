@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber/native';
 import { AccessibilityInfo, Platform, View, useWindowDimensions } from 'react-native';
+import { advanceNativeGesture, type TouchFrame, type TouchPoint } from '@/lib/native-universe-gesture';
 import {
   AddEquation,
   BackSide,
@@ -808,7 +809,21 @@ function pointerDistance(points: Map<number, { x: number; y: number }>) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
-function DragPlane({ controls, onBackgroundPress }: { controls: RefObject<UniverseControls>; onBackgroundPress?: () => void }) {
+function DragPlane({ controls, onBackgroundPress, suppressTapRef }: { controls: RefObject<UniverseControls>; onBackgroundPress?: () => void; suppressTapRef: RefObject<number> }) {
+  const nativeFrameRef = useRef<TouchFrame>({ points: [], travel: 0 });
+  const nativeTouch = (e: ThreeEvent<PointerEvent>, phase: 'start' | 'move' | 'end') => {
+    if (Platform.OS === 'web') return false;
+    const points = (e.nativeEvent as unknown as { touches?: TouchPoint[] }).touches ?? [];
+    if (phase === 'start' && nativeFrameRef.current.points.length === 0) nativeFrameRef.current.travel = 0;
+    const step = advanceNativeGesture(nativeFrameRef.current, points);
+    nativeFrameRef.current = step.frame;
+    if (step.suppressTap) suppressTapRef.current = Date.now() + 250;
+    if (phase === 'move') {
+      rotateView(controls.current, step.dx, step.dy, getRotateSensitivity());
+      zoomView(controls.current, Math.pow(step.zoom, getRotateSensitivity()));
+    }
+    return true;
+  };
   const dragging = useRef(false);
   const lastPoint = useRef({ x: 0, y: 0 });
   // 동시에 눌려 있는 포인터(손가락/마우스)를 id별로 추적 — 2개가 되면 핀치 줌으로 전환
@@ -818,8 +833,9 @@ function DragPlane({ controls, onBackgroundPress }: { controls: RefObject<Univer
   return (
     <mesh
       position={[0, 0, -20]}
-      onClick={event => { if (event.delta <= 4) onBackgroundPress?.(); }}
+      onClick={event => { if (event.delta <= 4 && Date.now() >= suppressTapRef.current) onBackgroundPress?.(); }}
       onPointerDown={(e: ThreeEvent<PointerEvent>) => {
+        if (nativeTouch(e, 'start')) return;
         activePointers.current.set(e.pointerId, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY });
         if (activePointers.current.size >= 2) {
           dragging.current = false;
@@ -830,6 +846,7 @@ function DragPlane({ controls, onBackgroundPress }: { controls: RefObject<Univer
         }
       }}
       onPointerMove={(e: ThreeEvent<PointerEvent>) => {
+        if (nativeTouch(e, 'move')) return;
         if (!activePointers.current.has(e.pointerId)) return;
         activePointers.current.set(e.pointerId, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY });
 
@@ -849,6 +866,7 @@ function DragPlane({ controls, onBackgroundPress }: { controls: RefObject<Univer
         lastPoint.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
       }}
       onPointerUp={(e: ThreeEvent<PointerEvent>) => {
+        if (nativeTouch(e, 'end')) return;
         activePointers.current.delete(e.pointerId);
         lastPinchDist.current = null;
         if (activePointers.current.size === 1) {
@@ -859,7 +877,9 @@ function DragPlane({ controls, onBackgroundPress }: { controls: RefObject<Univer
           dragging.current = false;
         }
       }}
+      onPointerCancel={() => { nativeFrameRef.current = { points: [], travel: 0 }; suppressTapRef.current = Date.now() + 250; }}
       onPointerOut={(e: ThreeEvent<PointerEvent>) => {
+        if (Platform.OS !== 'web') return;
         activePointers.current.delete(e.pointerId);
         lastPinchDist.current = null;
         dragging.current = false;
@@ -963,6 +983,7 @@ export function UniverseScene({
   unreadIds?: readonly string[];
 }) {
   const controls = useRef(controlsFor(sceneKey));
+  const suppressTapRef = useRef(0);
   const groupRef = useRef<Group>(null);
   // 화면이 다시 만들어졌을 때 첫 프레임은 저장된 각도·거리로 바로 맞춘다(서서히 돌아가며 초기화되는 것처럼 보이지 않게).
   const synced = useRef(false);
@@ -1315,7 +1336,7 @@ export function UniverseScene({
   const center = framing?.center ?? [0, 0, 0];
   return (
     <>
-      <DragPlane controls={controls} onBackgroundPress={onBackgroundPress} />
+      <DragPlane controls={controls} onBackgroundPress={onBackgroundPress} suppressTapRef={suppressTapRef} />
       <group ref={groupRef}>
         <Starfield count={QUALITY_SETTINGS[quality].stars} sizeScale={backgroundStarScale} />
 
@@ -1338,7 +1359,7 @@ export function UniverseScene({
               surface={surfaceToDraw(entry.surface)}
               runtime={runtimeRef}
               dim={constellation && !memberSet.has(entry.id) ? DIM_OTHERS_LINEAR : 0}
-              onPress={() => onStarPress(entry.id)}
+              onPress={() => { if (Date.now() >= suppressTapRef.current) onStarPress(entry.id); }}
               registerMesh={(mesh) => {
                 if (mesh) {
                   mesh.userData.diaryId = entry.id;

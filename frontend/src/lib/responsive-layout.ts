@@ -45,8 +45,8 @@ const navPanels = [
   { id: 'group', label: '그룹 우주', x: 500, width: 95 },
 ] as const;
 
-export function getBottomNavLayout(width: number) {
-  const scale = Math.min(Math.max(0, width) / 774, 1.15) * 0.7 * 0.85;
+export function getBottomNavLayout(width: number, sizeMultiplier = 1) {
+  const scale = Math.min(Math.max(0, width) / 774, 1.15) * 0.7 * 0.85 * sizeMultiplier;
   const viewWidth = scale > 0 ? width / scale : 774;
   const offset = (viewWidth - 774) / 2;
   const viewHeight = 120;

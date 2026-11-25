@@ -6,6 +6,7 @@ import { router } from 'expo-router';
 import { ScrollView } from '@/components/app-scroll-view';
 import { Text, TextInput } from '@/components/app-text';
 import { DesignFonts, DesignPaint } from '@/constants/ui-design';
+import { useAppLayout } from '@/hooks/use-app-layout';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { MAX_PHOTOS, type Photo } from '@/lib/journal';
 import { DiaryBackFrame, DiaryInputFrame, DiaryLockIcon, DiaryPhotoAddFrame, DiaryPhotoEmptyFrame, DiarySubmitFrame } from './diary-decoration';
@@ -41,20 +42,19 @@ export function DiaryWriteScreen({
   onBack, onSubmit, topics, selectedTopic, onToggleTopic, hasBottomNav, rememberSelections, onToggleRemember,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const app = useAppLayout();
   const [preview, setPreview] = useState<Photo | null>(null);
-  const [topicsOpen, setTopicsOpen] = useState(false);
   const { wide, compact, navLeft, navWidth, navHeight, navBottom, scale: phoneScale } = useResponsiveLayout();
   const pageWidth = Math.min(navWidth, 1800);
   const scale = wide ? Math.max(0.8, pageWidth / 1440) : phoneScale;
-  const bodyWidth = pageWidth * (wide ? 1248 / 1440 : 344 / 393);
+  const bodyWidth = app.native && !wide ? app.contentWidth : pageWidth * (wide ? 1248 / 1440 : 344 / 393);
   const columnGap = wide ? bodyWidth * 0.045 : 0;
   const sideWidth = wide ? Math.max(210, bodyWidth * 0.298) : bodyWidth;
   const photoGap = (wide ? 24 : 12) * scale;
-  const photoSize = wide ? (sideWidth - photoGap) / 2 : Math.min(128 * scale, (sideWidth - photoGap) / 2);
+  const photoSize = app.native && !wide ? app.photoSize : wide ? (sideWidth - photoGap) / 2 : Math.min(128 * scale, (sideWidth - photoGap) / 2);
   const tile = { width: photoSize, height: photoSize, flexShrink: 0 };
   const addDisabled = photoBusy || saving || photos.length >= MAX_PHOTOS;
   const type = (size: number, line: number) => ({ fontSize: size * scale, lineHeight: line * scale });
-  const selectedTopicLabel = topics?.find(topic => topic.id === selectedTopic)?.label;
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -77,16 +77,11 @@ export function DiaryWriteScreen({
           </Pressable>
         </View>
 
-        <View style={{ width: bodyWidth, marginTop: (wide ? 46 : 32) * scale }}>
-          <Text accessibilityRole="header" style={[styles.text, type(wide ? 36 : 24, wide ? 50 : 32)]}>오늘은 어떤 별일이 있었나요?</Text>
-          <View style={[styles.rowBetween, { marginTop: (wide ? 14 : 7) * scale, minHeight: 30 * scale }]}>
-            <Text style={[styles.muted, { flexShrink: 1 }, type(wide ? 22 : 18, wide ? 31 : 26)]}>{dateLabel}</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 12 * scale, flexShrink: 1 }}>
-            {!!topics?.length && <Pressable accessibilityRole="button" accessibilityLabel="오늘의 주제 선택"
-              accessibilityState={{ expanded: topicsOpen }} aria-expanded={topicsOpen} hitSlop={6}
-              onPress={() => setTopicsOpen(open => !open)} style={styles.topicToggle}>
-              <Text style={[styles.muted, type(12, 17)]}>{selectedTopicLabel ?? '주제 선택'} {topicsOpen ? '⌄' : '›'}</Text>
-            </Pressable>}
+        <View style={{ width: bodyWidth, marginTop: (wide ? 46 : app.native ? 16 : 32) * scale }}>
+          <Text accessibilityRole="header" style={[styles.text, type(wide ? 36 : app.native ? 22 : 24, wide ? 50 : 32)]}>오늘은 어떤 별일이 있었나요?</Text>
+          <View style={[styles.rowBetween, { marginTop: (wide ? 14 : 7) * scale, minHeight: 30 * scale }, app.native && !wide && { flexDirection: 'column', alignItems: 'stretch', gap: 0 }]}>
+            <Text style={[styles.muted, { flexShrink: 1 }, type(wide ? 22 : app.native ? 15 : 18, wide ? 31 : 26)]}>{dateLabel}</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: app.native && !wide ? 'space-between' : 'flex-end', gap: 12 * scale, flexShrink: 1 }}>
               {rememberSelections !== undefined && <Pressable accessibilityRole="checkbox" accessibilityLabel="이전 주제와 공유 그룹 선택 기억하기"
                 accessibilityState={{ checked: rememberSelections, disabled: saving }} disabled={saving} onPress={onToggleRemember}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 7, minHeight: 44, flexShrink: 1, paddingVertical: 4 }}>
@@ -97,7 +92,7 @@ export function DiaryWriteScreen({
               </Pressable>}
             </View>
           </View>
-          {topicsOpen && topics && <View style={[styles.chips, { marginVertical: 8 * scale }]}>
+          {!!topics?.length && <View style={[styles.chips, { marginVertical: 8 * scale }]}>
             {topics.map(topic => {
               const selected = selectedTopic === topic.id;
               return <Pressable key={topic.id} accessibilityRole="button" accessibilityLabel={topic.label}
@@ -113,11 +108,11 @@ export function DiaryWriteScreen({
           </View>
 
           <View style={{ flexDirection: wide ? 'row' : 'column', gap: wide ? columnGap : 27 * scale, marginTop: (wide ? 36 : 5) * scale }}>
-            <View style={wide ? { flex: 1, minWidth: 0, minHeight: 285 * scale } : { height: Math.min(bodyWidth * 233 / 344, 340 * scale) }}>
+            <View style={wide ? { flex: 1, minWidth: 0, minHeight: 285 * scale } : { height: app.native ? app.inputHeight : Math.min(bodyWidth * 233 / 344, 340 * scale) }}>
               <DiaryInputFrame scale={scale} wide={wide} />
               <TextInput accessibilityLabel="일기 내용" multiline
                 style={[StyleSheet.absoluteFill, styles.text, styles.input, type(wide ? 17 : 16, 24),
-                  { paddingHorizontal: (wide ? 28 : 18) * scale, paddingVertical: (wide ? 26 : 32) * scale }]}
+                  { paddingHorizontal: (wide ? 28 : 18) * scale, paddingVertical: (wide ? 26 : app.native ? 18 : 32) * scale }]}
                 placeholder="글을 입력해주세요." placeholderTextColor={wide ? '#bbb' : DesignPaint.ink}
                 selectionColor={DesignPaint.ink} cursorColor={DesignPaint.ink} underlineColorAndroid={DesignPaint.clear}
                 value={diaryText} editable={!saving} onChangeText={onChangeText} />
@@ -195,7 +190,6 @@ const styles = StyleSheet.create({
   headerAction: { minHeight: 44, justifyContent: 'center' },
   center: { alignItems: 'center', justifyContent: 'center' },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  topicToggle: { paddingVertical: 6, alignItems: 'flex-end' },
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   rule: { flex: 1, height: 1, backgroundColor: '#666' },
   mobileRule: { backgroundColor: '#ccc' },

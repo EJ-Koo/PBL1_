@@ -1,6 +1,8 @@
 import { ScrollView } from '@/components/app-scroll-view';
 import { Text } from '@/components/app-text';
 import { DesignFonts } from '@/constants/ui-design';
+import { useNativeBack } from '@/hooks/use-native-back';
+import { useAppLayout } from '@/hooks/use-app-layout';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useLanguage } from '@/lib/language';
 import { confirmChoice } from '@/lib/notice';
@@ -13,13 +15,16 @@ import { SpaceIcon } from './space-ui';
 
 type Props = { scale: number; onClose: () => void; onWriteDiary: () => void };
 
-export function QuestPanel({ scale, onClose, onWriteDiary }: Props) {
+export function QuestPanel({ scale: webScale, onClose, onWriteDiary }: Props) {
+  useNativeBack(onClose);
+  const app = useAppLayout();
+  const scale = app.native ? app.menuScale * 0.9 : webScale;
   const { t } = useLanguage();
   const { quest, loading, error, refresh, reset } = useQuest();
   const { height, chromeLeft, chromeWidth, headerTop, bottomSpace } = useResponsiveLayout();
   const top = headerTop + 80 * scale;
   const width = Math.min(352 * scale, chromeWidth - 28 * scale);
-  const panelHeight = Math.min(540 * scale, Math.max(0, height - top - bottomSpace));
+  const panelHeight = Math.min(app.native ? app.questHeight + 50 : 540 * scale, Math.max(0, height - top - bottomSpace));
   const todayComplete = quest?.completed ?? false;
   const resetQuest = () => confirmChoice(
     t('퀘스트 초기화'),
@@ -31,7 +36,7 @@ export function QuestPanel({ scale, onClose, onWriteDiary }: Props) {
   return (
     <View style={styles.overlay}>
       <Pressable accessibilityLabel={t('퀘스트 닫기')} style={StyleSheet.absoluteFill} onPress={onClose} />
-      <View accessibilityViewIsModal style={{ position: 'absolute', left: chromeLeft + chromeWidth - width - 17 * scale, top, width, height: panelHeight }}>
+      <View accessibilityViewIsModal style={{ position: 'absolute', left: chromeLeft + (app.native ? (chromeWidth - width) / 2 : chromeWidth - width - 17 * scale), top, width, height: panelHeight }}>
         <QuestPanelFrame width={width} height={panelHeight} scale={scale} />
         <View style={{ paddingTop: 22 * scale, paddingHorizontal: 28 * scale }}>
           <View style={[styles.headingRow, { minHeight: 40 * scale }]}>

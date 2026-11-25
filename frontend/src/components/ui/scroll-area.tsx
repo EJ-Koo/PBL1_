@@ -1,21 +1,12 @@
-import { useRef, useState, type ReactNode } from 'react';
-import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { useRef, useState } from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { ScrollView, type ScrollViewHandle } from '@/components/app-scroll-view';
+import type { ScrollAreaProps } from './scroll-area.types';
 import { offsetFromThumb, scrollbarMetrics } from '@/lib/scrollbar';
 
 /** A native scroll view with an always-visible, draggable scrollbar on either axis. */
-export function ScrollArea({ children, horizontal = false, style, contentContainerStyle, label, scrollbarLabel, scrollStep = 64, hideScrollbarWhenNotScrollable = false, testID }: {
-  children: ReactNode;
-  horizontal?: boolean;
-  style?: StyleProp<ViewStyle>;
-  contentContainerStyle?: StyleProp<ViewStyle>;
-  label: string;
-  scrollbarLabel: string;
-  scrollStep?: number;
-  hideScrollbarWhenNotScrollable?: boolean;
-  testID: string;
-}) {
+export function ScrollArea({ children, horizontal = false, style, contentContainerStyle, label, scrollbarLabel, scrollStep = 64, hideScrollbarWhenNotScrollable = false, testID }: ScrollAreaProps) {
   const scroll = useRef<ScrollViewHandle>(null);
   const track = useRef<View>(null);
   const latestOffset = useRef(0);

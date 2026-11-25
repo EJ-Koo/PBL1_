@@ -1,29 +1,17 @@
 import { useLanguage } from '@/lib/language';
 import { Text } from '@/components/app-text';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
-import { useState } from 'react';
 
 import { HomeHudFrame, HudIcon, QuestFrame } from './design-decoration';
 import { HomeMenuPanel } from './home-menu-panel';
-import type { ComponentProps } from 'react';
+import type { HomeHudProps as Props } from './home-hud.types';
 
 import { DesignFonts, DesignPaint } from '@/constants/ui-design';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 
-type Props = {
-  scale: number;
-  starCount: number;
-  coinCount: number;
-  checkCount: number;
-  onStats: () => void;
-  onQuest: () => void;
-  menuProps: Omit<ComponentProps<typeof HomeMenuPanel>, 'scale' | 'onClose'>;
-};
-
-export function HomeHud({ scale: contentScale, starCount, coinCount, checkCount, onStats, onQuest, menuProps }: Props) {
+export function HomeHud({ scale: contentScale, starCount, coinCount, checkCount, onStats, onQuest, menuVisible, onToggleMenu, onCloseMenu, menuProps }: Props) {
   const { t } = useLanguage();
   const { chromeLeft, chromeWidth, headerTop, wide, hudScale: scale } = useResponsiveLayout();
-  const [menuVisible, setMenuVisible] = useState(false);
   const showLabels = wide && chromeWidth >= 700 * scale;
   const statsWidth = (wide ? 272 : 190) * scale;
   const stats = wide ? [
@@ -44,7 +32,7 @@ export function HomeHud({ scale: contentScale, starCount, coinCount, checkCount,
         <TouchableOpacity
           accessibilityLabel={t("메뉴")}
           hitSlop={{ top: 6, bottom: 6 }}
-          onPress={() => setMenuVisible((visible) => !visible)}
+          onPress={onToggleMenu}
           style={[styles.button, { left: 15 * scale, top: 10 * scale, width: 51 * scale, height: Math.max(44, 38 * scale) }]}
         />
         {showLabels && <Text pointerEvents="none" numberOfLines={1} adjustsFontSizeToFit
@@ -73,7 +61,7 @@ export function HomeHud({ scale: contentScale, starCount, coinCount, checkCount,
           accessibilityLabel={t("퀘스트")}
           hitSlop={{ top: 6, bottom: 6 }}
           onPress={() => {
-            setMenuVisible(false);
+            onCloseMenu();
             onQuest();
           }}
           style={[styles.button, { right: 13 * scale, top: 9 * scale, width: 77 * scale, height: Math.max(44, 38 * scale) }]}>
@@ -81,7 +69,7 @@ export function HomeHud({ scale: contentScale, starCount, coinCount, checkCount,
           <Text style={[styles.quest, { top: 8 * scale, width: 77 * scale, fontSize: 16 * scale, lineHeight: 22 * scale }]}>Quest</Text>
         </TouchableOpacity>
       </View>
-      {menuVisible && <HomeMenuPanel {...menuProps} scale={contentScale} onClose={() => setMenuVisible(false)} />}
+      {menuVisible && <HomeMenuPanel {...menuProps} scale={contentScale} onClose={onCloseMenu} />}
     </>
   );
 }

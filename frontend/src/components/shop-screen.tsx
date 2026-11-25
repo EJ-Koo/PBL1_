@@ -1,3 +1,4 @@
+import { useAppLayout } from '@/hooks/use-app-layout';
 import { useLanguage } from '@/lib/language';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { CoinIcon } from '@/components/coin-icon';
@@ -161,22 +162,23 @@ function Card({
   testID: string;
   width: number;
 }) {
+  const app = useAppLayout();
   const { t } = useLanguage();
   return (
     <Pressable
       disabled={!onSelect}
       onPress={onSelect}
       accessibilityLabel={onSelect ? `${name} 미리보기` : undefined}
-      style={[styles.card, { width }, highlighted && styles.cardEquipped, previewing && styles.cardPreviewing]}
+      style={[styles.card, app.native && { paddingHorizontal: 10, paddingVertical: 8 }, { width }, highlighted && styles.cardEquipped, previewing && styles.cardPreviewing]}
       testID={testID}>
       <View pointerEvents="none" aria-hidden style={StyleSheet.absoluteFill}>
         {[styles.topLeft, styles.topRight, styles.bottomLeft, styles.bottomRight].map((corner, index) =>
           <View key={index} style={[styles.cardCorner, corner, previewing && styles.cardCornerPreviewing]} />)}
       </View>
       {badge && !highlighted ? <Text style={styles.badge}>{t(badge)}</Text> : null}
-      <View style={styles.artwork}>
+      <View style={[styles.artwork, app.native && { minHeight: 48 }]}>
         {artwork ?? (imageSource ? <Image source={imageSource} style={styles.cursorImage} resizeMode="contain" accessibilityLabel={name} />
-          : <Text style={styles.icon}>{icon}</Text>)}
+          : <Text style={[styles.icon, app.native && { fontSize: 34, lineHeight: 44 }]}>{icon}</Text>)}
       </View>
       <Text style={styles.name}>
         {name}
@@ -195,6 +197,7 @@ function Card({
           hitSlop={{ top: 8, bottom: 8 }}
           style={[
             styles.button,
+            app.native && { minHeight: 44 },
             // 버튼 줄(가로) 안에서는 늘이기(stretch)가 폭이 아니라 높이에 걸리므로, 하나든 둘이든 flex 로 폭을 채운다
             styles.buttonHalf,
             action.kind === 'unequip' && styles.buttonGhost,
@@ -214,7 +217,7 @@ function Card({
             disabled={disabledAll}
             onPress={secondary.onPress}
             hitSlop={{ top: 8, bottom: 8 }}
-            style={[styles.button, styles.buttonHalf, styles.buttonApply]}>
+            style={[styles.button, styles.buttonHalf, styles.buttonApply, app.native && { minHeight: 44 }]}>
             <Text style={styles.buttonText}>{t(secondary.label)}</Text>
           </TouchableOpacity>
         ) : null}
@@ -236,6 +239,7 @@ function PlanetLookPreview({
   effectItem: ShopItem | undefined;
   visible: boolean;
 }) {
+  const app = useAppLayout();
   const { t } = useLanguage();
   const surface = surfaceItem ? surfaceOfItem(surfaceItem) : null;
   const effect = effectItem ? effectOfItem(effectItem) : null;
@@ -245,7 +249,7 @@ function PlanetLookPreview({
   const [zoom, setZoom] = useState<number | null>(null);
   return (
     <View
-      style={styles.preview}
+      style={[styles.preview, app.native && { flex: 0, minHeight: 0, height: app.previewHeight }]}
       testID="shop-planet-preview"
       onLayout={(e) => {
         const { width, height } = e.nativeEvent.layout;
@@ -266,14 +270,15 @@ function PlanetLookPreview({
 }
 
 export function ShopSheet({ visible, onClose }: { visible: boolean; width: number; onClose: () => void }) {
+  const app = useAppLayout();
   const { t } = useLanguage();
   const { coins, items, loading, error, refresh, purchase, setEquipped, resetAllowed, resetShop } = useShop();
   const { entries } = useDiary();
   const { height, width: viewportWidth } = useWindowDimensions();
   const compact = viewportWidth < 768;
-  const sheetWidth = Math.min(viewportWidth - (compact ? 32 : 96), 1180);
-  const sheetHeight = Math.min(height - 48, compact ? Math.min(height * 0.82, 720) : 700);
-  const cardWidth = compact ? Math.min(CARD_WIDTH, Math.max(124, (sheetWidth - 32 - CARD_GAP - 4) / 2)) : CARD_WIDTH;
+  const sheetWidth = app.native ? app.sheetWidth : Math.min(viewportWidth - (compact ? 32 : 96), 1180);
+  const sheetHeight = app.native ? app.sheetHeight : Math.min(height - 48, compact ? Math.min(height * 0.82, 720) : 700);
+  const cardWidth = app.native ? Math.min(172, (sheetWidth - 44) * 0.58) : compact ? Math.min(CARD_WIDTH, Math.max(124, (sheetWidth - 32 - CARD_GAP - 4) / 2)) : CARD_WIDTH;
   const [tabId, setTabId] = useState(TABS[0].id);
   const [busyId, setBusyId] = useState<string | null>(null);
   // 행성 표면·효과 줄: 미리보기 중인 표면·효과(하나의 미리보기에 함께), 행성 꾸미기 팝업(적용하기)
@@ -451,22 +456,23 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
           style={[
             styles.sheet,
             compact && styles.sheetCompact,
+            app.native && { paddingTop: 16, paddingBottom: 16, paddingHorizontal: 14 },
             { width: sheetWidth, height: sheetHeight },
           ]}>
           <ShopFrame fill="#1F2025" />
-          <View style={[styles.header, compact && styles.headerCompact]}>
-            <Text style={[styles.title, compact && styles.titleCompact, viewportWidth < 360 && styles.titleNarrow]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>SPACE SHOP</Text>
+          <View style={[styles.header, compact && styles.headerCompact, app.native && { marginBottom: 8 }]}>
+            <Text style={[styles.title, compact && styles.titleCompact, app.native && { fontSize: 20 }, viewportWidth < 360 && styles.titleNarrow]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>SPACE SHOP</Text>
             <View style={styles.headerRight}>
               <View style={styles.coinBalance} testID="shop-coins">
                 <CoinIcon size={16} /><Text style={styles.coinText} numberOfLines={1}>{coins?.toLocaleString() ?? '…'}</Text>
               </View>
-              <TouchableOpacity onPress={onClose} accessibilityLabel={t("닫기")} testID="shop-close" hitSlop={10} style={styles.close}>
+              <TouchableOpacity onPress={onClose} accessibilityLabel={t("닫기")} testID="shop-close" hitSlop={10} style={[styles.close, app.native && { width: 44, height: 44 }]}>
                 <Text style={styles.closeText}>✕</Text>
               </TouchableOpacity>
             </View>
           </View>
 
-          <View style={[styles.tabs, compact && styles.tabsCompact]}>
+          <View style={[styles.tabs, compact && styles.tabsCompact, app.native && { marginBottom: 12, marginHorizontal: 0, gap: 6 }]}>
             {TABS.map((tabItem) => (
               <TouchableOpacity
                 key={tabItem.id}
@@ -474,13 +480,16 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
                 accessibilityRole="tab"
                 accessibilityState={{ selected: tabItem.id === tab.id }}
                 onPress={() => setTabId(tabItem.id)}
-                style={styles.tab}>
+                style={[styles.tab, app.native && { minHeight: 44 }]}>
                 <ShopFrame tab cut={12} fill={tabItem.id === tab.id ? '#D9D9D9' : '#55565A'} />
                 <Text style={[styles.tabText, compact && styles.tabTextCompact, tabItem.id === tab.id && styles.tabTextActive]}>{t(tabItem.label)}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
+          {app.native && tab.id === 'cursor' && <Text style={[styles.previewHint, { marginBottom: 10 }]}>
+            {t('커서 효과는 웹에서 마우스를 사용할 때 보여요. 앱에서는 미리보기만 제공해요.')}
+          </Text>}
           {error ? (
             <TouchableOpacity style={styles.errorBox} onPress={refresh}>
               <Text style={styles.errorText}>{error}</Text>
