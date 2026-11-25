@@ -1,5 +1,8 @@
-import { ScrollView } from '@/components/app-scroll-view';
+import { CoinIcon } from '@/components/coin-icon';
 import { Text } from '@/components/app-text';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { ShopFrame, ShopSectionRule } from '@/components/ui/shop-frame';
+import { DesignFonts } from '@/constants/ui-design';
 // [ADDED 2026-11-12] 행성 꾸미기 팝업: 산 특수 효과를 원하는 일기 행성에 적용·변경·해제한다. 상점 팝업과 같은 모양.
 //  - 상점에서 열기(방법 A): 효과를 고른 채로 열림 → 내 일기(행성) 목록에서 행성 고르기 → 미리보기 → 적용
 //  - 행성 상세에서 열기(방법 B): 그 행성으로 바로 열림 → 효과 고르기 → 미리보기 → 적용/변경/해제
@@ -9,8 +12,9 @@ import { Text } from '@/components/app-text';
 // [MODIFIED 2026-11-21] 두 카테고리: '표면'(Surface Style, 행성 표면 재질) · '효과'(Special Effect, 행성 주변).
 //  - 행성 하나에 표면 하나 + 효과 하나를 따로 고른다. 미리보기에는 둘 다 함께 보인다.
 //  - 구매·남은 개수·적용·해제 규칙은 두 카테고리가 같다(서버 표만 따로: planet_surfaces / planet_effects).
-import { useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 import { PlanetPreview } from '@/components/universe-scene';
 import { showMessage } from '@/lib/feedback';
@@ -134,8 +138,18 @@ function DecoratorSheet({ onClose, diaryId, effect, surface }: Omit<Props, 'visi
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const sheetWidth = Math.min(width - 24, 496);
-  const sheetHeight = Math.min(height * 0.84, 740);
+  const compact = width < 768;
+  const stacked = compact || height < 640;
+  const sheetWidth = Math.min(width - (compact ? 32 : 96), 1100);
+  const sheetHeight = Math.min(height - 48, compact ? height * 0.88 : 740);
+  const cardWidth = compact ? 132 : 156;
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [onClose]);
 
   const run = async (task: () => Promise<{ ok: true } | { ok: false; error: string }>, done: string) => {
     setBusy(true);
@@ -160,39 +174,99 @@ function DecoratorSheet({ onClose, diaryId, effect, surface }: Omit<Props, 'visi
       ? { icon: fx.icon(effect), name: fx.name(effect) }
       : null;
 
+  const preview = entry ? <View style={[styles.previewColumn, !stacked && styles.previewColumnWide]}>
+    <View style={[styles.preview, !stacked && styles.previewWide]} testID="decorator-preview">
+      <PlanetPreview
+        id={entry.id}
+        visual={entry.planet}
+        radius={PLANET_BASE_RADIUS * planetScaleForText(entry.text)}
+        effect={fx.selected}
+        surface={sf.selected}
+        zoom={stacked ? 0.9 : 0.7}
+      />
+      <Text style={styles.previewTag} pointerEvents="none">미리보기</Text>
+      <Text style={styles.previewDate} pointerEvents="none">{dateLabel(entry.createdAt)}의 행성</Text>
+    </View>
+    <Text style={styles.snippet} numberOfLines={2}>{entry.text}</Text>
+    <View style={styles.currentSettings} testID="decorator-current">
+      <Text style={styles.currentHeading}>현재 적용</Text>
+      <View style={styles.currentRow}>
+        <Text style={styles.currentLabel}>표면</Text>
+        <Text style={styles.currentValue}>{sf.current ? `${sf.icon(sf.current)} ${sf.name(sf.current)}` : '기본 표면'}</Text>
+      </View>
+      <View style={styles.currentRow}>
+        <Text style={styles.currentLabel}>효과</Text>
+        <Text style={styles.currentValue}>{fx.current ? `${fx.icon(fx.current)} ${fx.name(fx.current)}` : '없음'}</Text>
+      </View>
+    </View>
+  </View> : null;
+
+  const controls = entry ? <View style={styles.controlsContent}>
+    <View style={styles.categoryRow}>
+      {(['surface', 'effect'] as const).map(c => <TouchableOpacity
+        key={c} testID={`decorator-category-${c}`} accessibilityRole="tab" aria-selected={category === c}
+        onPress={() => { setCategory(c); setNotice(null); }} style={styles.category}>
+        <ShopFrame tab cut={12} fill={category === c ? '#D9D9D9' : '#55565A'} />
+        <Text style={[styles.categoryText, category === c && styles.categoryTextActive]}>
+          {c === 'surface' ? '행성 표면' : '행성 효과'}
+        </Text>
+      </TouchableOpacity>)}
+    </View>
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionTitle}>{category === 'surface' ? '표면 스타일' : '행성 주변 효과'}</Text>
+      <ShopSectionRule />
+    </View>
+    {category === 'surface' ? <KindPanel
+      key="surface" state={sf} coins={coins} busy={busy} notice={notice} cardWidth={cardWidth} onBuy={buy}
+      onApply={type => {
+        if (busy) return;
+        const item = type ? sf.itemByType.get(type) : undefined;
+        run(() => applyPlanetSurface(entry.id, item?.id ?? null),
+          type ? `${sf.icon(type)} ${sf.name(type)}을(를) 적용했어요.` : '표면을 해제했어요. 기본 표면으로 돌아갔어요.');
+      }}
+    /> : <KindPanel
+      key="effect" state={fx} coins={coins} busy={busy} notice={notice} cardWidth={cardWidth} onBuy={buy}
+      onApply={type => {
+        if (busy) return;
+        const item = type ? fx.itemByType.get(type) : undefined;
+        run(() => applyPlanetEffect(entry.id, item?.id ?? null),
+          type ? `${fx.icon(type)} ${fx.name(type)}를 적용했어요.` : '효과를 해제했어요. 기본 행성으로 돌아갔어요.');
+      }}
+    />}
+  </View> : null;
+
   return (
     <View style={styles.backdrop}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="행성 꾸미기 닫기" />
-      <View testID="decorator-sheet" style={[styles.sheet, { width: sheetWidth, height: sheetHeight }]}>
+      <Pressable accessibilityRole="button" style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="행성 꾸미기 닫기" />
+      <View testID="decorator-sheet" role="dialog" aria-modal accessibilityLabel="행성 꾸미기"
+        style={[styles.sheet, compact && styles.sheetCompact, { width: sheetWidth, height: sheetHeight }]}>
+        <ShopFrame fill="#1F2025" cut={compact ? 22 : 32} />
         <View style={styles.header}>
-          <View style={styles.headerSide}>
-            {entry && !diaryId ? (
-              <TouchableOpacity
-                testID="decorator-back"
-                onPress={() => {
-                  setPickedId(null);
-                  setNotice(null);
-                  fx.setChosen(effect ?? undefined);
-                  sf.setChosen(surface ?? undefined);
-                }}
-                hitSlop={10}>
-                <Text style={styles.backText}>‹ 행성 목록</Text>
-              </TouchableOpacity>
-            ) : null}
+          <View style={styles.heading}>
+            <Text accessibilityRole="header" style={[styles.title, compact && styles.titleCompact]}
+              numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>PLANET STUDIO</Text>
+            <Text style={styles.subtitle}>행성 꾸미기</Text>
           </View>
-          <Text style={styles.title}>🪐 행성 꾸미기</Text>
-          <View style={[styles.headerSide, styles.headerRight]}>
-            <View style={styles.coinPill}>
-              <Text style={styles.coinText}>🪙 {coins ?? '…'}</Text>
+          <View style={styles.headerRight}>
+            <View style={styles.coinBalance} accessibilityLabel={`보유 코인 ${coins ?? '확인 중'}`}>
+              <CoinIcon size={18} /><Text style={styles.coinText}>{coins?.toLocaleString() ?? '…'}</Text>
             </View>
-            <TouchableOpacity onPress={onClose} accessibilityLabel="닫기" testID="decorator-close" hitSlop={10} style={styles.close}>
-              <Text style={styles.closeText}>✕</Text>
+            <TouchableOpacity accessibilityRole="button" onPress={onClose} accessibilityLabel="행성 꾸미기 닫기" testID="decorator-close" style={styles.close}>
+              <Svg width={18} height={18} viewBox="0 0 24 24" pointerEvents="none" aria-hidden>
+                <Path d="M5 5L19 19 M19 5L5 19" stroke="#D9D9D9" strokeWidth={1.8} />
+              </Svg>
             </TouchableOpacity>
           </View>
         </View>
 
+        {entry && !diaryId ? <TouchableOpacity accessibilityRole="button" testID="decorator-back" style={styles.backLink}
+          onPress={() => {
+            setPickedId(null); setNotice(null);
+            fx.setChosen(effect ?? undefined); sf.setChosen(surface ?? undefined);
+          }}><Text style={styles.backText}>‹ 행성 목록</Text></TouchableOpacity> : null}
+
         {error ? (
-          <TouchableOpacity style={styles.errorBox} onPress={refresh}>
+          <TouchableOpacity accessibilityRole="button" style={styles.errorBox} onPress={refresh}>
             <Text style={styles.errorText}>{error}</Text>
             <Text style={styles.errorRetry}>눌러서 다시 시도</Text>
           </TouchableOpacity>
@@ -200,87 +274,16 @@ function DecoratorSheet({ onClose, diaryId, effect, surface }: Omit<Props, 'visi
 
         {!entry ? (
           <PlanetList entries={sorted} target={listTarget} fx={fx} sf={sf} onPick={(id) => setPickedId(id)} />
-        ) : (
-          <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
-            <View style={styles.preview} testID="decorator-preview">
-              <PlanetPreview
-                id={entry.id}
-                visual={entry.planet}
-                radius={PLANET_BASE_RADIUS * planetScaleForText(entry.text)}
-                effect={fx.selected}
-                surface={sf.selected}
-              />
-              <Text style={styles.previewTag} pointerEvents="none">
-                미리보기
-              </Text>
-              <Text style={styles.previewDate} pointerEvents="none">
-                {dateLabel(entry.createdAt)}의 행성
-              </Text>
-            </View>
-            <Text style={styles.snippet} numberOfLines={2}>
-              {entry.text}
-            </Text>
-            <Text style={styles.currentLine} testID="decorator-current">
-              현재 표면:{' '}
-              <Text style={styles.currentValue}>{sf.current ? `${sf.icon(sf.current)} ${sf.name(sf.current)}` : '기본 표면'}</Text>
-              {'  ·  '}효과:{' '}
-              <Text style={styles.currentValue}>{fx.current ? `${fx.icon(fx.current)} ${fx.name(fx.current)}` : '없음'}</Text>
-            </Text>
-
-            <View style={styles.divider} />
-            <View style={styles.categoryRow}>
-              {(['surface', 'effect'] as const).map((c) => (
-                <TouchableOpacity
-                  key={c}
-                  testID={`decorator-category-${c}`}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: category === c }}
-                  onPress={() => {
-                    setCategory(c);
-                    setNotice(null);
-                  }}
-                  style={[styles.category, category === c && styles.categoryActive]}>
-                  <Text style={[styles.categoryText, category === c && styles.categoryTextActive]}>
-                    {c === 'surface' ? '표면 (행성 표면)' : '효과 (행성 주변)'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            {category === 'surface' ? (
-              <KindPanel
-                state={sf}
-                coins={coins}
-                busy={busy}
-                notice={notice}
-                onBuy={buy}
-                onApply={(t) => {
-                  if (busy) return;
-                  const item = t ? sf.itemByType.get(t) : undefined;
-                  run(
-                    () => applyPlanetSurface(entry.id, item?.id ?? null),
-                    t ? `${sf.icon(t)} ${sf.name(t)}을(를) 적용했어요.` : '표면을 해제했어요. 기본 표면으로 돌아갔어요.'
-                  );
-                }}
-              />
-            ) : (
-              <KindPanel
-                state={fx}
-                coins={coins}
-                busy={busy}
-                notice={notice}
-                onBuy={buy}
-                onApply={(t) => {
-                  if (busy) return;
-                  const item = t ? fx.itemByType.get(t) : undefined;
-                  run(
-                    () => applyPlanetEffect(entry.id, item?.id ?? null),
-                    t ? `${fx.icon(t)} ${fx.name(t)}를 적용했어요.` : '효과를 해제했어요. 기본 행성으로 돌아갔어요.'
-                  );
-                }}
-              />
-            )}
-          </ScrollView>
-        )}
+        ) : stacked ? <ScrollArea style={styles.body} contentContainerStyle={styles.mobileContent}
+          label="행성 꾸미기 옵션" scrollbarLabel="행성 꾸미기 세로 스크롤" testID="decorator-scroll">
+          {preview}{controls}
+        </ScrollArea> : <View style={styles.workbench}>
+          {preview}
+          <ScrollArea style={styles.body} contentContainerStyle={styles.controlsScrollContent}
+            label="행성 꾸미기 옵션" scrollbarLabel="행성 꾸미기 세로 스크롤" testID="decorator-scroll">
+            {controls}
+          </ScrollArea>
+        </View>}
       </View>
     </View>
   );
@@ -292,6 +295,7 @@ function KindPanel<T extends string>({
   coins,
   busy,
   notice,
+  cardWidth,
   onApply,
   onBuy,
 }: {
@@ -299,6 +303,7 @@ function KindPanel<T extends string>({
   coins: number | null;
   busy: boolean;
   notice: string | null;
+  cardWidth: number;
   onApply: (t: T | null) => void;
   onBuy: (item: ShopItem) => void;
 }) {
@@ -315,7 +320,7 @@ function KindPanel<T extends string>({
       selectedItem?.on_sale === false
         ? { label: `판매 종료된 ${kind.noun}이에요`, disabled: true, onPress: () => {} }
         : {
-            label: enough ? `🪙 ${price}에 구매하기` : '코인 부족',
+            label: enough ? `${price}코인에 구매하기` : '코인 부족',
             disabled: !enough,
             onPress: () => {
               if (selectedItem) onBuy(selectedItem);
@@ -326,19 +331,22 @@ function KindPanel<T extends string>({
   } else if (!selected) {
     primary = { label: `${kind.noun} 해제`, disabled: false, ghost: true, onPress: () => onApply(null) };
   } else {
-    primary = { label: current ? `이 ${kind.noun}으로 변경하기` : '적용하기', disabled: false, onPress: () => onApply(selected) };
+    primary = { label: current ? `이 ${kind.noun}${kind.category === 'surface' ? '으로' : '로'} 변경하기` : '적용하기', disabled: false, onPress: () => onApply(selected) };
   }
 
   return (
     <View testID={`decorator-panel-${kind.category}`}>
       {types.length === 0 && !error ? <Text style={styles.empty}>상점에 행성 {kind.noun}이 아직 없어요.</Text> : null}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+      <ScrollArea horizontal hideScrollbarWhenNotScrollable contentContainerStyle={styles.row} scrollStep={cardWidth + 12}
+        label={`행성 ${kind.noun} 목록`} scrollbarLabel={`행성 ${kind.noun} 가로 스크롤`} testID={`decorator-${kind.category}-scroll`}>
         <EffectChip
           testID={`decorator-${kind.category}-none`}
-          icon="🪐"
+          width={cardWidth}
+          icon={null}
           name={kind.noneLabel}
           status={current === null ? '사용 중' : kind.noneStatus}
           selected={selected === null}
+          disabled={busy}
           onPress={() => setChosen(null)}
         />
         {types.map((t) => {
@@ -347,6 +355,7 @@ function KindPanel<T extends string>({
             <EffectChip
               key={t}
               testID={`decorator-${kind.category}-${t}`}
+              width={cardWidth}
               icon={icon(t)}
               name={name(t)}
               status={
@@ -356,15 +365,17 @@ function KindPanel<T extends string>({
                     ? `남은 ${left(t)}개`
                     : quantity(t) > 0
                       ? '모두 사용 중'
-                      : `🔒 🪙 ${item?.price ?? ''}`
+                      : '구매 필요'
               }
+              price={current !== t && quantity(t) === 0 ? item?.price : undefined}
               locked={!canApply(t)}
               selected={selected === t}
+              disabled={busy}
               onPress={() => setChosen(t)}
             />
           );
         })}
-      </ScrollView>
+      </ScrollArea>
       {selected && !canApply(selected) ? (
         <Text style={styles.hint} testID="decorator-hint">
           {quantity(selected) > 0
@@ -379,23 +390,25 @@ function KindPanel<T extends string>({
 
       <TouchableOpacity
         testID="decorator-primary"
+        accessibilityRole="button"
         accessibilityLabel={primary.label}
+        aria-busy={busy}
         disabled={primary.disabled || busy}
         onPress={primary.onPress}
         style={[styles.button, primary.ghost && styles.buttonGhost, primary.disabled && styles.buttonDisabled]}>
         {busy ? (
-          <ActivityIndicator size="small" color="#000" />
+          <ActivityIndicator size="small" color={primary.ghost ? '#fff' : '#000'} />
         ) : (
-          <Text style={[styles.buttonText, primary.disabled && styles.buttonTextDisabled]}>{primary.label}</Text>
+          <Text style={[styles.buttonText, primary.ghost && styles.buttonTextLight, primary.disabled && styles.buttonTextDisabled]}>{primary.label}</Text>
         )}
       </TouchableOpacity>
       {current && selected !== null && !busy ? (
-        <TouchableOpacity testID="decorator-remove" onPress={() => onApply(null)} style={styles.removeLink} hitSlop={8}>
+        <TouchableOpacity accessibilityRole="button" testID="decorator-remove" onPress={() => onApply(null)} style={styles.removeLink}>
           <Text style={styles.removeText}>{kind.noun} 해제</Text>
         </TouchableOpacity>
       ) : null}
       {notice ? (
-        <Text style={styles.notice} testID="decorator-notice">
+        <Text accessibilityLiveRegion="polite" style={styles.notice} testID="decorator-notice">
           ✓ {notice}
         </Text>
       ) : null}
@@ -417,7 +430,8 @@ function PlanetList({
   onPick: (id: string) => void;
 }) {
   return (
-    <ScrollView style={styles.body} showsVerticalScrollIndicator={false} testID="decorator-list">
+    <ScrollArea style={styles.body} contentContainerStyle={styles.listContent}
+      label="꾸밀 행성 목록" scrollbarLabel="행성 목록 세로 스크롤" testID="decorator-list">
       <Text style={styles.sectionTitle}>
         {target ? `${target.icon} ${target.name}을(를) 적용할 행성을 골라 주세요` : '꾸밀 행성을 골라 주세요'}
       </Text>
@@ -431,6 +445,7 @@ function PlanetList({
           <TouchableOpacity
             key={e.id}
             testID={`decorator-planet-${e.id}`}
+            accessibilityRole="button"
             style={styles.planetRow}
             onPress={() => onPick(e.id)}
             accessibilityLabel={`${dateLabel(e.createdAt)} 행성 고르기`}>
@@ -444,10 +459,13 @@ function PlanetList({
             <Text style={[styles.planetEffect, parts.length > 0 && styles.planetEffectOn]} numberOfLines={2}>
               {parts.length ? parts.join('\n') : '기본'}
             </Text>
+            <Svg width={12} height={18} viewBox="0 0 12 18" pointerEvents="none" aria-hidden>
+              <Path d="M3 3l6 6-6 6" fill="none" stroke="#D9D9D9" strokeWidth={1.2} />
+            </Svg>
           </TouchableOpacity>
         );
       })}
-    </ScrollView>
+    </ScrollArea>
   );
 }
 
@@ -455,138 +473,133 @@ function EffectChip({
   icon,
   name,
   status,
+  price,
+  width,
   selected,
   locked,
+  disabled,
   onPress,
   testID,
 }: {
-  icon: string;
+  icon: string | null;
   name: string;
   status: string;
+  price?: number;
+  width: number;
   selected: boolean;
   locked?: boolean;
+  disabled: boolean;
   onPress: () => void;
   testID: string;
 }) {
   return (
     <TouchableOpacity
       testID={testID}
+      accessibilityRole="button"
       accessibilityLabel={`${name} 미리보기`}
+      aria-pressed={selected}
+      disabled={disabled}
       onPress={onPress}
-      style={[styles.chip, locked && styles.chipLocked, selected && styles.chipSelected]}>
-      <Text style={styles.chipIcon}>{icon}</Text>
-      <Text style={styles.chipName} numberOfLines={1}>
+      style={[styles.chip, { width }, selected && styles.chipSelected, disabled && styles.chipDisabled]}>
+      <View pointerEvents="none" aria-hidden style={StyleSheet.absoluteFill}>
+        {[styles.topLeft, styles.topRight, styles.bottomLeft, styles.bottomRight].map((corner, index) =>
+          <View key={index} style={[styles.cardCorner, corner, selected && styles.cardCornerSelected]} />)}
+      </View>
+      <Text style={[styles.chipBadge, selected && styles.chipBadgeSelected]}>{selected ? '미리보기' : locked && price !== undefined ? '미보유' : ''}</Text>
+      <View style={styles.chipArtwork}>
+        {icon ? <Text style={styles.chipIcon}>{icon}</Text> : <Svg width={48} height={48} viewBox="0 0 48 48" pointerEvents="none" aria-hidden>
+          <Circle cx={24} cy={24} r={13} fill="none" stroke="#D9D9D9" strokeWidth={1.2} />
+          <Path d="M10 22C-2 33 13 39 29 31S52 13 37 17" fill="none" stroke="#D9D9D9" strokeWidth={1.2} />
+        </Svg>}
+      </View>
+      <Text style={styles.chipName} numberOfLines={2}>
         {name}
       </Text>
-      <Text style={styles.chipStatus} numberOfLines={1}>
-        {status}
-      </Text>
+      <View style={styles.chipStatusRow}>
+        {price !== undefined ? <><CoinIcon size={15} /><Text style={styles.chipPrice}>{price}</Text></>
+          : <Text style={styles.chipStatus}>{status}</Text>}
+      </View>
     </TouchableOpacity>
   );
 }
 
-// 색·모양은 상점 팝업(shop-screen.tsx)과 같게 맞춘다
+// Match SPACE SHOP: charcoal panels, cut corners, white actions and violet previews.
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center' },
-  sheet: {
-    backgroundColor: '#000',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#3A3A4A',
-    paddingTop: 14,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  headerSide: { width: 110 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 8 },
-  title: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
-  backText: { color: '#c8c8d8', fontSize: 14, fontWeight: '600' },
-  coinPill: { backgroundColor: '#7f8c8d', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
-  coinText: { color: '#000', fontWeight: 'bold', fontSize: 13 },
-  close: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
-  closeText: { color: '#fff', fontSize: 20, fontWeight: '600' },
-  errorBox: { backgroundColor: '#3A1F2E', borderRadius: 10, padding: 12, marginBottom: 12 },
-  errorText: { color: '#F66C9E', fontSize: 13 },
+  sheet: { paddingTop: 28, paddingHorizontal: 40, paddingBottom: 32 },
+  sheetCompact: { paddingTop: 24, paddingHorizontal: 16, paddingBottom: 24 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingBottom: 16, marginBottom: 22, borderBottomWidth: 1, borderBottomColor: '#747478' },
+  heading: { flex: 1, minWidth: 0 },
+  title: { color: '#fff', fontFamily: DesignFonts.bold, fontSize: 28, lineHeight: 36 },
+  titleCompact: { fontSize: 20, lineHeight: 28 },
+  subtitle: { color: '#ADADB2', fontSize: 12, lineHeight: 18, marginTop: 2 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  coinBalance: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  coinText: { color: '#fff', fontSize: 13, fontFamily: DesignFonts.bold },
+  close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: -10 },
+  backLink: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start', marginTop: -14, marginBottom: 8 },
+  backText: { color: '#D9D9D9', fontSize: 13, lineHeight: 20 },
+  errorBox: { backgroundColor: '#30232D', borderWidth: 1, borderColor: '#F66C9E66', padding: 12, marginBottom: 16 },
+  errorText: { color: '#F66C9E', fontSize: 13, lineHeight: 20 },
   errorRetry: { color: '#fff', fontSize: 12, marginTop: 6, textDecorationLine: 'underline' },
-  body: { flex: 1 },
-  preview: {
-    height: 210,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: '#05050c',
-    borderWidth: 1,
-    borderColor: '#2f2f3d',
-  },
-  previewTag: {
-    position: 'absolute',
-    top: 8,
-    left: 10,
-    color: '#B888FF',
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  previewDate: { position: 'absolute', bottom: 8, left: 10, color: '#c8c8d8', fontSize: 12 },
-  snippet: { color: '#9C9CC0', fontSize: 12, lineHeight: 17, marginTop: 10 },
-  currentLine: { color: '#c8c8d8', fontSize: 13, marginTop: 8 },
-  currentValue: { color: '#FED240', fontWeight: 'bold' },
-  divider: { height: 1, backgroundColor: '#3A3A4A', marginVertical: 14 },
-  sectionTitle: { color: '#fff', fontSize: 15, fontWeight: 'bold', marginBottom: 10 },
-  empty: { color: '#9C9CC0', fontSize: 12, marginBottom: 6, marginTop: 4 },
-  row: { gap: 8, paddingRight: 4 },
-  chip: {
-    width: 88,
-    backgroundColor: '#b2bec3',
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  chipLocked: { backgroundColor: '#8e999e' },
-  chipSelected: { borderColor: '#FED240' },
-  chipIcon: { fontSize: 26, marginBottom: 4 },
-  chipName: { fontSize: 12, fontWeight: 'bold', color: '#000' },
-  chipStatus: { fontSize: 10, color: '#2d3436', marginTop: 2 },
-  hint: { color: '#9C9CC0', fontSize: 11, lineHeight: 16, marginTop: 10, marginBottom: 12 },
-  button: {
-    backgroundColor: '#FED240',
-    borderRadius: 8,
-    paddingVertical: 11,
-    alignItems: 'center',
-    minHeight: 42,
-    justifyContent: 'center',
-  },
-  buttonGhost: { backgroundColor: '#dfe6e9' },
-  buttonDisabled: { backgroundColor: '#95a5a6' },
-  buttonText: { fontWeight: 'bold', fontSize: 14, color: '#000' },
-  buttonTextDisabled: { color: '#555' },
-  removeLink: { alignSelf: 'center', marginTop: 12, paddingHorizontal: 12, paddingVertical: 4 },
-  removeText: { color: '#F66C9E', fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' },
-  notice: { color: '#7CE0B0', fontSize: 13, textAlign: 'center', marginTop: 12, marginBottom: 8 },
-  // [2026-11-21] 표면 / 효과 카테고리 탭
-  categoryRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  category: { flex: 1, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#3A3A4A', alignItems: 'center' },
-  categoryActive: { backgroundColor: '#FED240', borderColor: '#FED240' },
-  categoryText: { color: '#c8c8d8', fontSize: 13, fontWeight: 'bold' },
+  body: { flex: 1, minHeight: 0, minWidth: 0 },
+  workbench: { flex: 1, minHeight: 0, flexDirection: 'row', gap: 28 },
+  mobileContent: { paddingRight: 6, paddingBottom: 8, gap: 24 },
+  controlsScrollContent: { paddingRight: 8, paddingBottom: 8 },
+  previewColumn: { minWidth: 0 },
+  previewColumnWide: { width: '35%', flexShrink: 0 },
+  preview: { height: 240, overflow: 'hidden', backgroundColor: '#17181D', borderWidth: 1, borderColor: '#747478' },
+  previewWide: { flex: 1, minHeight: 260 },
+  previewTag: { position: 'absolute', top: 12, left: 14, color: '#D9D9D9', fontSize: 11, lineHeight: 18 },
+  previewDate: { position: 'absolute', bottom: 12, left: 14, right: 14, color: '#fff', fontSize: 12, lineHeight: 20 },
+  snippet: { color: '#ADADB2', fontSize: 12, lineHeight: 19, marginTop: 12 },
+  currentSettings: { marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#747478', gap: 8 },
+  currentHeading: { color: '#ADADB2', fontSize: 11, lineHeight: 18 },
+  currentRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  currentLabel: { color: '#ADADB2', fontSize: 12, lineHeight: 20 },
+  currentValue: { flex: 1, color: '#D9D9D9', fontSize: 12, lineHeight: 20 },
+  controlsContent: { minWidth: 0 },
+  categoryRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
+  category: { flex: 1, minWidth: 0, minHeight: 44, paddingVertical: 10, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' },
+  categoryText: { color: '#fff', fontSize: 14, lineHeight: 22 },
   categoryTextActive: { color: '#000' },
-  planetRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#1d1d26',
-    borderWidth: 1,
-    borderColor: '#2f2f3d',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 8,
-  },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
+  sectionTitle: { color: '#fff', fontSize: 15, lineHeight: 24 },
+  empty: { color: '#ADADB2', fontSize: 12, lineHeight: 20, marginBottom: 12, marginTop: 4 },
+  row: { gap: 12, padding: 2, alignItems: 'stretch' },
+  chip: { flexShrink: 0, minHeight: 186, backgroundColor: '#1F2025', borderWidth: 1, borderColor: '#747478', paddingHorizontal: 10, paddingTop: 6, paddingBottom: 14, alignItems: 'center' },
+  chipSelected: { borderColor: '#B888FF', backgroundColor: '#29252F' },
+  chipDisabled: { opacity: 0.5 },
+  cardCorner: { position: 'absolute', width: 12, height: 12, borderColor: '#D9D9D9' },
+  cardCornerSelected: { borderColor: '#B888FF' },
+  topLeft: { top: -1, left: -1, borderTopWidth: 3, borderLeftWidth: 3 },
+  topRight: { top: -1, right: -1, borderTopWidth: 3, borderRightWidth: 3 },
+  bottomLeft: { bottom: -1, left: -1, borderBottomWidth: 3, borderLeftWidth: 3 },
+  bottomRight: { bottom: -1, right: -1, borderBottomWidth: 3, borderRightWidth: 3 },
+  chipBadge: { alignSelf: 'stretch', minHeight: 18, color: '#ADADB2', fontSize: 9, lineHeight: 15, textAlign: 'right' },
+  chipBadgeSelected: { color: '#B888FF' },
+  chipArtwork: { height: 64, alignItems: 'center', justifyContent: 'center' },
+  chipIcon: { fontSize: 40, lineHeight: 54 },
+  chipName: { alignSelf: 'stretch', minHeight: 42, fontSize: 14, lineHeight: 21, color: '#fff', textAlign: 'center' },
+  chipStatusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 22, marginTop: 'auto' },
+  chipPrice: { color: '#fff', fontSize: 12, lineHeight: 18 },
+  chipStatus: { color: '#ADADB2', fontSize: 11, lineHeight: 18, textAlign: 'center' },
+  hint: { color: '#ADADB2', fontSize: 12, lineHeight: 20, marginTop: 14, marginBottom: 20 },
+  button: { backgroundColor: '#D9D9D9', borderWidth: 1, borderColor: '#D9D9D9', borderRadius: 24, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', minHeight: 48, justifyContent: 'center' },
+  buttonGhost: { backgroundColor: 'transparent' },
+  buttonDisabled: { backgroundColor: '#292A30', borderColor: '#515157' },
+  buttonText: { fontFamily: DesignFonts.bold, fontSize: 14, lineHeight: 22, color: '#17181D', textAlign: 'center' },
+  buttonTextLight: { color: '#D9D9D9' },
+  buttonTextDisabled: { color: '#9D9DA4' },
+  removeLink: { alignSelf: 'center', marginTop: 8, paddingHorizontal: 16, minHeight: 44, justifyContent: 'center' },
+  removeText: { color: '#C4C4CA', fontSize: 12, lineHeight: 20, textDecorationLine: 'underline' },
+  notice: { color: '#D9D9D9', fontSize: 12, lineHeight: 20, textAlign: 'center', marginTop: 12, padding: 12, borderWidth: 1, borderColor: '#B888FF66', backgroundColor: '#B888FF0D' },
+  listContent: { paddingRight: 8, paddingBottom: 8 },
+  planetRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#17181D', borderWidth: 1, borderColor: '#747478', paddingVertical: 16, paddingHorizontal: 14, marginTop: 12 },
   dot: { width: 28, height: 28, borderRadius: 14 },
-  planetRowText: { flex: 1 },
-  planetDate: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
-  planetSnippet: { color: '#9C9CC0', fontSize: 12, marginTop: 2 },
-  planetEffect: { color: '#6E6E90', fontSize: 12 },
-  planetEffectOn: { color: '#FED240', fontWeight: 'bold' },
+  planetRowText: { flex: 1, minWidth: 0 },
+  planetDate: { color: '#fff', fontSize: 13, lineHeight: 20, fontFamily: DesignFonts.bold },
+  planetSnippet: { color: '#ADADB2', fontSize: 12, lineHeight: 19, marginTop: 4 },
+  planetEffect: { maxWidth: '30%', color: '#ADADB2', fontSize: 11, lineHeight: 18, textAlign: 'right' },
+  planetEffectOn: { color: '#D3B6FF' },
 });

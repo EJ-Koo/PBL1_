@@ -87,16 +87,18 @@ function browser(t) {
   };
 }
 
-test('uses the supplied swimming pose during movement and returns upright while floating at rest', t => {
+for (const theme of ['blue', 'pink']) test(`${theme} uses the supplied swimming pose and the same follow, facing, and resting behavior`, t => {
   const env = browser(t);
-  const stop = startAstronautCursor();
+  const stop = startAstronautCursor(theme);
   env.cleanup(stop);
   const avatar = env.find();
   assert.equal(avatar.style.display, 'none');
   const floating = avatar.children.find(child => child.tagName === 'div');
   const [idle, swim] = floating.children;
-  assert.equal(idle.src, '/cursors/astronaut-blue-idle.png');
-  assert.equal(swim.src, '/cursors/astronaut-blue-swim.png');
+  assert.equal(avatar.dataset.astronautTheme, theme);
+  assert.equal(idle.src, `/cursors/astronaut-${theme}-idle.png`);
+  assert.equal(swim.src, `/cursors/astronaut-${theme}-swim.png`);
+  assert.match(floating.style.filter, theme === 'pink' ? /255,133,193/ : /72,223,255/);
   assert.match(floating.style.animation, /infinite/);
   assert.equal(avatar.style.pointerEvents, 'none');
   env.move(200, 150);
@@ -199,6 +201,25 @@ test('shop selection switches, visibility and motion preferences remove the astr
   select('account-a', astronaut);
   assert(env.find());
   assert(!env.document.body.children.some(node => node.tagName === 'canvas'));
+  const blueAvatar = env.find();
+  const pink = { type: 'cursor', style: 'astronaut_pink', color: '#FF85C1', itemId: 'cursor_astronaut_pink' };
+  env.move(200, 150);
+  env.advance(32);
+  select('account-a', pink);
+  assert(!blueAvatar.isConnected, 'Changing astronaut themes removes the old cursor');
+  const pinkAvatar = env.find();
+  assert.equal(pinkAvatar.dataset.astronautTheme, 'pink');
+  const pinkImages = pinkAvatar.children.find(child => child.tagName === 'div').children;
+  assert.equal(pinkImages[0].src, '/cursors/astronaut-pink-idle.png');
+  assert.equal(pinkImages[1].src, '/cursors/astronaut-pink-swim.png');
+  assert.equal(JSON.parse(env.cache.get('cursor:account-a')).itemId, pink.itemId);
+  assert.equal(env.pending(), 0, 'Theme changes clear the old follow animation');
+  env.move(300, 150);
+  env.advance(240);
+  assert.equal(pinkAvatar.dataset.pose, 'idle');
+  select('account-a', astronaut);
+  assert(!pinkAvatar.isConnected);
+  assert.equal(env.find().dataset.astronautTheme, 'blue');
   select('account-a', { ...astronaut, style: 'unknown' });
   assert.equal(env.find(), undefined);
   controller.disconnectedCallback();

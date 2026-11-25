@@ -5,9 +5,9 @@ import { ScrollView } from '@/components/app-scroll-view';
 import { Text } from '@/components/app-text';
 import { DiaryUniverse } from '@/components/diary-universe';
 import { GroupChatDock } from '@/components/group-chat-dock';
-import { QuestFrame } from '@/components/ui/design-decoration';
+import { GroupQuestDrawer } from '@/components/group-quest-drawer';
 import { Avatar } from '@/components/ui/group-profile-control';
-import { GroupPanelFrame, GroupUniverseHeaderFrame, GroupUniverseIcon } from '@/components/ui/group-universe-decoration';
+import { GroupPanelFrame, GroupReadAllIcon, GroupUniverseHeaderFrame, GroupUniverseIcon } from '@/components/ui/group-universe-decoration';
 import { SpaceButton } from '@/components/ui/space-ui';
 import { DesignFonts } from '@/constants/ui-design';
 import { useGroupSocial } from '@/hooks/use-group-social';
@@ -39,7 +39,7 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   const { t } = useLanguage();
   const { accessToken, profile } = useDiary();
   const revision = authSession.getRevision();
-  const { height } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const layout = useResponsiveLayout();
   const s = layout.scale;
   const [chatExpanded, setChatExpanded] = useState(initialChat);
@@ -156,9 +156,7 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   const titleHeight = Math.max(24, 28 * s) * fontScale;
   const headerHeight = titleHeight + 24 * s;
   const controlsTop = layout.headerTop + headerHeight + 9 * s;
-  const questButtonSize = { width: 86 * s, height: Math.max(44, 38 * s) };
-  const clearButtonWidth = (108 * Math.max(1, fontScale) + 16) * s;
-  const clearButtonLabel = t('전체 읽음 표시');
+  const clearButtonLabel = t('모두 읽음');
   const panelTop = controlsTop + Math.max(44, 40 * s) + 4 * s;
   const panelWidth = Math.min(236 * s, layout.chromeWidth - 24 * s);
   const chatWidth = Math.min(460, layout.chromeWidth - 68 * s);
@@ -166,6 +164,7 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   const chatBottom = layout.navBottom + 24 * s;
   const chatHistoryHeight = Math.max(72, Math.min(176 * s, height * 0.24));
   const panelHeight = Math.max(120, Math.min(488 * s, height - panelTop - chatBottom - 72 * s));
+  const questPanelWidth = Math.min(312 * s, layout.chromeWidth - 68 * s);
 
   return <View style={styles.screen} testID="group-experience">
     {/* [2026-11-19] 홈 우주처럼 배경 사진(night-sky.png)을 빼고 단색(#000)+3D 배경 별 한 겹만 보이게 함 */}
@@ -189,21 +188,12 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
       <View pointerEvents="box-none" style={[styles.rightControls, { gap: 8 * s }]}>
         <Pressable accessibilityRole="button" accessibilityLabel={clearButtonLabel}
           accessibilityState={{ disabled: clearingHighlights || unreadIds.length === 0, busy: clearingHighlights }}
+          aria-busy={clearingHighlights}
           disabled={clearingHighlights || unreadIds.length === 0} onPress={clearHighlights}
-          style={[styles.quest, questButtonSize, { width: clearButtonWidth }, unreadIds.length === 0 && styles.controlDisabled]}>
-          <QuestFrame scale={s * 1.12} width={clearButtonWidth} />
-          <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.questLabel, { paddingHorizontal: 8 * s }]}>
-            {clearingHighlights ? <ActivityIndicator size="small" color="#fff" /> :
-              <Text style={[styles.questText, { fontSize: 13 * s, textAlign: 'center' }]}>{clearButtonLabel}</Text>}
-          </View>
-        </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel={t('그룹 퀘스트')}
-          accessibilityState={{ expanded: panel === 'quest' }} onPress={() => togglePanel('quest')}
-          style={[styles.quest, questButtonSize]}>
-          <QuestFrame scale={s * 1.12} />
-          <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.questLabel]}>
-            <Text style={[styles.questText, { fontSize: 16 * s }]}>Quest</Text>
-          </View>
+          style={({ pressed }) => [styles.readAll, { gap: 7 * s, paddingHorizontal: 8 * s, opacity: pressed ? 0.6 : 1 },
+            unreadIds.length === 0 && styles.controlDisabled]}>
+          {clearingHighlights ? <ActivityIndicator size="small" color="#ddd" /> : <GroupReadAllIcon size={24 * s} />}
+          <Text style={[styles.readAllText, { fontSize: 13 * s, lineHeight: 20 * s }]}>{clearButtonLabel}</Text>
         </Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel={t('그룹 멤버 목록')}
           accessibilityState={{ expanded: panel === 'members' }} onPress={() => togglePanel('members')} style={styles.icon}>
@@ -216,7 +206,7 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
     <GroupChatDock key={group.id} groupId={group.id} bottom={chatBottom} left={chatLeft} width={chatWidth} scale={s}
       unread={data?.chat_unread_count ?? 0} onRead={refresh} initialExpanded={initialChat} expanded={chatOpen} onExpandedChange={expanded=>{if(expanded)selection.onChange(null);setChatExpanded(expanded);}} />
 
-    {panel && <>
+    {panel === 'members' && <>
       <Pressable style={styles.backdrop} accessibilityRole="button" accessibilityLabel={t('그룹 패널 닫기')} onPress={() => setPanel(null)} />
       <View accessibilityViewIsModal testID={`group-${panel}-panel`} style={[styles.panel, {
         left: layout.chromeLeft + layout.chromeWidth - panelWidth - 10 * s,
@@ -224,7 +214,6 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
       }]}>
         <View pointerEvents="none" style={StyleSheet.absoluteFill}><GroupPanelFrame /></View>
         <View style={[styles.panelContent, { paddingHorizontal: 20 * s, paddingTop: 18 * s, paddingBottom: 12 * s }]}>
-          {panel === 'members' ? <>
             <View style={[styles.code, { paddingBottom: 13 * s }]}>
               <Text selectable accessibilityLabel={t('방 코드')} style={[styles.codeText, { fontSize: 15 * s }]}>{t('코드: {code}', { code: group.invite_code })}</Text>
             </View>
@@ -250,40 +239,28 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
                 <Text style={styles.leaveText}>{t(leaving ? '나가는 중…' : '그룹 나가기')}</Text>
               </Pressable>
             </View>
-          </> : <>
-            <Text accessibilityRole="header" style={styles.panelTitle}>{t('그룹 퀘스트')}</Text>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.questContent}>
-              {data ? <>
-                <Text style={styles.text}>{t(data.quest.title)}</Text>
-                <Text style={styles.bio}>{t('오늘 그룹 멤버가 각자 일기를 공유하면 완료돼요.')}</Text>
-                <View style={styles.track}><View style={[styles.progress, { width: `${data.quest.total ? Math.min(100, data.quest.completed / data.quest.total * 100) : 0}%` }]} /></View>
-                <Text style={styles.text}>{t('{completed}/{total}명', { completed: data.quest.completed, total: data.quest.total })}{data.quest.done ? ` · ${t('오늘의 미션 완료')}` : ''}</Text>
-                <Text style={styles.muted}>{data.quest.day}</Text>
-              </> : socialError
-                ? <Pressable accessibilityRole="button" onPress={refresh}><Text style={styles.warning}>{t('퀘스트를 불러오지 못했어요. 다시 시도')}</Text></Pressable>
-                : <ActivityIndicator color="#fff" />}
-            </ScrollView>
-          </>}
         </View>
       </View>
     </>}
+    {panel !== 'members' && <GroupQuestDrawer open={panel === 'quest'} scale={s} top={panelTop}
+      right={Math.max(0, width - layout.navLeft - layout.navWidth)} width={questPanelWidth} height={panelHeight}
+      quest={data?.quest ?? null} error={socialError} onRetry={refresh}
+      onToggle={() => togglePanel('quest')} onClose={() => setPanel(null)} />}
   </View>;
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#000' },
+  screen: { flex: 1, backgroundColor: '#000', overflow: 'hidden' },
   titleFrame: { position: 'absolute' },
   groupName: { position: 'absolute', color: '#fff', fontFamily: DesignFonts.bold, textAlign: 'center', includeFontPadding: false },
   controls: { position: 'absolute', zIndex: 7, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   icon: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   rightControls: { flexDirection: 'row', alignItems: 'center', flexShrink: 1 },
   controlDisabled: { opacity: 0.45 },
-  quest: { alignItems: 'center', justifyContent: 'center' },
-  questLabel: { alignItems: 'center', justifyContent: 'center' },
-  questText: { color: '#fff', fontFamily: DesignFonts.bold },
+  readAll: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 44, flexShrink: 1 },
+  readAllText: { color: '#ddd', fontFamily: DesignFonts.regular, flexShrink: 1 },
   empty: { position: 'absolute', top: '38%', left: 28, right: 28, alignItems: 'center', gap: 12 },
   text: { color: '#f4f4fa', fontSize: 13, lineHeight: 20 },
-  muted: { color: '#d1d1d8', fontSize: 11 },
   readError: { position: 'absolute', left: 24, right: 24, color: '#ffd3df', fontSize: 11 },
   backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 5 },
   panel: { position: 'absolute', zIndex: 6 },
@@ -301,8 +278,4 @@ const styles = StyleSheet.create({
   notification: { borderColor: '#ffffffa0', backgroundColor: '#ffffff0a' },
   leave: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   leaveText: { color: '#c5c5ce', fontSize: 10 },
-  panelTitle: { color: '#fff', fontSize: 17, fontFamily: DesignFonts.bold, textAlign: 'center', paddingBottom: 18, borderBottomWidth: 1, borderColor: '#ffffff60' },
-  questContent: { gap: 18, paddingTop: 24, paddingBottom: 12 },
-  track: { height: 6, backgroundColor: '#ffffff30', borderRadius: 3, overflow: 'hidden' },
-  progress: { height: '100%', backgroundColor: '#e7efff' },
 });

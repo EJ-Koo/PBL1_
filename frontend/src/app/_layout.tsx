@@ -14,6 +14,7 @@ import { DiaryProvider } from '@/store/diary-context';
 import { ShopProvider } from '@/store/shop-context';
 import { ShopMusic } from '@/components/shop-music';
 import { NoticeDialogHost } from '@/components/notice-dialog-host';
+import { EquippedCursor } from '@/components/equipped-cursor';
 
 export default function RootLayout() {
   useEffect(() => { void loadSettings(); void loadLanguage(); }, []);
@@ -44,7 +45,7 @@ export default function RootLayout() {
             <Stack.Screen name="admin/login" />
             <Stack.Screen name="admin/index" />
           </Stack>
-          <NoticeDialogHost /><SessionGuard /><GroupPushGuard />
+          <NoticeDialogHost /><SessionGuard /><GroupPushGuard /><EquippedCursor />
           </QuestProvider>
         </ShopProvider>
       </DiaryProvider>

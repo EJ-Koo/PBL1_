@@ -59,11 +59,15 @@ test('cursor records accept supported shapes and hex colors only', () => {
   }
 });
 
-test('the astronaut uses the same ownership and single-cursor equipment rules as particle cursors', () => {
+for (const [style, name, color] of [
+  ['astronaut_blue', '우주비행사(blue)', '#48DFFF'],
+  ['astronaut_pink', '우주비행사(pink)', '#FF85C1'],
+  ['ufo_mint', 'UFO(민트)', '#70FFE0'],
+]) test(`${name} uses the same ownership and single-cursor equipment rules as particle cursors`, () => {
   const starter = starterItem(true);
-  const astronaut = { ...starter, id: 'cursor_astronaut_blue', name: '우주비행사(blue)', equipped: false,
-    effect: { type: 'cursor', style: 'astronaut_blue', color: '#48dfff' } };
-  assert.deepEqual(cursorEffect(astronaut.effect), { type: 'cursor', style: 'astronaut_blue', color: '#48DFFF' });
+  const astronaut = { ...starter, id: `cursor_${style}`, name, equipped: false,
+    effect: { type: 'cursor', style, color: color.toLowerCase() } };
+  assert.deepEqual(cursorEffect(astronaut.effect), { type: 'cursor', style, color });
   assert.equal(equippedCursor([{ ...astronaut, quantity: 0, equipped: true }]), null);
   const applied = withEquipment([starter, astronaut], astronaut.id, true);
   assert.equal(applied[0].equipped, false);
