@@ -118,6 +118,12 @@ export const SPECIAL_EFFECT_SETTINGS = {
   maxFull: { low: 8, medium: 24, high: 40 } as Record<PlanetQuality, number>,
   /** 저품질(휴대폰·행성 많음)에서는 가까운 행성도 입자를 그리지 않는다(선택한 행성만) */
   particlesWhenNear: { low: false, medium: true, high: true } as Record<PlanetQuality, boolean>,
+  /**
+   * [2026-11-25] 상세 장식(별가루·별빛 잔해·위성 잔상·광륜): 선택하거나 확대해서 가까이 본 행성에만.
+   * 전체 우주에서는 효과 본체(고리·위성·별똥별)만 그려 화면이 복잡하지 않게 한다.
+   * distance: 카메라와 이 거리 안이면 '확대해서 본 행성', max: 기기 사양별 최대 개수(가까운 순서)
+   */
+  detail: { distance: 6.5, max: { low: 1, medium: 4, high: 6 } as Record<PlanetQuality, number> },
 };
 
 /**

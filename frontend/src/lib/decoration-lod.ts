@@ -22,6 +22,25 @@ export type DecorationLodOptions = {
   dimmed?: ReadonlySet<string>;
 };
 
+/**
+ * [2026-11-25] 상세 장식(별가루·별빛 잔해·위성 잔상·광륜 같은 추가 입자)을 켤 행성.
+ * 전체 우주에서는 행성 특징(재질·고리·위성·별똥별 본체)만 두고 주변 장식은 간소화한다.
+ * 카메라를 가까이 가져가 확대한 행성(detailDistance 안, 가까운 순서로 maxDetail 개)만 켠다. 선택한 행성·미리보기는 효과 쪽에서 바로 켠다.
+ * 전환 중(moving)·별자리 밖(dimmed)은 끈다.
+ */
+export function detailIds(
+  ranked: readonly { id: string; d: number }[],
+  o: { maxDetail: number; detailDistance: number; moving?: boolean; dimmed?: ReadonlySet<string> }
+): Set<string> {
+  const out = new Set<string>();
+  if (o.moving) return out;
+  for (const r of ranked) {
+    if (out.size >= o.maxDetail || r.d >= o.detailDistance) break;
+    if (!o.dimmed?.has(r.id)) out.add(r.id);
+  }
+  return out;
+}
+
 /** ranked = 카메라에서 가까운 순서로 정렬한 꾸민 행성(id, 거리) */
 export function decorationTiers(ranked: readonly { id: string; d: number }[], o: DecorationLodOptions): Map<string, DecorationTier> {
   const out = new Map<string, DecorationTier>();
