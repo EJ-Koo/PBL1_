@@ -58,8 +58,10 @@ import {
   type SurfaceStyle,
   type SurfaceTier,
 } from '@/lib/surface-style';
-import { buildSurfaceFragmentShader } from '@/lib/surface-shader';
-import { decorationTiers } from '@/lib/decoration-lod';
+import { CLOUD_SHAPE, SURFACE_BODY_SHAPE, buildSurfaceFragmentShader, buildSurfaceVertexShader } from '@/lib/surface-shader';
+import { decorationTiers, detailIds } from '@/lib/decoration-lod';
+import { createFacetedGeometry } from '@/components/surface-extras';
+import { softenStrip } from '@/lib/soft-strip';
 import {
   CONSTELLATION_CONFIG,
   arriveDuration,
@@ -83,7 +85,7 @@ import {
   type ConstellationRuntime,
   type RuntimeRef,
 } from './constellation-visuals';
-import { EFFECT_TIERS, LIGHT_DIR_GLSL, SpecialEffect, type SharedUniforms } from './planet-effects';
+import { EFFECT_DETAIL, EFFECT_TIERS, LIGHT_DIR_GLSL, SpecialEffect, type SharedUniforms } from './planet-effects';
 
 // pointsMaterial은 텍스처가 없으면 각 점을 네모로 그린다. 중심은 불투명, 가장자리는
 // 투명한 작은 원형 텍스처를 입혀서 동그란 별점으로 보이게 한다.
@@ -483,8 +485,10 @@ const ATMOSPHERE_FRAGMENT_SHADER = `
   }
 `;
 
-function createBandTexture(visual: PlanetVisual, rand: number[]) {
-  const texture = new DataTexture(planetBandStrip(visual, rand), BAND_TEXELS, 1, RGBAFormat);
+function createBandTexture(visual: PlanetVisual, rand: number[], soft = false) {
+  // [2026-11-26] soft: 솜사탕 구름용으로 넓게 흐린 사본(감정 색·비율 그대로, 큰 색 영역)
+  const strip = planetBandStrip(visual, rand);
+  const texture = new DataTexture(soft ? softenStrip(strip, BAND_TEXELS) : strip, BAND_TEXELS, 1, RGBAFormat);
   texture.magFilter = LinearFilter;
   texture.minFilter = LinearFilter;
   texture.wrapS = ClampToEdgeWrapping;
@@ -572,6 +576,12 @@ function Planet({
   // 색 줄(일기마다 고정): 층 배치·보조 감정 층 위치. 보조 감정 층 면적 = 서버가 정한 weight
   const bandTexture = useMemo(() => createBandTexture(visual, rand.slice(9)), [visual, rand]);
   useEffect(() => () => bandTexture.dispose(), [bandTexture]);
+  // [2026-11-26] 솜사탕 구름만: 넓게 흐린 감정 색 줄(큰 색 영역)
+  const softStrip = useMemo(
+    () => (surface === 'pastel_cloud' ? createBandTexture(visual, rand.slice(9), true) : null),
+    [surface, visual, rand]
+  );
+  useEffect(() => () => softStrip?.dispose(), [softStrip]);
 
   // 대기광: 대표색과 어울리는 색(밝은 색 쪽), 세기는 행성마다 다르게.
   // 서버 glow(밝고 강한 감정일수록 큼, '없음'은 0)를 따르고, 같은 감정끼리도 똑같지 않게 일기별 고정 난수를 조금 더한다.
@@ -586,6 +596,13 @@ function Planet({
     () => buildSurfaceFragmentShader(PLANET_FRAGMENT_SHADER, surface, SURFACE_OVERLAY_MAX),
     [surface]
   );
+  // [2026-11-25] 크리스탈: 정점 셰이더에 면 무게중심 좌표, 몸통은 깎은 다면체(크기 그대로). 다른 스타일은 기존 그대로.
+  const vertexShader = useMemo(() => buildSurfaceVertexShader(PLANET_VERTEX_SHADER, surface), [surface]);
+  const faceted = useMemo(
+    () => (surface && SURFACE_BODY_SHAPE[surface] === 'faceted' ? createFacetedGeometry(radius) : null),
+    [surface, radius]
+  );
+  useEffect(() => () => faceted?.dispose(), [faceted]);
 
   const bodyUniforms = useMemo(() => {
     const style = PATTERN_STYLE[visual.pattern];
@@ -599,6 +616,8 @@ function Planet({
           uSurfaceTier: { value: 0 },
           uSurfaceAmount: { value: SURFACE_STYLE_SETTINGS.amount },
           uAccentA: { value: new Color(effectPalette.accent) },
+          // [2026-11-26] 솜사탕 구름: 표면을 부풀리는 높이(반지름 대비). 다른 스타일 셰이더는 이 값을 쓰지 않는다.
+          ...(surface === 'pastel_cloud' ? { uCloudLift: { value: CLOUD_SHAPE.lift }, uSoftStrip: { value: softStrip } } : {}),
         }
       : {};
     return {
@@ -621,7 +640,7 @@ function Planet({
       uSeed: { value: new Vector3(r0 * 40, r1 * 40, r2 * 40) },
       uDim: { value: 0 },
     };
-  }, [visual, palette, bandTexture, brightness, atmo, atmoColor, shared, r0, r1, r2, r6, r7, r8, surface, effectPalette.accent]);
+  }, [visual, palette, bandTexture, brightness, atmo, atmoColor, shared, r0, r1, r2, r6, r7, r8, surface, effectPalette.accent, softStrip]);
 
   const ringUniforms = useMemo(
     () => ({
@@ -726,15 +745,28 @@ function Planet({
             if (isFrontmost(e)) onPressStart?.();
           }}
         >
-          <sphereGeometry args={[radius, q.segments, Math.round(q.segments * 0.75)]} />
+          {faceted ? (
+            <primitive key={faceted.uuid} object={faceted} attach="geometry" />
+          ) : (
+            // [2026-11-26] 솜사탕 구름은 정점 셰이더가 표면을 부풀리므로 곡면이 각지지 않게 분할을 조금 더(CLOUD_SHAPE.segments)
+            <sphereGeometry
+              key={surface === 'pastel_cloud' ? 'cloud' : 'base'}
+              args={(() => {
+                const seg = surface === 'pastel_cloud' ? Math.max(q.segments, CLOUD_SHAPE.segments[quality]) : q.segments;
+                return [radius, seg, Math.round(seg * 0.75)] as [number, number, number];
+              })()}
+            />
+          )}
           <shaderMaterial
             ref={bodyMat}
             // 품질·표면 스타일이 바뀌면 재질을 새로 만든다(셰이더가 다르다)
             key={`${quality}|${surface ?? 'base'}`}
             uniforms={bodyUniforms}
-            vertexShader={PLANET_VERTEX_SHADER}
+            vertexShader={vertexShader}
             fragmentShader={fragmentShader}
             defines={{ OCTAVES: q.octaves }}
+            // [2026-11-26] 솜사탕 구름만 가장자리가 반투명(안개처럼 번짐). 다른 스타일·기본 행성은 기존처럼 불투명.
+            transparent={surface === 'pastel_cloud'}
           />
         </mesh>
       </group>
@@ -1191,6 +1223,7 @@ export function UniverseScene({
   useEffect(
     () => () => {
       EFFECT_TIERS.clear();
+      EFFECT_DETAIL.clear();
       SURFACE_TIERS.clear();
     },
     []
@@ -1255,6 +1288,18 @@ export function UniverseScene({
           dimmed: dimmedOf(specialEntries),
         });
         for (const [id, tier] of tiers) EFFECT_TIERS.set(id, tier as EffectTier);
+      }
+      // [2026-11-25] 상세 장식(추가 입자·잔상)은 확대해서 가까이 본 효과 행성에만(전체 우주에서는 간소화)
+      EFFECT_DETAIL.clear();
+      if (specialEntries.length) {
+        const D = SPECIAL_EFFECT_SETTINGS.detail;
+        for (const id of detailIds(rank(specialEntries), {
+          maxDetail: D.max[quality],
+          detailDistance: D.distance,
+          moving,
+          dimmed: dimmedOf(specialEntries),
+        }))
+          EFFECT_DETAIL.add(id);
       }
       SURFACE_TIERS.clear();
       if (surfaceEntries.length) {

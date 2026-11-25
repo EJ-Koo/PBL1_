@@ -1,7 +1,7 @@
 // [2026-11-22] 꾸민 행성 단계(src/lib/decoration-lod.ts). 실행: npm test
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { decorationTiers } from '../src/lib/decoration-lod.ts';
+import { decorationTiers, detailIds } from '../src/lib/decoration-lod.ts';
 import { SPECIAL_EFFECT_SETTINGS } from '../src/lib/special-planet.ts';
 import { SURFACE_STYLE_SETTINGS } from '../src/lib/surface-style.ts';
 
@@ -40,4 +40,22 @@ test('matchPreview=false 면 예전 거리별 규칙(가까운 6개·거리 9 �
   assert.equal(count(t, 1), 6);
   assert.equal(count(t, 2), 0);
   assert.equal(t.get('p11'), 0);
+});
+
+// [2026-11-25] 전체 우주 vs 상세: 추가 장식(별가루·잔해·잔상)은 확대해서 가까이 본 행성에만
+test('상세 장식: 가까운 순서로 거리 안·상한까지만, 멀리 있는 행성은 간소화', () => {
+  const D = SPECIAL_EFFECT_SETTINGS.detail;
+  assert.ok(D.max.low <= D.max.medium && D.max.medium <= D.max.high, '휴대폰(저품질)일수록 적게');
+  const r = ranked(10); // 거리 2, 3, 4, …
+  assert.deepEqual([...detailIds(r, { maxDetail: 4, detailDistance: 4.5 })], ['p0', 'p1', 'p2']);
+  assert.deepEqual([...detailIds(r, { maxDetail: 2, detailDistance: 100 })], ['p0', 'p1']);
+  // 전체 우주(카메라가 멀리): 아무 행성도 상세 장식 없음
+  assert.equal(detailIds(r.map((x) => ({ ...x, d: x.d + 20 })), { maxDetail: 6, detailDistance: D.distance }).size, 0);
+});
+
+test('상세 장식: 별자리 전환 중·별자리 밖(어둡게 한) 행성은 끈다', () => {
+  const r = ranked(5);
+  assert.equal(detailIds(r, { maxDetail: 5, detailDistance: 100, moving: true }).size, 0);
+  const out = detailIds(r, { maxDetail: 5, detailDistance: 100, dimmed: new Set(['p0', 'p2']) });
+  assert.deepEqual([...out], ['p1', 'p3', 'p4']);
 });

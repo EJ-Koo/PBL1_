@@ -14,6 +14,12 @@ export type SharedUniforms = { uFocus: { value: number }; uDepthFade: { value: V
 /** 효과 단계: 카메라 거리·선택에 따라 UniverseScene이 주기적으로 정한다(행성 id → 단계). 없으면 0(멀리). */
 export const EFFECT_TIERS = new Map<string, EffectTier>();
 
+/**
+ * [2026-11-25] 상세 장식(추가 입자·잔상·광륜)을 켤 행성 id. 우주 화면이 0.3초마다 정한다(확대해서 가까이 본 행성).
+ * 선택한 행성·미리보기(단계 고정)는 여기에 없어도 켠다. 설정: special-planet.ts SPECIAL_EFFECT_SETTINGS.detail
+ */
+export const EFFECT_DETAIL = new Set<string>();
+
 export type EffectPalette = { deep: string; base: string; tone: string; light: string; accent: string };
 
 // 선택 강조·먼 행성 어둡게(행성 본체와 같은 규칙)
