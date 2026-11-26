@@ -18,9 +18,9 @@ export function GroupUniverseHeaderFrame({ width, scale, titleWidth = 148 * scal
   </Svg>;
 }
 
-export function GroupUniverseIcon({ kind, size = 40 }: { kind: 'back' | 'members'; size?: number }) {
+export function GroupUniverseIcon({ kind, size = 40, highlighted=false }: { kind: 'back' | 'members'; size?: number; highlighted?:boolean }) {
   return <Svg width={size} height={size} viewBox="0 0 40 40" pointerEvents="none">
-    <Circle cx={20} cy={20} r={19} fill="#00000080" stroke="#fff" strokeWidth={2} />
+    <Circle cx={20} cy={20} r={19} fill="#00000080" stroke={highlighted?'#f6d879':'#fff'} strokeWidth={2} />
     {kind === 'back'
       ? <Path d="M18 8L8 18l10 10v-7c8-1 11 3 13 9 1-11-3-16-13-16Z" fill="#fff" />
       : <><Circle cx={18} cy={15} r={4.5} fill="#fff" />
@@ -31,9 +31,9 @@ export function GroupUniverseIcon({ kind, size = 40 }: { kind: 'back' | 'members
   </Svg>;
 }
 
-export function GroupReadAllIcon({ size = 24 }: { size?: number }) {
+export function GroupReadAllIcon({ size = 24, highlighted=false }: { size?: number; highlighted?:boolean }) {
   return <Svg width={size} height={size} viewBox="0 0 24 24" pointerEvents="none" aria-hidden>
-    <Path d="M2 12l4 4L16 6 M12 16L22 6" fill="none" stroke="#ddd" strokeWidth={1.5}
+    <Path d="M2 12l4 4L16 6 M12 16L22 6" fill="none" stroke={highlighted?'#f6d879':'#ddd'} strokeWidth={1.5}
       strokeLinecap="round" strokeLinejoin="round" />
   </Svg>;
 }

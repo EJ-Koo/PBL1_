@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, BackHandler, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { BackHandler, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 
 import { ScrollView } from '@/components/app-scroll-view';
 import { Text } from '@/components/app-text';
 import { DiaryUniverse } from '@/components/diary-universe';
 import { GroupChatDock } from '@/components/group-chat-dock';
 import { GroupQuestDrawer } from '@/components/group-quest-drawer';
-import { Avatar } from '@/components/ui/group-profile-control';
-import { GroupPanelFrame, GroupReadAllIcon, GroupUniverseHeaderFrame, GroupUniverseIcon } from '@/components/ui/group-universe-decoration';
+import { GroupMembersPanel } from '@/components/ui/group-universe-panels';
+import { GroupUniverseHeader } from '@/components/ui/group-universe-header';
+import { groupUniverseLayout } from '@/lib/group-universe-layout';
 import { SpaceButton } from '@/components/ui/space-ui';
-import { DesignFonts } from '@/constants/ui-design';
 import { useGroupSocial } from '@/hooks/use-group-social';
 import { useGroupConstellation } from '@/hooks/use-group-constellation';
 import { ConstellationModeToggle, ConstellationPanel } from '@/components/ui/constellation-panel';
@@ -158,24 +158,8 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   };
   const members = data?.members ?? group.members.map(item => ({ user_id: item.user_id, nickname: item.nickname ?? t('멤버'), bio: '', avatar_url: null }));
   const fontScale = useFontScale();
-  const titleFontSize = Math.max(14, 18 * s);
-  const titleWidth = Math.min(layout.chromeWidth - 32 * s, 260 * s);
-  const titleHeight = Math.max(24, 28 * s) * fontScale;
-  const headerHeight = titleHeight + 24 * s;
-  const controlsTop = layout.headerTop + headerHeight + 9 * s;
-  const clearButtonLabel = t('모두 읽음');
-  const panelTop = controlsTop + Math.max(44, 40 * s) + 4 * s;
-  const panelWidth = Math.min(236 * s, layout.chromeWidth - 24 * s);
-  const chatWidth = Math.min(460, layout.chromeWidth - 68 * s);
-  const chatLeft = layout.chromeLeft + (layout.chromeWidth - chatWidth) / 2;
-  const chatBottom = layout.navBottom + 24 * s;
-  const chatHistoryHeight = Math.max(72, Math.min(176 * s, height * 0.24));
-  const panelHeight = Math.max(120, Math.min(488 * s, height - panelTop - chatBottom - 72 * s));
-  const questPanelWidth = Math.min(312 * s, layout.chromeWidth - 68 * s);
-  const toggleBottom = chatBottom + 56 * s + 38 + (chatOpen ? chatHistoryHeight : 0);
-  const infoBottom = toggleBottom + Math.max(44, 32 * s) + 8;
-  const infoWidth = layout.wide ? Math.min(400 * s, layout.chromeWidth * .42) : layout.chromeWidth - 24;
-  const infoLeft = layout.chromeLeft + 12;
+  const geometry = groupUniverseLayout(layout,fontScale,height,chatOpen);
+  const {panelTop,panelWidth,chatWidth,chatLeft,chatBottom,panelHeight,questPanelWidth,toggleBottom,infoBottom,infoWidth,infoLeft}=geometry;
   const constellationInsets = {
     top: Math.min(.4, (panelTop + 8) / height),
     bottom: Math.min(.6, (layout.wide ? toggleBottom + 44 : infoBottom + constellation.panelHeight + 12) / height),
@@ -195,37 +179,15 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
     <DiaryUniverse groupId={group.id} sceneKey={`${revision}:group-${group.id}`} entries={entries} backgroundStarScale={1}
       selection={{id:selection.id,onChange:selectDiary}} unreadIds={unreadIds} onDiaryRead={read}
       constellation={constellationRequest} frontViewRequest={constellation.frontViewRequest}
-      popupInsets={{ top: panelTop + 4 * s, bottom: constellation.enabled ? infoBottom + constellation.panelHeight + 12 : chatBottom + 68 * s + (chatOpen ? chatHistoryHeight : 20*s) }} />
+      popupInsets={{ top: panelTop + 4 * s, bottom: constellation.enabled ? infoBottom + constellation.panelHeight + 12 : geometry.popupBottom }} />
     {(loading || error || entries.length === 0) && <View pointerEvents={error ? 'auto' : 'none'} style={styles.empty}>
       <Text style={styles.text}>{error ?? t(loading ? '그룹의 별을 불러오는 중…' : '아직 이 그룹에 공유된 별이 없어요.')}</Text>
       {error && <SpaceButton label={t('다시 불러오기')} onPress={onReload} />}
     </View>}
 
-    <View pointerEvents="none" style={[styles.titleFrame, { top: layout.headerTop, left: layout.chromeLeft, width: layout.chromeWidth, height: headerHeight }]}>
-      <GroupUniverseHeaderFrame width={layout.chromeWidth} scale={s} titleWidth={titleWidth} titleHeight={titleHeight} />
-      <Text accessibilityRole="header" accessibilityLabel={group.name} numberOfLines={1} ellipsizeMode="tail"
-        style={[styles.groupName, { left: (layout.chromeWidth - titleWidth) / 2 + 8 * s, width: titleWidth - 16 * s, top: 3 * s, fontSize: titleFontSize, lineHeight: Math.max(26, 28 * s) }]}>{group.name}</Text>
-    </View>
-    <View pointerEvents="box-none" style={[styles.controls, { top: controlsTop, left: layout.chromeLeft + 18 * s, width: layout.chromeWidth - 36 * s }]}>
-      <Pressable accessibilityRole="button" accessibilityLabel={t('그룹으로 돌아가기')} onPress={onBack} style={styles.icon}>
-        <GroupUniverseIcon kind="back" size={40 * s} />
-      </Pressable>
-      <View pointerEvents="box-none" style={[styles.rightControls, { gap: 8 * s }]}>
-        <Pressable accessibilityRole="button" accessibilityLabel={clearButtonLabel}
-          accessibilityState={{ disabled: clearingHighlights || unreadIds.length === 0, busy: clearingHighlights }}
-          aria-busy={clearingHighlights}
-          disabled={clearingHighlights || unreadIds.length === 0} onPress={clearHighlights}
-          style={({ pressed }) => [styles.readAll, { gap: 7 * s, paddingHorizontal: 8 * s, opacity: pressed ? 0.6 : 1 },
-            unreadIds.length === 0 && styles.controlDisabled]}>
-          {clearingHighlights ? <ActivityIndicator size="small" color="#ddd" /> : <GroupReadAllIcon size={24 * s} />}
-          <Text style={[styles.readAllText, { fontSize: 13 * s, lineHeight: 20 * s }]}>{clearButtonLabel}</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel={t('그룹 멤버 목록')}
-          accessibilityState={{ expanded: panel === 'members' }} onPress={() => togglePanel('members')} style={styles.icon}>
-          <GroupUniverseIcon kind="members" size={40 * s} />
-        </Pressable>
-      </View>
-    </View>
+    <GroupUniverseHeader name={group.name} layout={layout} geometry={geometry} onBack={onBack}
+      onReadAll={()=>void clearHighlights()} onMembers={()=>togglePanel('members')}
+      unread={unreadIds.length} busy={clearingHighlights} membersOpen={panel==='members'}/>
 
     <View pointerEvents="box-none" style={{position:'absolute',bottom:toggleBottom,left:layout.chromeLeft,width:layout.chromeWidth,alignItems:'center'}}>
       <ConstellationModeToggle scale={s} active={constellation.enabled} universeLabel="그룹 우주"
@@ -251,25 +213,8 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
 
     {panel === 'members' && <>
       <Pressable style={styles.backdrop} accessibilityRole="button" accessibilityLabel={t('그룹 패널 닫기')} onPress={() => setPanel(null)} />
-      <View accessibilityViewIsModal testID={`group-${panel}-panel`} style={[styles.panel, {
-        left: layout.chromeLeft + layout.chromeWidth - panelWidth - 10 * s,
-        top: panelTop, width: panelWidth, height: panelHeight,
-      }]}>
-        <View pointerEvents="none" style={StyleSheet.absoluteFill}><GroupPanelFrame /></View>
-        <View style={[styles.panelContent, { paddingHorizontal: 20 * s, paddingTop: 18 * s, paddingBottom: 12 * s }]}>
-            <View style={[styles.code, { paddingBottom: 13 * s }]}>
-              <Text selectable accessibilityLabel={t('방 코드')} style={[styles.codeText, { fontSize: 15 * s }]}>{t('코드: {code}', { code: group.invite_code })}</Text>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={styles.memberList} contentContainerStyle={{ paddingBottom: 12 * s }}>
-              {members.map((member, index) => <View key={member.user_id} style={[styles.member, index > 0 && styles.memberDivider, { minHeight: 88 * s, gap: 18 * s }]}>
-                <Avatar uri={member.avatar_url} size={40 * s} />
-                <View style={styles.memberDetails}>
-                  <Text style={[styles.memberName, { fontSize: Math.max(16, 16 * s), lineHeight: Math.max(24, 24 * s) }]}>{member.nickname}</Text>
-                  <Text style={[styles.bio, { fontSize: Math.max(13, 13 * s), lineHeight: Math.max(20, 20 * s) }]}>{member.bio || t('한줄소개')}</Text>
-                </View>
-              </View>)}
-              {socialError && <Pressable accessibilityRole="button" onPress={refresh}><Text style={styles.warning}>{t('추가 정보를 불러오지 못했어요. 다시 시도')}</Text></Pressable>}
-            </ScrollView>
+      <GroupMembersPanel left={layout.chromeLeft+layout.chromeWidth-panelWidth-10*s} top={panelTop}
+        width={panelWidth} height={panelHeight} scale={s} code={group.invite_code} members={members} error={socialError} onRetry={refresh}>
             <View style={styles.panelActions}>
               <SpaceButton label={t(pushBusy ? '연결 중…' : pushEnabled ? '그룹 알림 끄기' : '그룹 알림 받기')}
                 onPress={() => void push()} disabled={pushBusy||checkingPush} scale={s} style={styles.notification} />
@@ -282,8 +227,7 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
                 <Text style={styles.leaveText}>{t(leaving ? '나가는 중…' : '그룹 나가기')}</Text>
               </Pressable>
             </View>
-        </View>
-      </View>
+      </GroupMembersPanel>
     </>}
     {panel !== 'members' && <GroupQuestDrawer open={panel === 'quest'} scale={s} top={panelTop}
       right={Math.max(0, width - layout.navLeft - layout.navWidth)} width={questPanelWidth} height={panelHeight}
@@ -294,29 +238,10 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#000', overflow: 'hidden' },
-  titleFrame: { position: 'absolute' },
-  groupName: { position: 'absolute', color: '#fff', fontFamily: DesignFonts.bold, textAlign: 'center', includeFontPadding: false },
-  controls: { position: 'absolute', zIndex: 7, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  icon: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  rightControls: { flexDirection: 'row', alignItems: 'center', flexShrink: 1 },
-  controlDisabled: { opacity: 0.45 },
-  readAll: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 44, flexShrink: 1 },
-  readAllText: { color: '#ddd', fontFamily: DesignFonts.regular, flexShrink: 1 },
   empty: { position: 'absolute', top: '38%', left: 28, right: 28, alignItems: 'center', gap: 12 },
   text: { color: '#f4f4fa', fontSize: 13, lineHeight: 20 },
   readError: { position: 'absolute', left: 24, right: 24, color: '#ffd3df', fontSize: 11 },
   backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 5 },
-  panel: { position: 'absolute', zIndex: 6 },
-  panelContent: { flex: 1 },
-  code: { alignItems: 'center', borderBottomWidth: 1, borderColor: '#ffffff60' },
-  codeText: { color: '#fff', fontFamily: DesignFonts.regular, textAlign: 'center' },
-  memberList: { flex: 1 },
-  member: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 },
-  memberDivider: { borderTopWidth: 1, borderColor: '#ffffff60' },
-  memberDetails: { flex: 1, minWidth: 0, gap: 7 },
-  memberName: { color: '#fff' },
-  bio: { color: '#f0f0f4', fontSize: 13, lineHeight: 20 },
-  warning: { color: '#ffe2d5', fontSize: 11, lineHeight: 18, paddingVertical: 8 },
   panelActions: { paddingHorizontal: 4 },
   notification: { borderColor: '#ffffffa0', backgroundColor: '#ffffff0a' },
   leave: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },

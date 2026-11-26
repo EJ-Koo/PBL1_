@@ -2,7 +2,7 @@ import { useFontScale } from '@/hooks/use-font-scale';
 import { useLanguage } from '@/lib/language';
 import { ScrollView } from '@/components/app-scroll-view';
 import { DiaryHeart } from '@/components/diary-heart';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { BackHandler, Image, Platform, Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
@@ -25,6 +25,7 @@ type Props = {
   onClose: () => void;
   onEdit: () => void;
   onDecorate: () => void;
+  reaction?: ReactNode;
 };
 
 const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
@@ -48,7 +49,7 @@ function AuthorAvatar({ author, size }: { author: NonNullable<Props['author']>; 
   );
 }
 
-export function StarDiaryPopup({ entry, anchor, viewport, editable, owned, loading, error, onRetry, author, onClose, onEdit, onDecorate, groupId }: Props) {
+export function StarDiaryPopup({ entry, anchor, viewport, editable, owned, loading, error, onRetry, author, onClose, onEdit, onDecorate, groupId, reaction }: Props) {
   const { t } = useLanguage();
   const fontScale = useFontScale();
   useEffect(() => {
@@ -123,7 +124,7 @@ export function StarDiaryPopup({ entry, anchor, viewport, editable, owned, loadi
           )}
         </ScrollView>
         {(owned || groupId) && !loading && !error && <View style={[styles.actions, groupId && styles.groupActions]}>
-          {groupId && <DiaryHeart key={`${groupId}:${entry.id}`} groupId={groupId} diaryId={entry.id} />}
+          {groupId && (reaction ?? <DiaryHeart key={`${groupId}:${entry.id}`} groupId={groupId} diaryId={entry.id} />)}
           {owned && <Pressable onPress={onDecorate} accessibilityRole="button" style={styles.action}>
             <Text style={styles.actionText}>{t("행성 꾸미기")}</Text>
           </Pressable>}

@@ -13,6 +13,7 @@ function compile(path,require){
 }
 const core=compile('../src/lib/tutorial.ts',name=>{throw Error(`Unexpected service: ${name}`);});
 const responsive=compile('../src/lib/responsive-layout.ts',name=>{throw Error(name);});
+const groupLayout=compile('../src/lib/group-universe-layout.ts',name=>{throw Error(name);});
 function nodes(node){
   if(!node||typeof node!=='object')return [];
   if(Array.isArray(node))return node.flatMap(nodes);
@@ -94,6 +95,8 @@ for(const width of [390,1440])test(`every practice step at width ${width} expose
     if(name==='react-native')return native;
     if(name==='react-native-safe-area-context')return {useSafeAreaInsets:()=>({top:0,bottom:0,left:0,right:0})};
     if(name==='expo-asset')return {Asset:{fromModule:()=>({uri:'/bundled-sample.png'})}};
+    if(name==='@/lib/group-universe-layout')return groupLayout;
+    if(name==='@/hooks/use-font-scale')return {useFontScale:()=>1};
     if(name.endsWith('.png'))return '/bundled-sample.png';
     if(name==='@/lib/tutorial')return core;
     if(name==='@/hooks/use-responsive-layout')return {useResponsiveLayout:()=>responsive.getResponsiveLayout(width,900,{top:0,bottom:0,left:0,right:0})};
@@ -109,6 +112,10 @@ for(const width of [390,1440])test(`every practice step at width ${width} expose
       '@/components/ui/home-hud':['HomeHud'],'@/components/ui/universe-bottom-nav':['UniverseBottomNav'],
       '@/components/ui/group-space-screen':['GroupSpaceScreen'],'@/components/ui/constellation-panel':['ConstellationModeToggle','ConstellationPanel'],
       '@/components/group-quest-drawer':['GroupQuestDrawer'],
+      '@/components/ui/group-universe-header':['GroupUniverseHeader'],
+      '@/components/ui/group-universe-panels':['GroupMembersPanel','GroupChatFrame'],
+      '@/components/ui/group-universe-decoration':['GroupSendIcon'],
+      '@/components/ui/star-diary-popup':['StarDiaryPopup'],
     };
     if(components[name])return Object.fromEntries(components[name].map(name=>[name,name]));
     throw Error(`Practice UI attempted to import a non-presentation service: ${name}`);
@@ -119,6 +126,8 @@ for(const width of [390,1440])test(`every practice step at width ${width} expose
     localSlots=[];
     state={...core.createTutorialState(),step,personal:core.practiceEntry('tutorial-diary','private practice',width===390?'rest_daily':'travel',0),
       groupEntry:core.practiceEntry('tutorial-shared','group practice','other',0)};
+    if(core.TUTORIAL_STEPS[step].id==='recorded')state.selected=state.personal.id;
+    if(core.TUTORIAL_STEPS[step].id==='group-read-info')state.selected=core.groupPracticeStars()[0].id;
     const tree=render();
     const all=nodes(tree),exit=all.find(node=>node.props.label==='종료하기');
     assert.ok(exit,core.TUTORIAL_STEPS[step].id);
@@ -126,6 +135,8 @@ for(const width of [390,1440])test(`every practice step at width ${width} expose
     assert.equal(overlay.props.style.position,'absolute');
     assert.equal(overlay.props.style.justifyContent,'center');
     assert.equal(tree.props.children[0].type,'KeyboardAvoidingView','The scene occupies the full screen; the guide is not a header');
+    const scene=all.find(node=>node.props.testID===`tutorial-step-${core.TUTORIAL_STEPS[step].id}`);
+    assert.ok(scene.props.style[1].marginBottom>=60,'A dedicated footer keeps tutorial controls clear of navigation and chat');
     assert.ok(!all.some(node=>['화면 보기','직접 해보기'].includes(node.props.label)));
     if(core.TUTORIAL_STEPS[step].event==='finish')exit.props.onPress();
     else {
@@ -134,6 +145,10 @@ for(const width of [390,1440])test(`every practice step at width ${width} expose
       if(state.step===step){
         assert.ok(!after.some(node=>node.props.testID==='tutorial-guide-dialog'));
         assert.ok(after.some(node=>node.props.testID==='tutorial-guide-controls'));
+        const footer=after.find(node=>node.props.testID==='tutorial-guide-controls');
+        assert.equal(footer.props.style[1].top,undefined);
+        assert.ok(footer.props.style[1].bottom>=0);
+        assert.equal(after.find(node=>node.props.testID===scene.props.testID).props.style[1].marginBottom,scene.props.style[1].marginBottom,'Opening/closing explanations must not move the scene');
         after.find(node=>node.props.label==='종료하기').props.onPress();
         after.find(node=>node.props.label==='설명 보기').props.onPress();
         assert.ok(nodes(render()).some(node=>node.props.testID==='tutorial-guide-dialog'));
@@ -148,6 +163,21 @@ for(const width of [390,1440])test(`every practice step at width ${width} expose
     if(groups)assert.ok(groups.props.profileControl,'Never mount the actual server-backed profile editor');
     const canvas=all.find(node=>node.type==='UniverseCanvas');
     if(canvas)assert.ok(canvas.props.sceneKey.startsWith('tutorial-account-run:'));
+    if(core.TUTORIAL_STEPS[step].scene==='group'){
+      const header=all.find(node=>node.type==='GroupUniverseHeader');
+      assert.ok(header);assert.equal(header.props.name,'용사');
+      const chat=all.find(node=>node.type==='GroupChatFrame');assert.ok(chat);
+      assert.equal(chat.props.left,header.props.geometry.chatLeft);
+      assert.equal(chat.props.width,header.props.geometry.chatWidth);
+      assert.equal(chat.props.bottom,header.props.geometry.chatBottom);
+      assert.equal(all.some(node=>node.type==='UniverseBottomNav'),core.TUTORIAL_STEPS[step].id==='group-write');
+    }
+    const popup=all.find(node=>node.type==='StarDiaryPopup');
+    if(popup&&popup.props.groupId){
+      assert.ok(popup.props.reaction,'Practice reactions must override the API-backed heart');
+      const header=all.find(node=>node.type==='GroupUniverseHeader');
+      assert.equal(popup.props.viewport.bottomInset,header.props.geometry.popupBottom);
+    }
     if(core.TUTORIAL_STEPS[step].id==='constellation-info'){
       const panel=all.find(node=>node.type==='ConstellationPanel');
       assert.equal(panel.props.topic,width===390?'rest_daily':'travel');

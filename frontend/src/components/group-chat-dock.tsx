@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Keyboard, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import { Text, TextInput } from '@/components/app-text';
-import { GroupChatChevron, GroupSendIcon } from '@/components/ui/group-universe-decoration';
+import { GroupSendIcon } from '@/components/ui/group-universe-decoration';
+import { GroupChatFrame } from '@/components/ui/group-universe-panels';
 import { Avatar } from '@/components/ui/group-profile-control';
 import { authSession } from '@/lib/auth-session';
 import { chatMessages, markChatRead, sendChat, type ChatMessage } from '@/lib/group-social-api';
@@ -82,8 +83,8 @@ export function GroupChatDock({ groupId, bottom, left, width, unread, onRead, in
     }catch(reason){if(alive.current && revision===authSession.getRevision()){setError(reason instanceof Error?reason.message:t('전송하지 못했어요. 다시 시도해주세요.'));changeExpanded(true);}}
     finally{lock.current=false;if(alive.current)setBusy(false);}
   };
-  return <View style={[styles.dock,{left,width,bottom:Math.max(bottom,keyboard?keyboard+12:0)}]} testID="group-chat">
-    {expanded && <View style={styles.history} testID="group-chat-history">
+  return <GroupChatFrame left={left} width={width} bottom={Math.max(bottom,keyboard?keyboard+12:0)} scale={scale}
+    expanded={expanded} unread={unread} onToggle={()=>{changeExpanded(!expanded);if(expanded)Keyboard.dismiss();}} history={<>
       <ScrollView ref={scroll} maintainVisibleContentPosition={{minIndexForVisible:0}} style={{height:Math.max(72,Math.min(176*scale,height*.24))}} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={[styles.messages,{padding:12*scale,gap:16*scale}]}
         onScroll={event=>{const {layoutMeasurement,contentOffset,contentSize}=event.nativeEvent;nearBottom.current=layoutMeasurement.height+contentOffset.y>=contentSize.height-30;
           if(nearBottom.current && messages.length){void read(messages.at(-1)!.id).catch(()=>{});setHasNew(false);}}} scrollEventThrottle={100}
@@ -97,26 +98,17 @@ export function GroupChatDock({ groupId, bottom, left, width, unread, onRead, in
         </View>)}
       </ScrollView>
       {hasNew && <Pressable onPress={()=>{nearBottom.current=true;scroll.current?.scrollToEnd({animated:true});if(messages.length)void read(messages.at(-1)!.id).catch(()=>{});setHasNew(false);}}><Text style={styles.hint}>{t("새 메시지 ↓")}</Text></Pressable>}
-    </View>}
-    <Pressable accessibilityRole="button" accessibilityLabel={`${t(expanded?'그룹 채팅 접기':'그룹 채팅 펼치기')}${unread>0?` · ${t('미확인 {count}개',{count:unread})}`:''}`}
-      accessibilityState={{expanded}} onPress={()=>{changeExpanded(!expanded);if(expanded)Keyboard.dismiss();}} style={[styles.toggle,{top:expanded?0:-32}]}>
-      <GroupChatChevron expanded={expanded} size={12*scale}/>
-      {unread>0&&!expanded&&<View style={styles.unread}/>}
-    </Pressable>
-    {error && <Pressable accessibilityRole="button" onPress={()=>void load()} style={styles.errorPanel}><Text style={styles.error}>{error} · {t('다시 시도')}</Text></Pressable>}
-    <View style={[styles.composer,{minHeight:56*scale}]}>
+    </>} error={error&&<Pressable accessibilityRole="button" onPress={()=>void load()} style={styles.errorPanel}><Text style={styles.error}>{error} · {t('다시 시도')}</Text></Pressable>}>
       <TextInput accessibilityLabel={t("그룹 채팅 메시지")} style={[styles.input,{paddingHorizontal:24*scale,fontSize:13*scale}]} placeholder={t("입력하세요")} placeholderTextColor="#fff" value={body} onChangeText={setBody} maxLength={2000}
         underlineColorAndroid="transparent" editable={!busy} returnKeyType="send" onSubmitEditing={()=>void send()}/>
       <Pressable accessibilityRole="button" accessibilityLabel={t("메시지 보내기")} accessibilityState={{disabled:busy||!body.trim(),busy}} disabled={busy||!body.trim()} onPress={()=>void send()} style={[styles.send,{width:48*scale}]}>
         {busy?<ActivityIndicator color="#fff" size="small"/>:<GroupSendIcon size={27*scale}/>}
       </Pressable>
-    </View>
-  </View>;
+  </GroupChatFrame>;
 }
 const styles=StyleSheet.create({
- dock:{position:'absolute'},history:{backgroundColor:'rgba(217,217,217,0.38)'},toggle:{position:'absolute',right:2,width:32,height:32,alignItems:'center',justifyContent:'center',zIndex:1},unread:{position:'absolute',right:3,top:3,width:5,height:5,borderRadius:3,backgroundColor:'#fff'},
  messages:{padding:14,gap:16},message:{flexDirection:'row',gap:18,alignItems:'center',minHeight:40},body:{flex:1,minWidth:0,color:'#fff',fontSize:13,lineHeight:21,paddingRight:10},
  hint:{color:'#dddde8',fontSize:11,padding:10,textAlign:'center'},error:{color:'#ffd3d8',fontSize:11,padding:10},
- errorPanel:{backgroundColor:'rgba(0,0,0,0.8)'},composer:{flexDirection:'row',alignItems:'center',borderWidth:1,borderColor:'#eee',backgroundColor:'rgba(0,0,0,0.12)',minHeight:44},
+ errorPanel:{backgroundColor:'rgba(0,0,0,0.8)'},
  input:{flex:1,minWidth:0,minHeight:44,paddingVertical:16,color:'#fff'},send:{minWidth:44,minHeight:44,alignItems:'center',justifyContent:'center'},
 });
