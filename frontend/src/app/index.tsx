@@ -326,8 +326,12 @@ export default function HomeScreen() {
       return;
     }
     if (!entries.some(entry => entry.id === pending.id)) return;
-    pendingHomeHighlight = null;
-    setNewStar({ id: pending.id, startedAt: Date.now() });
+    const timer = setTimeout(() => {
+      if (pendingHomeHighlight !== pending || pending.revision !== authSession.getRevision()) return;
+      pendingHomeHighlight = null;
+      setNewStar({ id: pending.id, startedAt: Date.now() });
+    }, 0);
+    return () => clearTimeout(timer);
   }, [screen, routeTab, routeGroupId, isLoggedIn, entries]);
 
   useEffect(() => {
