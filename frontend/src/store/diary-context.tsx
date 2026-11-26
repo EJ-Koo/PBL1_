@@ -56,6 +56,8 @@ export type DiaryEntry = {
   surface: SurfaceStyle | null;
   /** [2026-11-12] 일기를 쓸 때 고른 주제(선택). 없으면 null. 별자리 해금·표시에만 쓴다(좌표·외형과 무관). */
   topic: DiaryTopic | null;
+  /** False for group stars returned by an older API that omits topic. */
+  topicAvailable?: boolean;
 };
 
 export type LoginResult = { ok: true } | { ok: false; error: string };
@@ -195,6 +197,7 @@ function groupStarToEntry(g: ApiGroupStar): DiaryEntry {
     surface: asSurfaceStyle(g.surface),
     // Keep each author's saved topic; never guess it from the viewer or diary text.
     topic: asDiaryTopic(g.topic),
+    topicAvailable: Object.prototype.hasOwnProperty.call(g, 'topic'),
   };
 }
 

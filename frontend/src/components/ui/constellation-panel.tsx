@@ -282,6 +282,7 @@ export type ConstellationMember = { id: string; createdAt: number; color: string
 
 type PanelProps = {
   intro?: string;
+  emptyTopicText?: string;
   scale: number;
   statuses: TopicStatus[];
   topic: DiaryTopic | null;
@@ -323,6 +324,7 @@ export function ConstellationPanel({
   onFrontView,
   onLayout,
   intro,
+  emptyTopicText = '아직 이 주제의 일기가 없어요',
   personal = null,
   personalBusy = false,
   onCreatePersonal,
@@ -347,7 +349,7 @@ export function ConstellationPanel({
     : status
       ? status.count > 0
         ? `첫 별자리까지 ${status.next?.remaining ?? 0}개`
-        : '아직 이 주제의 일기가 없어요'
+        : emptyTopicText
       : '';
 
   return (

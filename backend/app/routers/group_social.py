@@ -3,7 +3,7 @@ import hashlib
 from typing import Literal
 from uuid import UUID
 from urllib.parse import urlparse
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import Response, APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
 from app.db import supabase
 from app.dependencies import get_current_user_id
@@ -124,6 +124,23 @@ def push_config(user: str=Depends(get_current_user_id)):
 def register_device(draft: PushDevice,user: str=Depends(get_current_user_id)):
     return rpc('register_group_push',{'p_user':user,'p_id':str(draft.id),'p_secret':hashlib.sha256(draft.secret.encode()).hexdigest(),
       'p_platform':draft.platform,'p_subscription':draft.subscription,'p_active':draft.enabled})
+
+
+class PushDeviceRevoke(BaseModel):
+    id: UUID
+    secret: str = Field(min_length=32, max_length=128)
+
+
+@router.delete('/group-push/device', status_code=204)
+def revoke_device(draft: PushDeviceRevoke):
+    # No user session is required, but both the unguessable device ID and its
+    # existing secret must match. This endpoint can disable, never enable/read.
+    try:
+        supabase.table('group_push_devices').update({'active': False}).eq('id', str(draft.id)).eq(
+            'secret_hash', hashlib.sha256(draft.secret.encode()).hexdigest()).execute()
+    except Exception:
+        raise HTTPException(status_code=503, detail='알림 해제를 저장하지 못했어요. 다시 시도해주세요.')
+    return Response(status_code=204)
 
 
 @router.get('/me/group-push/status')

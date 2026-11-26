@@ -10,6 +10,7 @@ from app import ai_client
 from app.db import supabase
 from app.dependencies import get_current_user_id
 from app.routers.shop import applied_effects, applied_surfaces
+from app.routers.stars import _attach_topics
 from app.routers.diaries import is_missing_column, mark_topic_column_missing, topic_column_ready
 from app.schemas.group import Group, GroupCreate, GroupJoin, GroupMember, GroupStarEntry
 
@@ -238,6 +239,9 @@ def group_stars(group_id: str, user_id: str = Depends(get_current_user_id)):
     effects: dict[str, dict] = {}
     surfaces: dict[str, dict] = {}
     for a in author_ids:
+        # Same topic policy as the personal universe, scoped to each author.
+        # Only already-authorized, non-private shared rows reach this point.
+        _attach_topics(a, [row for row in star_rows if (row.get("diaries") or {}).get("user_id") == a])
         effects.update(applied_effects(a))
         surfaces.update(applied_surfaces(a))
     # 행성 외형(AI 감정 분석)은 list_stars와 동일하게 서비스가 있을 때만 붙인다.
@@ -259,7 +263,7 @@ def group_stars(group_id: str, user_id: str = Depends(get_current_user_id)):
                 content=d.get("content") or "",
                 created_at=d.get("created_at"),
                 nickname=nick.get(d.get("user_id")),
-                topic=d.get("topic"),
+                topic=r.get("topic"),
                 x=r["x"],
                 y=r["y"],
                 z=r["z"],

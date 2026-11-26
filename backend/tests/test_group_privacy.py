@@ -160,3 +160,36 @@ def test_missing_group_topic_column_falls_back_without_exposing_private_diaries(
     assert marked == [True]
     assert any(', topic' in columns for columns in selects)
     assert any('visibility)' in columns for columns in selects)
+
+
+def test_group_legacy_topics_are_scoped_to_authors_and_private_rows_are_excluded(monkeypatch):
+    from app.routers import stars
+
+    def row(diary_id, author, topic=None, visibility='friends'):
+        return {'diary_id': diary_id, 'diaries': {'id': diary_id, 'user_id': author,
+                'content': diary_id, 'created_at': '2020-01-01T00:00:00Z',
+                'visibility': visibility, 'topic': topic},
+                'x': 1, 'y': 2, 'z': 3, 'color': '#fff', 'size': .3, 'brightness': 1}
+
+    data = {'diary_groups': [{'diary_id': key} for key in ['a', 'b', 'saved', 'private']],
+            'stars': [row('a', 'author-a'), row('b', 'author-b'),
+                      row('saved', 'author-a', 'travel'), row('private', 'author-a', visibility='private')]}
+    monkeypatch.setattr(groups, 'supabase', DB(data))
+    monkeypatch.setattr(groups, '_assert_member', lambda *args: None)
+    monkeypatch.setattr(groups, '_nicknames', lambda *args: {})
+    monkeypatch.setattr(groups, 'applied_effects', lambda *args: {})
+    monkeypatch.setattr(groups, 'applied_surfaces', lambda *args: {})
+    monkeypatch.setattr(groups.ai_client, 'planet_visuals', lambda *args: None)
+    monkeypatch.setattr(stars.settings, 'topic_ai_fallback', True)
+    calls = []
+
+    def legacy(author, ids, allowed):
+        calls.append((author, ids))
+        return {'a': 'other'} if author == 'author-a' else {'b': 'rest_daily'}
+
+    monkeypatch.setattr(stars.ai_client, 'diary_topics', legacy)
+    result = groups.group_stars('g1', 'late-joining-viewer')
+    # Old shared diaries remain visible; there is no join-date cutoff.
+    assert {entry.diary_id: entry.topic for entry in result} == {
+        'a': 'other', 'b': 'rest_daily', 'saved': 'travel'}
+    assert sorted(calls) == [('author-a', ['a']), ('author-b', ['b'])]

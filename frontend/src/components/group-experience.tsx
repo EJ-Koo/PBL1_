@@ -47,6 +47,8 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   const layout = useResponsiveLayout();
   const s = layout.scale;
   const constellation = useGroupConstellation(entries);
+  const classifiedStars = entries.filter(entry => entry.topic !== null).length;
+  const missingTopicResponse = entries.some(entry => entry.topicAvailable === false);
   const [chatExpanded, setChatExpanded] = useState(initialChat);
   const chatOpen=chatExpanded&&!selection.id;
   const [checkingPush,setCheckingPush]=useState(false);
@@ -234,11 +236,13 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
       onLayout={event=>constellation.setPanelHeight(event.nativeEvent.layout.height)}>
       <ConstellationPanel scale={s} statuses={constellation.statuses} topic={constellation.topic}
         templateId={constellation.template?.id??null} members={constellation.members}
-        intro="멤버들이 공유한 일기를 작성자가 고른 주제별로 모아요. 각 별자리는 메인보다 3배 많은 별(15·30·60개)로 만들어요."
+        emptyTopicText={entries.length ? '이 주제로 분류된 공유 일기가 없어요' : '아직 공유된 별이 없어요'}
+        intro={`공유된 별 ${entries.length}개 · 주제 확인 ${classifiedStars}개. 멤버가 고른 주제별로 별을 모아 15·30·60개로 별자리를 만들어요.${missingTopicResponse ? ' 주제 정보를 가져오지 못했어요. 다시 불러와주세요.' : classifiedStars < entries.length ? ` 주제가 없는 별 ${entries.length - classifiedStars}개는 집계에서 제외돼요.` : ''}`}
         collapsed={constellation.collapsed} onToggleCollapsed={()=>constellation.setCollapsed(!constellation.collapsed)}
         onSelectTopic={topic=>{selection.onChange(null);constellation.selectTopic(topic);}}
         onSelectTemplate={template=>{selection.onChange(null);constellation.selectTemplate(template.id);}}
         onOpenEntry={selectDiary} onFrontView={constellation.front} />
+      {entries.length > classifiedStars && <SpaceButton label={loading ? '불러오는 중…' : '주제 다시 불러오기'} onPress={onReload} disabled={loading} scale={s} />}
     </ScrollView>}
 
     {readError && <Text accessibilityRole="alert" style={[styles.readError, { top: panelTop }]}>{readError}</Text>}

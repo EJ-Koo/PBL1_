@@ -3,9 +3,8 @@ import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import {Platform} from 'react-native';
 import {socialRequest} from './group-social-api';
-import {API_BASE_URL} from './api-config';
 import {authSession} from './auth-session';
-import {forgetPush,pushIdentity,savedPush,savePush,serialPush} from './push-device';
+import {forgetPush,pushIdentity,savedPush,savePush,serialPush,revokePushRegistration} from './push-device';
 export async function syncPushUser(_user:string|null){}
 export function enableGroupPush(token:string,user:string){return serialPush(async()=>{
   if(Platform.OS==='android')await Notifications.setNotificationChannelAsync('groups',{name:'그룹 소식',importance:Notifications.AndroidImportance.DEFAULT});
@@ -17,28 +16,45 @@ export function enableGroupPush(token:string,user:string){return serialPush(asyn
   const value={...await pushIdentity(),platform:'expo' as const,subscription:{token:data},user_id:user};
   await socialRequest(token,'/me/group-push/device','PUT',{...value,enabled:true});await savePush(value);
 });}
-export function disableGroupPush(token:string,user:string){return serialPush(async()=>{
+export function restoreGroupPush(token:string,user:string){return serialPush(async()=>{
+  const current=authSession.getSnapshot();
+  if(!current.ready||current.session?.user_id!==user)return;
+  const saved=await savedPush();if(!saved)return;
+  if(saved.user_id!==user||saved.enabled===false){await savePush({...saved,enabled:false});await revokePushRegistration(saved);await forgetPush();return;}
+  const permission=await Notifications.getPermissionsAsync();if(!permission.granted)return;
+  const projectId=Constants.expoConfig?.extra?.eas?.projectId??Constants.easConfig?.projectId;
+  if(!projectId)return;
+  const {data}=await Notifications.getExpoPushTokenAsync({projectId});
+  const value={...saved,subscription:{token:data}};
+  await socialRequest(token,'/me/group-push/device','PUT',{...value,enabled:true});await savePush(value);
+});}
+export function disableGroupPush(_token:string,user:string){return serialPush(async()=>{
   const saved=await savedPush();if(!saved||saved.user_id!==user)return;
-  try{const result=await fetch(`${API_BASE_URL}/me/group-push/device`,{method:'PUT',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({...saved,enabled:false})});if(!result.ok)throw new Error('알림 해제를 저장하지 못했어요. 다시 시도해주세요.');await forgetPush();}catch(error){throw error;}
+  await savePush({...saved,enabled:false});
+  await revokePushRegistration(saved);await forgetPush();
 });}
 export function listenGroupPush(onOpen:(data:Record<string,unknown>)=>void){
-  const open=(response:Notifications.NotificationResponse)=>{
+  const open=async(response:Notifications.NotificationResponse)=>{
     const data=response.notification.request.content.data;
-    if(data && data.user_id===authSession.getSnapshot().session?.user_id)onOpen(data);
+    const saved=await savedPush();
+    const receiver=authSession.getSnapshot().session?.user_id??saved?.user_id;
+    if(saved?.enabled!==false&&data&&data.user_id===receiver)onOpen(data);
   };
   Notifications.setNotificationHandler({handleNotification:async(notification)=>{
     const target=notification.request.content.data?.user_id;
-    const show=!target||target===authSession.getSnapshot().session?.user_id;
+    const saved=await savedPush();
+    const receiver=authSession.getSnapshot().session?.user_id??saved?.user_id;
+    const show=saved?.enabled!==false&&!!target&&target===receiver;
     return{shouldShowBanner:show,shouldShowList:show,shouldPlaySound:show,shouldSetBadge:false};
   }});
   const sub=Notifications.addNotificationResponseReceivedListener(open);
-  void Notifications.getLastNotificationResponseAsync().then(value=>{if(value)open(value);}).catch(()=>{});
+  void Notifications.getLastNotificationResponseAsync().then(value=>{if(value)void open(value);}).catch(()=>{});
   return()=>sub.remove();
 }
 
 export async function inspectGroupPush(token:string,user:string):Promise<PushDiagnostics>{
   const saved=await savedPush();
   const permission=await Notifications.getPermissionsAsync();
-  return {permission:permission.granted?'granted':'denied',subscription:saved?.user_id===user,key_matches:null,
+  return {permission:permission.granted?'granted':'denied',subscription:saved?.user_id===user&&saved.enabled!==false,key_matches:null,
     server:saved?.user_id===user?await pushDeliveryStatus(token,saved.id):null};
 }
