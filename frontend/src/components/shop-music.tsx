@@ -2,7 +2,7 @@
 // [ADDED 2026-11-10] 상점에서 장착한 배경음악을 재생한다.
 // 음악 아이템의 effect 값으로 소리를 정한다 (관리자 화면에서 입력):
 //   {"type":"music","url":"https://.../song.mp3"}   인터넷 주소의 음원 (예: Supabase Storage 공개 주소)
-//   {"type":"music","track":"space"}                 앱에 들어 있는 음원 (assets/audio 의 space, night)
+//   {"type":"music","track":"sparkle_day"}           앱에 들어 있는 음원 (아래 TRACKS: sparkle_day, milky_way …)
 //   "volume": 0~1 을 넣으면 그 크기로, 없으면 0.6
 // 브라우저는 사용자가 화면을 한 번 누르기 전에는 소리를 막는다 → 첫 터치 때 다시 재생을 시도한다.
 import { setAudioModeAsync, useAudioPlayer } from 'expo-audio';
@@ -12,6 +12,10 @@ import { AppState, Platform } from 'react-native';
 import { useShop } from '@/store/shop-context';
 
 const TRACKS: Record<string, number> = {
+  // [2026-11-26] 오늘의별일 테마곡 2곡(상점 아이템 music_space·music_night 를 이 곡으로 바꿈, migrations/2026-11-26_music_tracks.sql)
+  sparkle_day: require('../../assets/audio/todays-star-01.mp3'), // 반짝이는 하루 (1분 49초)
+  milky_way: require('../../assets/audio/todays-star-02.mp3'), // 은하수를 건너 (3분 53초)
+  // 예전 임시 음원: 운영 DB에 위 SQL을 실행하기 전까지 기존 아이템이 계속 소리 나도록 남겨 둔다
   space: require('../../assets/audio/space.wav'),
   night: require('../../assets/audio/night.wav'),
 };
