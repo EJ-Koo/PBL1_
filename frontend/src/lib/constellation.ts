@@ -34,6 +34,8 @@ export type ConstellationTemplate = {
   connections: [number, number][];
   /** 오각별처럼 모양 자체가 선의 교차로 이루어진 경우만 true (검사에서 교차 허용) */
   allowCrossings?: boolean;
+  /** Group shapes contain three times the stars, so need more line segments. */
+  lineLimit?: number;
 };
 
 // ---------------------------------------------------------------- 설정
@@ -41,6 +43,8 @@ export type ConstellationTemplate = {
  * 별자리 설정. 해금 기준(thresholds)은 여기서 바꾼다.
  * 템플릿의 점 개수는 이 값과 같아야 한다(테스트가 확인). 기준을 바꾸면 해당 레벨 템플릿의 점 개수도 함께 맞춘다.
  */
+export const GROUP_CONSTELLATION_MAX_LINES = 120;
+
 export const CONSTELLATION_CONFIG = {
   thresholds: { 1: 5, 2: 10, 3: 20, 4: 30 } as Record<ConstellationLevel, number>,
   /** 행성 사이 최소 간격: 두 행성 중심 거리 ≥ 두 반지름 합 × spacing (겹침 방지) */
@@ -522,7 +526,7 @@ export function drawableConnections(template: ConstellationTemplate): [number, n
     if (a === b || seen.has(key) || !template.points[a] || !template.points[b]) continue;
     seen.add(key);
     out.push([a, b]);
-    if (out.length >= CONSTELLATION_CONFIG.maxLines) break;
+    if (out.length >= Math.min(GROUP_CONSTELLATION_MAX_LINES, template.lineLimit ?? CONSTELLATION_CONFIG.maxLines)) break;
   }
   return out;
 }
@@ -680,4 +684,36 @@ export const PERSONAL_STAGES = [
 export function personalStageIndex(stage: string | null | undefined): number {
   if (stage === 'done') return PERSONAL_STAGES.length;
   return PERSONAL_STAGES.findIndex((s) => s.key === stage);
+}
+
+// ---------------------------------------------------------------- 그룹 별자리 (주제별 공유 일기, 별 수 3배)
+export const GROUP_STAR_MULTIPLIER = 3;
+/** Insert stars along the existing outline, preserving its shape and all original vertices. */
+export function groupTemplate(base: ConstellationTemplate): ConstellationTemplate {
+  const points: Point3[] = base.points.map(p => [...p]);
+  const connections: [number, number][] = base.connections.map(pair => [...pair]);
+  const target = points.length * GROUP_STAR_MULTIPLIER;
+  while (points.length < target) {
+    // Split the longest available edge first so extra stars do not bunch up.
+    const candidates = connections.map(([a,b],index) => ({index,a,b,length:Math.hypot(...points[a].map((v,k)=>v-points[b][k]))})).sort((a,b)=>b.length-a.length || a.index-b.index);
+    const edge = candidates.find(({a,b}) => {
+      const midpoint = points[a].map((v,k)=>(v+points[b][k])/2);
+      return points.every(p=>Math.hypot(...p.map((v,k)=>v-midpoint[k]))>0.025);
+    });
+    if (!edge) throw new Error(`Cannot expand group shape: ${base.id}`);
+    const index = points.length;
+    points.push(points[edge.a].map((v,k)=>(v+points[edge.b][k])/2) as Point3);
+    connections.splice(edge.index,1,[edge.a,index],[index,edge.b]);
+  }
+  return { ...base, id:`group_${base.id}`, name:`함께 만드는 ${base.name}`, requiredPlanets:target,
+    points, connections, lineLimit:GROUP_CONSTELLATION_MAX_LINES };
+}
+export const GROUP_CONSTELLATION_TEMPLATES = Object.fromEntries(CONSTELLATION_TOPICS.map(topic => [topic,CONSTELLATION_TEMPLATES[topic].map(groupTemplate)])) as Record<DiaryTopic,ConstellationTemplate[]>;
+export function groupTopicStatuses(entries: readonly {topic?:DiaryTopic|null}[]): TopicStatus[] {
+  const counts = topicCounts(entries);
+  return CONSTELLATION_TOPICS.map(topic => {
+    const count=counts[topic];
+    const levels=GROUP_CONSTELLATION_TEMPLATES[topic].map(template=>({template,unlocked:count>=template.requiredPlanets,remaining:Math.max(0,template.requiredPlanets-count)}));
+    return {topic,...TOPIC_CONCEPTS[topic],count,levels,highest:levels.filter(l=>l.unlocked).at(-1)?.template??null,next:levels.find(l=>!l.unlocked)??null};
+  });
 }

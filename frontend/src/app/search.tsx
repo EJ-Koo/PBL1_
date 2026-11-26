@@ -9,17 +9,17 @@ import { goBackSafe } from '@/lib/navigation';
 import { useDiary } from '@/store/diary-context';
 
 export default function SearchRoute() {
-  const { isLoggedIn } = useDiary();
+  const { isLoggedIn, isRestoring } = useDiary();
   const { calendar } = useLocalSearchParams<{ calendar?: string }>();
 
   // 웹에서 /search를 새로고침하면 로그인 정보가 사라지므로 로그인 화면으로 보낸다(다른 화면과 동일).
   useEffect(() => {
-    if (!isLoggedIn) {
+    if (!isRestoring && !isLoggedIn) {
       router.replace('/login');
     }
-  }, [isLoggedIn]);
+  }, [isLoggedIn, isRestoring]);
 
-  if (!isLoggedIn) {
+  if (isRestoring || !isLoggedIn) {
     return <View style={{ flex: 1, backgroundColor: '#05050A' }} />;
   }
 

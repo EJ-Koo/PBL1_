@@ -42,7 +42,6 @@ export function DiaryWriteScreen({
 }: Props) {
   const insets = useSafeAreaInsets();
   const [preview, setPreview] = useState<Photo | null>(null);
-  const [topicsOpen, setTopicsOpen] = useState(false);
   const { wide, compact, navLeft, navWidth, navHeight, navBottom, scale: phoneScale } = useResponsiveLayout();
   const pageWidth = Math.min(navWidth, 1800);
   const scale = wide ? Math.max(0.8, pageWidth / 1440) : phoneScale;
@@ -54,7 +53,6 @@ export function DiaryWriteScreen({
   const tile = { width: photoSize, height: photoSize, flexShrink: 0 };
   const addDisabled = photoBusy || saving || photos.length >= MAX_PHOTOS;
   const type = (size: number, line: number) => ({ fontSize: size * scale, lineHeight: line * scale });
-  const selectedTopicLabel = topics?.find(topic => topic.id === selectedTopic)?.label;
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -82,11 +80,6 @@ export function DiaryWriteScreen({
           <View style={[styles.rowBetween, { marginTop: (wide ? 14 : 7) * scale, minHeight: 30 * scale }]}>
             <Text style={[styles.muted, { flexShrink: 1 }, type(wide ? 22 : 18, wide ? 31 : 26)]}>{dateLabel}</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 12 * scale, flexShrink: 1 }}>
-            {!!topics?.length && <Pressable accessibilityRole="button" accessibilityLabel="오늘의 주제 선택"
-              accessibilityState={{ expanded: topicsOpen }} aria-expanded={topicsOpen} hitSlop={6}
-              onPress={() => setTopicsOpen(open => !open)} style={styles.topicToggle}>
-              <Text style={[styles.muted, type(12, 17)]}>{selectedTopicLabel ?? '주제 선택'} {topicsOpen ? '⌄' : '›'}</Text>
-            </Pressable>}
               {rememberSelections !== undefined && <Pressable accessibilityRole="checkbox" accessibilityLabel="이전 주제와 공유 그룹 선택 기억하기"
                 accessibilityState={{ checked: rememberSelections, disabled: saving }} disabled={saving} onPress={onToggleRemember}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 7, minHeight: 44, flexShrink: 1, paddingVertical: 4 }}>
@@ -97,7 +90,7 @@ export function DiaryWriteScreen({
               </Pressable>}
             </View>
           </View>
-          {topicsOpen && topics && <View style={[styles.chips, { marginVertical: 8 * scale }]}>
+          {!!topics?.length && <View style={[styles.chips, { marginVertical: 8 * scale }]}>
             {topics.map(topic => {
               const selected = selectedTopic === topic.id;
               return <Pressable key={topic.id} accessibilityRole="button" accessibilityLabel={topic.label}
@@ -195,7 +188,6 @@ const styles = StyleSheet.create({
   headerAction: { minHeight: 44, justifyContent: 'center' },
   center: { alignItems: 'center', justifyContent: 'center' },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  topicToggle: { paddingVertical: 6, alignItems: 'flex-end' },
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   rule: { flex: 1, height: 1, backgroundColor: '#666' },
   mobileRule: { backgroundColor: '#ccc' },

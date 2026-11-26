@@ -10,6 +10,7 @@ from app import ai_client
 from app.db import supabase
 from app.dependencies import get_current_user_id
 from app.routers.shop import applied_effects, applied_surfaces
+from app.routers.diaries import is_missing_column, mark_topic_column_missing, topic_column_ready
 from app.schemas.group import Group, GroupCreate, GroupJoin, GroupMember, GroupStarEntry
 
 router = APIRouter(prefix="/groups", tags=["groups"])
@@ -213,13 +214,22 @@ def group_stars(group_id: str, user_id: str = Depends(get_current_user_id)):
     diary_ids = [t["diary_id"] for t in tag_rows]
     if not diary_ids:
         return []
-    star_rows = (
-        supabase.table("stars")
-        .select("*, diaries!inner(id, content, created_at, user_id, visibility)")
-        .in_("diary_id", diary_ids)
-        .execute()
-        .data
-    )
+    # Older databases may not have diaries.topic yet. Keep the group readable;
+    # unknown topics simply do not participate in constellations.
+    def select_rows(with_topic: bool):
+        columns = "id, content, created_at, user_id, visibility" + (", topic" if with_topic else "")
+        return (supabase.table("stars").select(f"*, diaries!inner({columns})")
+                .in_("diary_id", diary_ids).execute().data)
+    if topic_column_ready():
+        try:
+            star_rows = select_rows(True)
+        except Exception as exc:
+            if not is_missing_column(exc, "topic"):
+                raise
+            mark_topic_column_missing()
+            star_rows = select_rows(False)
+    else:
+        star_rows = select_rows(False)
     # Never return a private diary, even if an old tag still exists.
     star_rows = [r for r in star_rows if (r.get("diaries") or {}).get("visibility", "private") != "private"]
     author_ids = list({(r.get("diaries") or {}).get("user_id") for r in star_rows} - {None})
@@ -249,6 +259,7 @@ def group_stars(group_id: str, user_id: str = Depends(get_current_user_id)):
                 content=d.get("content") or "",
                 created_at=d.get("created_at"),
                 nickname=nick.get(d.get("user_id")),
+                topic=d.get("topic"),
                 x=r["x"],
                 y=r["y"],
                 z=r["z"],

@@ -193,8 +193,8 @@ function groupStarToEntry(g: ApiGroupStar): DiaryEntry {
     planet,
     effect: asSpecialType(g.effect),
     surface: asSurfaceStyle(g.surface),
-    // 그룹 우주는 별자리 보기를 쓰지 않으므로 주제가 필요 없다
-    topic: null,
+    // Keep each author's saved topic; never guess it from the viewer or diary text.
+    topic: asDiaryTopic(g.topic),
   };
 }
 

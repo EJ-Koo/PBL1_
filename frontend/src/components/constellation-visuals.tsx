@@ -152,8 +152,8 @@ const LINE_FRAGMENT_SHADER = `
 const VERTS_PER_LINE = 4;
 
 /** 별자리 연결선. 행성이 도착한 뒤 선이 하나씩 이어지고, 숨길 때는 서서히 사라진다. */
-export function ConstellationLines({ runtimeRef }: { runtimeRef: RuntimeRef }) {
-  const max = CONSTELLATION_CONFIG.maxLines;
+export function ConstellationLines({ runtimeRef, maxLines = CONSTELLATION_CONFIG.maxLines }: { runtimeRef: RuntimeRef; maxLines?: number }) {
+  const max = maxLines;
   const size = useThree((s) => s.size);
 
   const geometry = useMemo(() => {

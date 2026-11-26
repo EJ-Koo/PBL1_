@@ -67,6 +67,7 @@ def test_group_universe_filters_private_and_unknown_visibility_before_analysis(m
     monkeypatch.setattr(groups, '_assert_member', lambda *args: None)
     monkeypatch.setattr(groups, '_nicknames', lambda *args: {})
     monkeypatch.setattr(groups, 'applied_effects', lambda *args: {})
+    monkeypatch.setattr(groups, 'applied_surfaces', lambda *args: {})
     calls = []
     monkeypatch.setattr(groups.ai_client, 'planet_visuals', lambda contents: calls.extend(contents))
     assert [row.diary_id for row in groups.group_stars('g1', 'friend')] == ['shared']
@@ -111,3 +112,51 @@ def test_private_diary_does_not_load_author_profile_for_other_members(monkeypatc
     monkeypatch.setattr(diaries, 'shape_profile', lambda *args: pytest.fail('must not sign a private diary author avatar'))
     with pytest.raises(HTTPException):
         diaries.get_diary(_DID, 'friend')
+
+
+@pytest.mark.parametrize('topic', ['travel', 'relationship', 'study_achievement', 'rest_daily', 'challenge_activity', 'other', None])
+def test_group_stars_preserves_each_authors_saved_diary_topic(monkeypatch, topic):
+    data = {'diary_groups': [{'diary_id': 'one'}], 'stars': [{
+        'diary_id': 'one', 'diaries': {'id': 'one', 'user_id': 'another-author', 'content': 'shared',
+            'created_at': '2026-11-25T00:00:00Z', 'visibility': 'friends', 'topic': topic},
+        'x': 1, 'y': 2, 'z': 3, 'color': '#fff', 'size': .3, 'brightness': 1,
+    }]}
+    monkeypatch.setattr(groups, 'supabase', DB(data))
+    monkeypatch.setattr(groups, '_assert_member', lambda *args: None)
+    monkeypatch.setattr(groups, '_nicknames', lambda *args: {})
+    monkeypatch.setattr(groups, 'applied_effects', lambda *args: {})
+    monkeypatch.setattr(groups, 'applied_surfaces', lambda *args: {})
+    monkeypatch.setattr(groups.ai_client, 'planet_visuals', lambda *args: None)
+    assert groups.group_stars('g1', 'viewer')[0].topic == topic
+
+
+def test_missing_group_topic_column_falls_back_without_exposing_private_diaries(monkeypatch):
+    data = {'diary_groups': [{'diary_id': 'shared'}], 'stars': [{
+        'diary_id': 'shared', 'diaries': {'content': 'shared', 'created_at': '2026-11-25T00:00:00Z',
+            'user_id': 'owner', 'visibility': 'friends'},
+        'x': 1, 'y': 2, 'z': 3, 'color': '#fff', 'size': .3, 'brightness': 1,
+    }]}
+    selects = []
+    class MissingTopicQuery(Query):
+        def select(self, columns):
+            selects.append(columns)
+            if self.table == 'stars' and ', topic' in columns:
+                raise RuntimeError('missing topic column')
+            return self
+    class MissingTopicDB:
+        def table(self, name): return MissingTopicQuery(name, data)
+    monkeypatch.setattr(groups, 'supabase', MissingTopicDB())
+    monkeypatch.setattr(groups, '_assert_member', lambda *args: None)
+    monkeypatch.setattr(groups, '_nicknames', lambda *args: {})
+    monkeypatch.setattr(groups, 'applied_effects', lambda *args: {})
+    monkeypatch.setattr(groups, 'applied_surfaces', lambda *args: {})
+    monkeypatch.setattr(groups.ai_client, 'planet_visuals', lambda *args: None)
+    monkeypatch.setattr(groups, 'topic_column_ready', lambda: True)
+    monkeypatch.setattr(groups, 'is_missing_column', lambda error, column: column == 'topic')
+    marked = []
+    monkeypatch.setattr(groups, 'mark_topic_column_missing', lambda: marked.append(True))
+    rows = groups.group_stars('g1', 'friend')
+    assert rows[0].topic is None
+    assert marked == [True]
+    assert any(', topic' in columns for columns in selects)
+    assert any('visibility)' in columns for columns in selects)

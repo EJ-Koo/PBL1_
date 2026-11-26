@@ -49,13 +49,15 @@ export function ConstellationModeToggle({
   scale,
   active,
   onChange,
+  universeLabel = '나의 우주',
 }: {
   scale: number;
   active: boolean;
   onChange: (active: boolean) => void;
+  universeLabel?: string;
 }) {
   const items = [
-    { on: false, label: '나의 우주' },
+    { on: false, label: universeLabel },
     { on: true, label: '별자리 보기' },
   ];
   return (
@@ -279,6 +281,7 @@ function PersonalBox({
 export type ConstellationMember = { id: string; createdAt: number; color: string };
 
 type PanelProps = {
+  intro?: string;
   scale: number;
   statuses: TopicStatus[];
   topic: DiaryTopic | null;
@@ -319,6 +322,7 @@ export function ConstellationPanel({
   onOpenEntry,
   onFrontView,
   onLayout,
+  intro,
   personal = null,
   personalBusy = false,
   onCreatePersonal,
@@ -388,9 +392,9 @@ export function ConstellationPanel({
 
       {!collapsed && (
         <>
-          {!anyTopic && (
+          {(intro || !anyTopic) && (
             <Text style={[styles.hint, { fontSize: f(12), lineHeight: f(18), marginTop: f(8) }]}>
-              일기를 쓸 때 &apos;오늘의 주제&apos;를 고르면 같은 주제의 별이 모여 별자리가 돼요. 같은 주제 일기 5개면 첫 별자리가 열려요.
+              {intro ?? `일기를 쓸 때 '오늘의 주제'를 고르면 같은 주제의 별이 모여 별자리가 돼요. 같은 주제 일기 ${statuses[0]?.levels[0]?.template.requiredPlanets ?? 5}개면 첫 별자리가 열려요.`}
             </Text>
           )}
 

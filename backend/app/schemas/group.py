@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, field_validator
 from uuid import UUID
+from app.schemas.diary import Topic
 
 
 class GroupCreate(BaseModel):
@@ -40,6 +41,7 @@ class GroupStarEntry(BaseModel):
     content: str
     created_at: str
     nickname: str | None = None
+    topic: Topic | None = None
     x: float
     y: float
     z: float
