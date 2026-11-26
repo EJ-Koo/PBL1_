@@ -3,6 +3,9 @@
     "name": "오늘의 별일",
     "slug": "starex-926-app",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
     "orientation": "portrait",
     "icon": "./assets/images/star2day-icon.png",
     "scheme": "starex926app",
@@ -56,6 +59,15 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "b9639415-bc18-4297-a6fd-86adddfb8c72"
+      }
+    },
+    "owner": "dydtk",
+    "updates": {
+      "url": "https://u.expo.dev/b9639415-bc18-4297-a6fd-86adddfb8c72"
     }
   }
 }

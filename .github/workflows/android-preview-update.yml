@@ -1,0 +1,36 @@
+name: Publish Android preview update
+
+on:
+  push:
+    branches: [test]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/android-preview-update.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-preview-update
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - run: npm ci
+      - run: eas update --channel preview --platform android --environment preview --message "$GITHUB_SHA" --non-interactive
