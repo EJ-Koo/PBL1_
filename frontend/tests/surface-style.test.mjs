@@ -93,7 +93,8 @@ test('재질 특성: 구름은 반사·무지갯빛·주변 반사가 없고, �
   const cloud = body('pastel_cloud');
   assert.ok(!/sIrid\(|sEnv\(|pow\(nh,/.test(cloud), '구름: 광택·무지갯빛·반사 없음(무광)');
   assert.ok(/vCloudH/.test(cloud), '구름: 부푼 높이로 덩어리 사이 골짜기만 살짝 그늘');
-  assert.ok(/uSoftStrip/.test(cloud), '구름: 넓게 흐린 감정 색 줄(큰 색 영역)을 읽는다');
+  assert.ok(/lit = col \* \(fillC \+ diffC \* limbC\) \* tex;/.test(cloud), '구름: 감정 본체 색 그대로, 기본 행성과 같은 빛에 실 결만 곱한다');
+  assert.ok(!/uSoftStrip|vec3\(lum\)/.test(cloud), '구름: 색을 흐리거나 파스텔로 바꾸지 않는다');
   assert.ok(/fwidth\(sA\)/.test(cloud), '구름: 설탕 실 결은 멀리서 흐려져 깜빡이지 않는다');
   assert.ok(/refract\(/.test(body('opal_glass')), '유리: 속 굴절(색층 시차)');
   assert.ok(/sEnv\(/.test(body('opal_glass')) && /sEnv\(/.test(body('crystal_prism')));
@@ -163,24 +164,4 @@ test('표면을 끄면(설정) 기본 스타일로 그린다', () => {
   assert.equal(surfaceToDraw('pearl_silk'), null);
   SURFACE_STYLE_SETTINGS.enabled = true;
   assert.equal(surfaceToDraw(null), null);
-});
-
-// [2026-11-26] 솜사탕 구름 색: 넓게 흐린 감정 색 줄 — 감정 색 비율(평균 색)은 그대로, 가는 층만 사라진다
-test('솜사탕 구름 색 줄: 평균 색(감정 비율)은 거의 그대로, 가는 층의 색 차이는 크게 줄어든다', async () => {
-  const { softenStrip } = await import('../src/lib/soft-strip.ts');
-  const N = 512;
-  const data = new Uint8Array(N * 4);
-  for (let i = 0; i < N; i++) {
-    const band = Math.floor(i / 16) % 2 === 0; // 16텍셀마다 바뀌는 가는 층(분홍/하늘)
-    data.set(band ? [255, 156, 194, 255] : [140, 200, 255, 255], i * 4);
-  }
-  const soft = softenStrip(data, N);
-  // 양 끝은 끝 색을 이어 쓰므로(설계) 가운데 구간에서 잰다
-  const mid = (d, c) => Array.from({ length: N - 256 }, (_, i) => d[(i + 128) * 4 + c]);
-  const mean = (d, c) => { const v = mid(d, c); return v.reduce((a, b) => a + b, 0) / v.length; };
-  const spread = (d, c) => { const v = mid(d, c); const m = mean(d, c); return Math.sqrt(v.reduce((a, b) => a + (b - m) ** 2, 0) / v.length); };
-  for (const c of [0, 1, 2]) {
-    assert.ok(Math.abs(mean(soft, c) - mean(data, c)) < 3, `채널 ${c} 평균 유지`);
-    assert.ok(spread(soft, c) < spread(data, c) * 0.15, `채널 ${c} 가는 층 사라짐`);
-  }
 });

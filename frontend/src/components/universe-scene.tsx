@@ -61,7 +61,6 @@ import {
 import { CLOUD_SHAPE, SURFACE_BODY_SHAPE, buildSurfaceFragmentShader, buildSurfaceVertexShader } from '@/lib/surface-shader';
 import { decorationTiers, detailIds } from '@/lib/decoration-lod';
 import { createFacetedGeometry } from '@/components/surface-extras';
-import { softenStrip } from '@/lib/soft-strip';
 import {
   CONSTELLATION_CONFIG,
   arriveDuration,
@@ -485,10 +484,8 @@ const ATMOSPHERE_FRAGMENT_SHADER = `
   }
 `;
 
-function createBandTexture(visual: PlanetVisual, rand: number[], soft = false) {
-  // [2026-11-26] soft: 솜사탕 구름용으로 넓게 흐린 사본(감정 색·비율 그대로, 큰 색 영역)
-  const strip = planetBandStrip(visual, rand);
-  const texture = new DataTexture(soft ? softenStrip(strip, BAND_TEXELS) : strip, BAND_TEXELS, 1, RGBAFormat);
+function createBandTexture(visual: PlanetVisual, rand: number[]) {
+  const texture = new DataTexture(planetBandStrip(visual, rand), BAND_TEXELS, 1, RGBAFormat);
   texture.magFilter = LinearFilter;
   texture.minFilter = LinearFilter;
   texture.wrapS = ClampToEdgeWrapping;
@@ -576,12 +573,6 @@ function Planet({
   // 색 줄(일기마다 고정): 층 배치·보조 감정 층 위치. 보조 감정 층 면적 = 서버가 정한 weight
   const bandTexture = useMemo(() => createBandTexture(visual, rand.slice(9)), [visual, rand]);
   useEffect(() => () => bandTexture.dispose(), [bandTexture]);
-  // [2026-11-26] 솜사탕 구름만: 넓게 흐린 감정 색 줄(큰 색 영역)
-  const softStrip = useMemo(
-    () => (surface === 'pastel_cloud' ? createBandTexture(visual, rand.slice(9), true) : null),
-    [surface, visual, rand]
-  );
-  useEffect(() => () => softStrip?.dispose(), [softStrip]);
 
   // 대기광: 대표색과 어울리는 색(밝은 색 쪽), 세기는 행성마다 다르게.
   // 서버 glow(밝고 강한 감정일수록 큼, '없음'은 0)를 따르고, 같은 감정끼리도 똑같지 않게 일기별 고정 난수를 조금 더한다.
@@ -617,7 +608,7 @@ function Planet({
           uSurfaceAmount: { value: SURFACE_STYLE_SETTINGS.amount },
           uAccentA: { value: new Color(effectPalette.accent) },
           // [2026-11-26] 솜사탕 구름: 표면을 부풀리는 높이(반지름 대비). 다른 스타일 셰이더는 이 값을 쓰지 않는다.
-          ...(surface === 'pastel_cloud' ? { uCloudLift: { value: CLOUD_SHAPE.lift }, uSoftStrip: { value: softStrip } } : {}),
+          ...(surface === 'pastel_cloud' ? { uCloudLift: { value: CLOUD_SHAPE.lift } } : {}),
         }
       : {};
     return {
@@ -640,7 +631,7 @@ function Planet({
       uSeed: { value: new Vector3(r0 * 40, r1 * 40, r2 * 40) },
       uDim: { value: 0 },
     };
-  }, [visual, palette, bandTexture, brightness, atmo, atmoColor, shared, r0, r1, r2, r6, r7, r8, surface, effectPalette.accent, softStrip]);
+  }, [visual, palette, bandTexture, brightness, atmo, atmoColor, shared, r0, r1, r2, r6, r7, r8, surface, effectPalette.accent]);
 
   const ringUniforms = useMemo(
     () => ({

@@ -124,7 +124,6 @@ const CLOUD_VERTEX = /* glsl */ `
 const CLOUD_DECLS = /* glsl */ `
   varying float vCloudH;
   varying float vLimb;
-  uniform sampler2D uSoftStrip;
   const float CLOUD_EDGE_SOFT = CLOUD_EDGE_SOFT_VALUE;
 `;
 /** 기존 셰이더의 마지막 색 쓰기. 솜사탕 구름만 가장자리 투명도를 넣은 줄로 바꾼다. */
@@ -187,23 +186,15 @@ const STYLE_BODIES: Record<SurfaceStyle, string> = {
   `,
   // [2026-11-26] 솜사탕 구름: 작은 조각을 붙이지 않고, 몸통 표면을 낮은 주파수로 부풀려 큰 구름 덩어리 몇 개가 자연스럽게
   //   겹친 모양(정점 셰이더 CLOUD_VERTEX — 조각 경계가 없다).
-  // [2026-11-26 2차] 실제 솜사탕 질감(참고 사진): 가는 설탕 실이 덩어리를 따라 감기고, 외곽은 실이 삐져나와 보송보송 반투명,
-  //   색은 큰 영역으로 부드럽게 이어진다(분홍 → 노랑 → 하늘처럼).
-  //   - 색: 감정 색 줄을 아주 넓게 흐려 읽어(7탭) 감정 색이 2~4개의 큰 색 영역으로 스며든다. 밝은 파스텔(설탕의 흰빛 조금).
+  // [2026-11-26 2차] 실제 솜사탕 질감(참고 사진): 가는 설탕 실이 감기고, 외곽은 보송보송 반투명.
+  // [2026-11-27] 색은 감정 본체 그대로(기본 행성과 같은 색·무늬). 덩어리 없음(3차). 바뀌는 것은 표면 질감뿐.
+  //   - 색: 감정 본체 색(col)·감정 무늬 그대로. 흐림·파스텔·흰빛 섞기 없음.
   //   - 실 결: 한 방향으로 길게 늘인 노이즈 3겹. 덩어리 높이(vCloudH)를 따라 휘어 덩어리마다 실이 감긴다(소용돌이).
   //     실이 픽셀보다 가늘어지는 먼 거리에서는 결을 흐려 깜빡이지 않는다.
   //   - 빛: 넓은 확산광 + 밝은 실·어두운 틈 + 빛을 받은 실의 은은한 밝음. 유리·진주 같은 반사·무지갯빛은 없다.
   //   - 외곽: 행성 바깥 외곽에서만 실 모양으로 들쭉날쭉 옅어진다(보송보송한 실루엣).
   pastel_cloud: /* glsl */ `
-    // 색: CPU 에서 넓게 흐린 감정 색 줄(uSoftStrip, 감정 색·비율 그대로)을 완만한 위도 좌표로 읽는다 → 큰 색 영역이 스며든다
-    float tc = clamp(vObj.y * 0.5 + 0.5 + (w1 - 0.5) * 0.18 + (vCloudH - 0.4) * 0.05, 0.002, 0.998);
-    vec3 zone = srgbToLinear(texture2D(uSoftStrip, vec2(tc, 0.5)).rgb);
-    // 흐린 색이 원래 감정 색을 대신하는 정도는 겹침 상한 기준(0.35 × 2.8 ≈ 0.98)
-    vec3 softC = mix(col, zone, min(1.0, OVERLAY_MAX * 2.8));
-    float lum = dot(softC, vec3(0.2126, 0.7152, 0.0722));
-    // 솜사탕은 맑고 밝은 파스텔: 채도는 그대로 두고(회색빛 방지) 설탕의 흰빛만 조금
-    vec3 pastel = mix(vec3(lum), softC, 1.08);
-    pastel = max(mix(pastel, mix(uLight, vec3(1.0), 0.35), 0.28 * sAmt), 0.0);
+    // [2026-11-27] 색: 감정 본체 색(col)·감정 무늬를 그대로 쓴다(흐리거나 파스텔로 바꾸지 않음). 질감만 설탕 실 결.
     // 설탕 실 질감: 한 방향으로 길게 늘인 노이즈 세 겹(방향이 조금씩 달라 엉킨 느낌)을 겹친 촘촘하고 부드러운 결.
     // 결은 덩어리 모양(vCloudH)을 따라 조금 휘어 덩어리마다 감긴다. 결이 픽셀보다 가늘어지면 흐려서 깜빡이지 않는다.
     vec3 fp = vObj + uSeed * 0.02;
@@ -221,18 +212,16 @@ const STYLE_BODIES: Record<SurfaceStyle, string> = {
     float silk = smoothstep(0.28, 0.78, streak);
     // 드문드문 빛을 받은 실 한 가닥(아주 옅게)
     float thread = pow(1.0 - abs(sin(sA * 0.5)), 24.0) * smoothstep(0.55, 0.8, n2) * aa * sAmt;
-    // 빛: 넓은 확산광, 덩어리 사이 틈은 그늘, 결의 밝고 어두운 차이로 보송한 질감
-    float wrap = clamp((ndl + 0.5) / 1.5, 0.0, 1.0);
-    wrap = wrap * wrap * (3.0 - 2.0 * wrap);
-    // [2026-11-26 3차] 덩어리 없음: 골짜기 그늘도 두지 않는다(얼룩처럼 보이지 않게). 설탕 실이 감기는 결만 남긴다.
-    float ao = 1.0;
-    vec3 shade = mix(pastel * 0.58, uAccentA * 0.45, 0.1);
-    lit = mix(shade, pastel * 1.03, wrap) * ao * (0.86 + 0.26 * silk);
-    // 결 꼭대기가 빛을 머금어 하얗게 보송(광택 아님) + 드문 실 한 가닥
-    lit += mix(pastel, vec3(1.0), 0.55) * pow(silk, 3.0) * (0.05 + 0.13 * wrap);
-    lit += mix(pastel, vec3(1.0), 0.6) * thread * (0.12 + 0.2 * wrap);
-    // 속까지 빛이 스민 가장자리
-    lit += mix(pastel, vec3(1.0), 0.4) * pow(1.0 - mu, 2.0) * 0.14 * smoothstep(-0.3, 0.7, ndl);
+    // 빛: 기존 행성과 같은 방식(반대쪽 약한 채움광 + 부드러운 확산광 × 가장자리 감쇠) → 감정 색이 기본 행성과 같은 밝기로 보인다.
+    //   여기에 실 결의 밝고 어두운 차이만 곱한다(세기는 겹침 상한 기준: 약 ±13%). 광택·반사 없음.
+    float diffC = smoothstep(-0.12, 0.95, ndl);
+    float fillC = 0.07 + 0.06 * smoothstep(0.2, -0.6, ndl);
+    float limbC = 0.72 + 0.28 * mu;
+    float tex = 1.0 - OVERLAY_MAX * 0.38 + OVERLAY_MAX * 0.75 * silk;
+    lit = col * (fillC + diffC * limbC) * tex;
+    // 빛을 받은 실 꼭대기와 드문 실 한 가닥만 살짝 밝게(색은 감정 색 쪽으로, 흰빛은 조금만)
+    lit += mix(col, vec3(1.0), 0.35) * pow(silk, 3.0) * 0.1 * diffC;
+    lit += mix(col, vec3(1.0), 0.45) * thread * 0.14 * (0.3 + 0.7 * diffC);
     float fluff = streak;
     float threads = thread;
     lit *= uExposure;
