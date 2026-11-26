@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { ScrollView } from '@/components/app-scroll-view';
 import { Text } from '@/components/app-text';
@@ -42,15 +42,23 @@ function MenuAccordion({ scale, title, expanded, onToggle, children }: {
   </View>;
 }
 
-export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, onTutorial, sensitivity, onSensitivity }: Props) {
+export function HomeMenuPanel({ scale: layoutScale, onClose, onSearch, onCalendar, onLogout, onTutorial, sensitivity, onSensitivity }: Props) {
   const { t, language, setLanguage } = useLanguage();
   const fontScale = useFontScale();
   const [expanded, setExpanded] = useState<Partial<Record<AccordionId, boolean>>>({});
   const [sensitivityPreview, setSensitivityPreview] = useState<number | null>(null);
   const { height, chromeLeft, chromeWidth, headerTop, bottomSpace, hudHeight } = useResponsiveLayout();
-  const top = headerTop + hudHeight + 4 * scale;
-  const panelWidth = Math.min(352 * scale * Math.max(1, fontScale), chromeWidth - 30 * scale);
-  const visibleHeight = Math.min(688 * scale, Math.max(0, height - top - bottomSpace - 14 * scale));
+  const isAndroid = Platform.OS === 'android';
+  const scale = isAndroid ? layoutScale * 0.8 : layoutScale;
+  const top = headerTop + hudHeight + 4 * layoutScale;
+  const panelWidth = Math.min(
+    isAndroid ? chromeWidth * 0.67 : 352 * scale * Math.max(1, fontScale),
+    chromeWidth - 30 * layoutScale,
+  );
+  const visibleHeight = Math.min(
+    isAndroid ? height * 0.55 : 688 * scale,
+    Math.max(0, height - top - bottomSpace - 14 * layoutScale),
+  );
   const type = (fontSize = 19, lineHeight = 28) => ({ fontSize: fontSize * scale, lineHeight: lineHeight * scale });
   const toggle = (id: AccordionId) => setExpanded(value => ({ ...value, [id]: !value[id] }));
   const heading = (text: string) => <Text accessibilityRole="header" style={[styles.label, styles.heading, { marginLeft: 16 * scale }, type(26, 36)]}>{t(text)}</Text>;
@@ -64,7 +72,7 @@ export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, 
 
   return <View style={styles.overlay} pointerEvents="box-none">
     <Pressable accessibilityLabel={t('메뉴 닫기')} onPress={onClose} style={StyleSheet.absoluteFill} />
-    <View accessibilityViewIsModal style={[styles.panel, { left: chromeLeft + 15 * scale, top, width: panelWidth, height: visibleHeight }]}>
+    <View accessibilityViewIsModal style={[styles.panel, { left: chromeLeft + 15 * layoutScale, top, width: panelWidth, height: visibleHeight }]}>
       <MenuDecoration scale={scale} height={visibleHeight} width={panelWidth} />
       <ScrollView accessibilityLabel={t('설정 메뉴')} style={{ flex: 1, marginVertical: 15 * scale }}
         bounces={false} showsVerticalScrollIndicator={false} nestedScrollEnabled keyboardShouldPersistTaps="handled"
@@ -74,7 +82,9 @@ export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, 
           <Pressable accessibilityRole="button" accessibilityLabel={t('일기 내용 검색')} onPress={() => { onClose(); onSearch(); }}
             style={({ pressed }) => ({ flex: 1, minWidth: 0, minHeight: Math.max(44, 48 * scale), paddingHorizontal: 12 * scale,
               paddingVertical: 8 * scale, flexDirection: 'row', alignItems: 'center', gap: 6 * scale, opacity: pressed ? 0.7 : 1 })}>
-            <MenuSearchFrame />
+            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+              <MenuSearchFrame />
+            </View>
             <MenuSearchIcon scale={scale} />
             <Text style={[styles.label, { flex: 1, color: DesignPaint.ink }, type(17, 26)]}>{t('일기 내용 검색')}</Text>
           </Pressable>

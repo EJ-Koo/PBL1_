@@ -5,7 +5,7 @@ import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useLanguage } from '@/lib/language';
 import { confirmChoice } from '@/lib/notice';
 import { useQuest } from '@/store/quest-context';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
 import { QuestCardFrame, QuestDivider, QuestPanelFrame } from './quest-decoration';
@@ -13,13 +13,21 @@ import { SpaceIcon } from './space-ui';
 
 type Props = { scale: number; onClose: () => void; onWriteDiary: () => void };
 
-export function QuestPanel({ scale, onClose, onWriteDiary }: Props) {
+export function QuestPanel({ scale: layoutScale, onClose, onWriteDiary }: Props) {
   const { t } = useLanguage();
   const { quest, loading, error, refresh, reset } = useQuest();
   const { height, chromeLeft, chromeWidth, headerTop, bottomSpace } = useResponsiveLayout();
-  const top = headerTop + 80 * scale;
-  const width = Math.min(352 * scale, chromeWidth - 28 * scale);
-  const panelHeight = Math.min(540 * scale, Math.max(0, height - top - bottomSpace));
+  const compact = Platform.OS === 'android';
+  const top = headerTop + 80 * layoutScale;
+  const width = Math.min(
+    compact ? chromeWidth * 0.56 : 352 * layoutScale,
+    chromeWidth - 28 * layoutScale,
+  );
+  const scale = compact ? Math.min(layoutScale, width / 352) : layoutScale;
+  const panelHeight = Math.min(
+    compact ? height * 0.36 : 540 * layoutScale,
+    Math.max(0, height - top - bottomSpace),
+  );
   const todayComplete = quest?.completed ?? false;
   const resetQuest = () => confirmChoice(
     t('퀘스트 초기화'),
@@ -31,7 +39,7 @@ export function QuestPanel({ scale, onClose, onWriteDiary }: Props) {
   return (
     <View style={styles.overlay}>
       <Pressable accessibilityLabel={t('퀘스트 닫기')} style={StyleSheet.absoluteFill} onPress={onClose} />
-      <View accessibilityViewIsModal style={{ position: 'absolute', left: chromeLeft + chromeWidth - width - 17 * scale, top, width, height: panelHeight }}>
+      <View accessibilityViewIsModal style={{ position: 'absolute', left: chromeLeft + chromeWidth - width - 17 * layoutScale, top, width, height: panelHeight }}>
         <QuestPanelFrame width={width} height={panelHeight} scale={scale} />
         <View style={{ paddingTop: 22 * scale, paddingHorizontal: 28 * scale }}>
           <View style={[styles.headingRow, { minHeight: 40 * scale }]}>

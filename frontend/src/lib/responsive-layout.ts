@@ -1,7 +1,7 @@
 type Insets = { top: number; bottom: number; left: number; right: number };
 
 // Keep the 393dp artwork readable without enlarging it to tablet/desktop size.
-export function getResponsiveLayout(width: number, height: number, insets: Insets) {
+export function getResponsiveLayout(width: number, height: number, insets: Insets, bottomNavScale = 1) {
   const availableWidth = Math.max(0, width - insets.left - insets.right);
   const scale = Math.min(availableWidth / 393, 1.15);
   const hudScale = scale * 0.85 * 0.85;
@@ -18,7 +18,7 @@ export function getResponsiveLayout(width: number, height: number, insets: Inset
   const navBottom = insets.bottom;
   const navLeft = insets.left;
   const navWidth = availableWidth;
-  const navLayout = getBottomNavLayout(navWidth);
+  const navLayout = getBottomNavLayout(navWidth, bottomNavScale);
   const navHeight = navLayout.height;
   const bottomSpace = navBottom + navHeight + 16 * scale;
   const gridWidth = Math.min(availableWidth, 1120);
@@ -45,8 +45,8 @@ const navPanels = [
   { id: 'group', label: '그룹 우주', x: 500, width: 95 },
 ] as const;
 
-export function getBottomNavLayout(width: number) {
-  const scale = Math.min(Math.max(0, width) / 774, 1.15) * 0.7 * 0.85;
+export function getBottomNavLayout(width: number, sizeMultiplier = 1) {
+  const scale = Math.min(Math.max(0, width) / 774, 1.15) * 0.7 * 0.85 * sizeMultiplier;
   const viewWidth = scale > 0 ? width / scale : 774;
   const offset = (viewWidth - 774) / 2;
   const viewHeight = 120;

@@ -15,7 +15,7 @@ import { Text } from '@/components/app-text';
 //  - [ADDED 2026-11-21] slot=planet_surface → 소모품 탭 '행성 표면' 줄 (오팔 유리·솜사탕 구름·진주 실크·크리스탈 프리즘·오로라 리본)
 //      행성 효과와 같은 규칙(소모품, 1개 = 행성 1개). 행성 하나에 표면 하나 + 효과 하나를 따로 고른다.
 import { useMemo, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, TouchableOpacity, useWindowDimensions, View, type ImageSourcePropType } from 'react-native';
+import { ActivityIndicator, Image, Modal, Platform, Pressable, StyleSheet, TouchableOpacity, useWindowDimensions, View, type ImageSourcePropType } from 'react-native';
 
 import { ShopFrame, ShopSectionRule } from '@/components/ui/shop-frame';
 import { DesignFonts } from '@/constants/ui-design';
@@ -359,7 +359,7 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
                     ? require('../../public/cursors/astronaut-blue-idle.png')
                     : cursor?.style === 'astronaut_pink'
                       ? require('../../public/cursors/astronaut-pink-idle.png') : undefined}
-                  artwork={cursor?.style === 'ufo_mint' ? <UfoSprite pose="idle" size={56} /> : undefined}
+                  artwork={cursor?.style === 'ufo_mint' ? <UfoSprite pose="idle" size={android ? 44 : 56} /> : undefined}
                   name={item.id === STARTER_CURSOR_ID ? t(item.name) : item.name}
                   description={item.id === STARTER_CURSOR_ID ? t(item.description) : item.description}
                   priceText={item.id === STARTER_CURSOR_ID ? '기본 제공' : item.kind === 'equip' && owned ? '보유 중' : String(item.price)}
@@ -489,7 +489,7 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
           ) : null}
           {loading && coins === null ? <ActivityIndicator color="#fff" style={styles.loading} /> : null}
 
-          <ScrollArea key={tab.id} style={[styles.body, compact && styles.bodyCompact]} contentContainerStyle={styles.bodyContent}
+          <ScrollArea key={tab.id} hideScrollbarWhenNotScrollable style={[styles.body, compact && styles.bodyCompact]} contentContainerStyle={styles.bodyContent}
             label={t('상점 상품 목록')} scrollbarLabel={t('상점 세로 스크롤')} testID="shop-scroll">
             {indexed.filter(({ entry }) => !entry.section.preview).map(({ entry, index }) => renderSection(entry, index))}
             {lookSections.length > 0 ? (
@@ -538,8 +538,9 @@ export function ShopSheet({ visible, onClose }: { visible: boolean; width: numbe
   );
 }
 
-const CARD_WIDTH = 164;
-const CARD_GAP = 14;
+const android = Platform.OS === 'android';
+const CARD_WIDTH = android ? 138 : 164;
+const CARD_GAP = android ? 10 : 14;
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center' },
@@ -548,25 +549,25 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
     paddingHorizontal: 56,
   },
-  sheetCompact: { paddingTop: 26, paddingBottom: 28, paddingHorizontal: 16 },
+  sheetCompact: { paddingTop: android ? 18 : 26, paddingBottom: android ? 20 : 28, paddingHorizontal: 16 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingBottom: 10, marginBottom: 24, borderBottomWidth: 1, borderBottomColor: '#D9D9D9' },
-  headerCompact: { minHeight: 46, marginBottom: 16 },
+  headerCompact: { minHeight: android ? 40 : 46, marginBottom: android ? 10 : 16 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   title: { color: '#fff', fontFamily: DesignFonts.bold, fontSize: 30, flex: 1, minWidth: 0 },
-  titleCompact: { fontSize: 24 },
+  titleCompact: { fontSize: android ? 21 : 24 },
   titleNarrow: { fontSize: 18 },
   coinBalance: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   coinText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
   close: { width: 24, height: 32, alignItems: 'center', justifyContent: 'center' },
   closeText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
   tabs: { flexDirection: 'row', gap: 16, marginHorizontal: 48, marginBottom: 24 },
-  tabsCompact: { gap: 10, marginHorizontal: 0, marginBottom: 18 },
+  tabsCompact: { gap: 10, marginHorizontal: 0, marginBottom: android ? 12 : 18 },
   tab: {
     flex: 1,
     minWidth: 0,
     minHeight: 40,
     justifyContent: 'center',
-    paddingVertical: 8,
+    paddingVertical: android ? 5 : 8,
     paddingHorizontal: 6,
     alignItems: 'center',
   },
@@ -580,16 +581,16 @@ const styles = StyleSheet.create({
   body: { flex: 1, minHeight: 0, marginHorizontal: 48 },
   bodyCompact: { marginHorizontal: 0 },
   bodyContent: { paddingBottom: 4 },
-  section: { marginBottom: 18 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
+  section: { marginBottom: android ? 12 : 18 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: android ? 6 : 10 },
   sectionTitle: { color: '#fff', fontSize: 22 },
   sectionTitleCompact: { fontSize: 16 },
   empty: { color: '#ADADB2', fontSize: 12, marginBottom: 6, marginTop: 4 },
   row: { gap: CARD_GAP, padding: 2, alignItems: 'stretch' },
   card: {
     flexShrink: 0,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: android ? 8 : 12,
+    paddingVertical: android ? 7 : 10,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#858589',
@@ -609,7 +610,7 @@ const styles = StyleSheet.create({
   lookRows: { flex: 1, minWidth: 0 },
   preview: {
     flex: 1,
-    minHeight: 200,
+    minHeight: android ? 144 : 200,
     overflow: 'hidden',
     backgroundColor: '#17181D',
     borderWidth: 1,
@@ -627,11 +628,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#D9D9D9',
   },
-  artwork: { minHeight: 64, alignItems: 'center', justifyContent: 'center' },
-  icon: { fontSize: 46, lineHeight: 56 },
-  cursorImage: { width: 56, height: 56 },
-  name: { alignSelf: 'stretch', fontSize: 14, lineHeight: 22, marginBottom: 6, color: '#fff', textAlign: 'center', flexShrink: 0 },
-  desc: { alignSelf: 'stretch', fontSize: 13, lineHeight: 20, color: '#C4C4CA', textAlign: 'center', marginBottom: 10, minHeight: 40, flexShrink: 0 },
+  artwork: { minHeight: android ? 50 : 64, alignItems: 'center', justifyContent: 'center' },
+  icon: { fontSize: android ? 36 : 46, lineHeight: android ? 44 : 56 },
+  cursorImage: { width: android ? 44 : 56, height: android ? 44 : 56 },
+  name: { alignSelf: 'stretch', fontSize: 14, lineHeight: android ? 19 : 22, marginBottom: android ? 3 : 6, color: '#fff', textAlign: 'center', flexShrink: 0 },
+  desc: { alignSelf: 'stretch', fontSize: 13, lineHeight: android ? 17 : 20, color: '#C4C4CA', textAlign: 'center', marginBottom: android ? 5 : 10, minHeight: android ? 34 : 40, flexShrink: 0 },
   priceRow: { flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 22, marginBottom: 6, marginTop: 'auto' },
   price: { fontSize: 12, lineHeight: 18, color: '#fff' },
   button: {
@@ -662,7 +663,7 @@ const styles = StyleSheet.create({
     borderColor: '#F66C9E',
     borderRadius: 8,
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: android ? 7 : 10,
     minWidth: 200,
     alignItems: 'center',
   },
