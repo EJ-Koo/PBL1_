@@ -76,7 +76,7 @@ for(const width of [390,1440])test(`member diaries, constellation, read-all and 
   assert.equal(universe.props.sceneKey,'1:group-g','Changing member focus preserves the group camera');
   assert.equal(f.find('GroupMemberRecordsPanel').props.entries.length,15);
   assert.equal(f.reads.length,0,'Opening a member filter never marks a diary read');
-  f.find('GroupMemberRecordsPanel').props.onConstellation();
+  f.find('ConstellationModeToggle').props.onChange(true);
   const panel=f.find('ConstellationPanel');
   assert.equal(panel.props.statuses.find(item=>item.topic==='travel').count,15);
   panel.props.onSelectTemplate(panel.props.statuses.find(item=>item.topic==='travel').levels[0].template);

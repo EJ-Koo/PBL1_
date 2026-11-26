@@ -236,7 +236,7 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
     </ScrollView>}
     {memberFilter&&!constellation.enabled&&!panel&&!selection.id&&!chatOpen&&!loading&&!error&&<GroupMemberRecordsPanel entries={visibleEntries} name={memberFilter.name}
       left={infoLeft} bottom={infoBottom} width={infoWidth} maxHeight={Math.max(80,Math.min(height*.43,360*s,height-recordsTop-infoBottom-12))} scale={s}
-      onOpen={openRecord} onConstellation={()=>showConstellation(true)}/>}
+      onOpen={openRecord}/>}
 
     {readError && <Text accessibilityRole="alert" style={[styles.readError, { top: panelTop }]}>{readError}</Text>}
     <GroupChatDock key={group.id} groupId={group.id} bottom={chatBottom} left={chatLeft} width={chatWidth} scale={s}

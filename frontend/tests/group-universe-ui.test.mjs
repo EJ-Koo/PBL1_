@@ -81,18 +81,17 @@ test('each member record action carries the stable user id and old-server failur
   assert.ok(unavailable.filter(node=>node.props.testID?.startsWith('group-member-records-')).every(node=>node.props.disabled));
 });
 
-test('member records show newest shared diaries first with direct reading and constellation actions',()=>{
+test('member records show newest shared diaries first with direct reading',()=>{
   const {GroupMemberRecordsPanel}=compile('../src/components/ui/group-member-records-panel.tsx',name=>{
     if(name==='@/lib/special-planet')return {DIARY_TOPICS:[{id:'travel',label:'여행'}]};
     return uiRequire(name);
   });
-  let opened,shape=0;
+  let opened;
   const entries=[{id:'old',createdAt:0,topic:'travel',text:'old diary'},{id:'new',createdAt:100,topic:'travel',text:'new diary'}];
-  const all=nodes(GroupMemberRecordsPanel({entries,name:'same',left:10,bottom:140,width:320,maxHeight:300,scale:1,onOpen:id=>{opened=id;},onConstellation:()=>shape++}));
+  const all=nodes(GroupMemberRecordsPanel({entries,name:'same',left:10,bottom:140,width:320,maxHeight:300,scale:1,onOpen:id=>{opened=id;}}));
   const records=all.filter(node=>node.props.testID?.startsWith('member-record-'));
   assert.deepEqual(records.map(node=>node.props.testID),['member-record-new','member-record-old']);
   records[0].props.onPress();assert.equal(opened,'new');
-  all.find(node=>node.props.children?.props?.children==='주제별 별자리 보기').props.onPress();assert.equal(shape,1);
   assert.deepEqual(entries.map(entry=>entry.id),['old','new']);
 });
 
