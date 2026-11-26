@@ -50,18 +50,20 @@ export function ConstellationModeToggle({
   active,
   onChange,
   universeLabel = '나의 우주',
+  highlightConstellation = false,
 }: {
   scale: number;
   active: boolean;
   onChange: (active: boolean) => void;
   universeLabel?: string;
+  highlightConstellation?: boolean;
 }) {
   const items = [
     { on: false, label: universeLabel },
     { on: true, label: '별자리 보기' },
   ];
   return (
-    <View style={[styles.toggle, { height: 32 * scale, borderRadius: 16 * scale }]} accessibilityRole="tablist">
+    <View style={[styles.toggle, { height: 32 * scale, borderRadius: 16 * scale }, highlightConstellation&&{borderColor:'#f6d879'}]} accessibilityRole="tablist">
       {items.map((item) => {
         const selected = item.on === active;
         return (
@@ -78,6 +80,7 @@ export function ConstellationModeToggle({
                 styles.toggleText,
                 { fontSize: 13 * scale, lineHeight: 18 * scale },
                 selected && { fontFamily: DesignFonts.bold, color: DesignPaint.menuText },
+                item.on&&highlightConstellation&&{color:'#f6d879'},
               ]}>
               {item.label}
             </Text>

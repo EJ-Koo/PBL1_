@@ -16,6 +16,14 @@ test('pinch is proportional, zoom and vertical rotation have shared bounds',()=>
  rotateView(view,0,-100000,1);assert.equal(view.pitch,-Math.PI/2);
 });
 
+test('practice rotation is isolated from the account and a replay starts with a fresh camera',()=>{
+ const real=controlsFor('tutorial-isolation-account:home');rotateView(real,12,8,1);zoomView(real,1.5);
+ const before={...real};
+ const practice=controlsFor('tutorial-account-1:home');rotateView(practice,60,40,1);zoomView(practice,3);
+ assert.deepEqual(real,before);
+ assert.deepEqual(controlsFor('tutorial-account-2:home'),{yaw:0,pitch:0,zoom:1});
+});
+
 test('opening a diary limits extreme zoom without moving angle or zooming in from a distant view', () => {
  const view={yaw:1,pitch:.3,zoom:.25};limitDiaryZoom(view);
  assert.deepEqual(view,{yaw:1,pitch:.3,zoom:.6});

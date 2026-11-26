@@ -5,7 +5,7 @@ import Svg, { ClipPath, Defs, G, Path, Rect } from 'react-native-svg';
 import { DesignColors, DesignPaint } from '@/constants/ui-design';
 import type { getBottomNavLayout } from '@/lib/responsive-layout';
 
-export function HomeHudFrame({ scale, width = 393 * scale, wide = false }: { scale: number; width?: number; wide?: boolean }) {
+export function HomeHudFrame({ scale, width = 393 * scale, wide = false, highlightMenu=false }: { scale: number; width?: number; wide?: boolean; highlightMenu?:boolean }) {
   const frameWidth = scale > 0 ? width / scale : 393;
   const center = frameWidth / 2;
   const notchLeft = center - (wide ? 154 : 73);
@@ -24,8 +24,8 @@ export function HomeHudFrame({ scale, width = 393 * scale, wide = false }: { sca
       <Path
         d="M23 10H15V18 M15 22V38 M15 42V47H23 M58 10H66V18 M66 22V38 M66 42V47H58"
         fill="none"
-        stroke={DesignPaint.ink}
-        strokeWidth={1.5}
+        stroke={highlightMenu?'#f6d879':DesignPaint.ink}
+        strokeWidth={highlightMenu?2.5:1.5}
       />
       <Path d="M29 20H51 M29 28.5H51 M29 37H51" stroke={DesignPaint.ink} strokeWidth={1.3} />
       <G stroke={DesignPaint.hudHatching} strokeWidth={1}>
@@ -37,15 +37,15 @@ export function HomeHudFrame({ scale, width = 393 * scale, wide = false }: { sca
   );
 }
 
-export function QuestFrame({ scale, width = 77 * scale }: { scale: number; width?: number }) {
+export function QuestFrame({ scale, width = 77 * scale, highlighted=false }: { scale: number; width?: number; highlighted?:boolean }) {
   const frameWidth = width / scale;
   return (
     <Svg width={width} height={38 * scale} viewBox={`0 0 ${frameWidth} 38`} pointerEvents="none">
       <Path
         d={`M11 1H${frameWidth - 1}V27L${frameWidth - 11} 37H1V12Z`}
         fill={DesignPaint.quest}
-        stroke={DesignPaint.ink}
-        strokeWidth={1.5}
+        stroke={highlighted?'#f6d879':DesignPaint.ink}
+        strokeWidth={highlighted?2.5:1.5}
       />
     </Svg>
   );
@@ -67,7 +67,7 @@ export function HudIcon({ kind, scale }: { kind: 'star' | 'coin' | 'check'; scal
 
 type BottomLayout = ReturnType<typeof getBottomNavLayout>;
 
-export function BottomNavFrame({ layout, pressed }: { layout: BottomLayout; pressed?: string | null }) {
+export function BottomNavFrame({ layout, pressed, highlighted }: { layout: BottomLayout; pressed?: string | null; highlighted?:string }) {
   const clipId = 'bottom-stripes-' + useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const { viewWidth, viewHeight, scale, offset, height, items } = layout;
   if (scale === 0) return null;
@@ -92,7 +92,8 @@ export function BottomNavFrame({ layout, pressed }: { layout: BottomLayout; pres
         const top = id === 'diary' ? `V71L${x + 35} 45.5H${right}`
           : id === 'group' ? `V45.5H${right - 35}L${right} 71` : `V45.5H${right}`;
         return <Path key={id} d={`M${x} 87.5${top}V87.5Z`}
-          fill={pressed === id ? '#686868' : DesignPaint.bottomBar} stroke={DesignPaint.ink} strokeWidth={2} />;
+          fill={pressed === id ? '#686868' : highlighted===id?'#665c3b':DesignPaint.bottomBar}
+          stroke={highlighted===id?'#f6d879':DesignPaint.ink} strokeWidth={highlighted===id?3:2} />;
       })}
     </Svg>
   );

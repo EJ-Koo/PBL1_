@@ -14,7 +14,7 @@ function FrameCorners({ size, stroke, color }: { size: number; stroke: number; c
   ));
 }
 
-type FrameProps = { scale: number; wide: boolean };
+type FrameProps = { scale: number; wide: boolean; highlighted?:boolean };
 
 export function DiaryBackFrame({ scale, wide }: FrameProps) {
   return <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -24,12 +24,12 @@ export function DiaryBackFrame({ scale, wide }: FrameProps) {
   </View>;
 }
 
-export function DiaryInputFrame({ scale, wide }: FrameProps) {
+export function DiaryInputFrame({ scale, wide, highlighted=false }: FrameProps) {
   const gridId = 'diary-grid-' + useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const cell = (wide ? 20 : 11) * scale;
   const inset = (wide ? 20 : 8) * scale;
   const gap = 28 * scale;
-  const edge = { position: 'absolute', borderColor: wide ? '#555' : '#ccc' } as const;
+  const edge = { position: 'absolute', borderColor: highlighted?'#f6d879':wide ? '#555' : '#ccc' } as const;
   return <View style={StyleSheet.absoluteFill} pointerEvents="none">
     <View style={{ position: 'absolute', left: inset, right: inset, top: inset, bottom: inset }}>
       <Svg width="100%" height="100%">
@@ -41,15 +41,15 @@ export function DiaryInputFrame({ scale, wide }: FrameProps) {
     </View>
     <View style={[edge, { left: gap, right: gap, top: 0, bottom: 0, borderTopWidth: 1, borderBottomWidth: 1 }]} />
     <View style={[edge, { left: 0, right: 0, top: gap, bottom: gap, borderLeftWidth: 1, borderRightWidth: 1 }]} />
-    <FrameCorners size={(wide ? 16 : 13) * scale} stroke={wide ? 1 : 3 * scale} color={wide ? '#999' : DesignPaint.ink} />
+    <FrameCorners size={(wide ? 16 : 13) * scale} stroke={wide ? 1 : 3 * scale} color={highlighted?'#f6d879':wide ? '#999' : DesignPaint.ink} />
   </View>;
 }
 
-export function DiaryPhotoAddFrame({ wide }: { wide: boolean }) {
+export function DiaryPhotoAddFrame({ wide, highlighted=false }: { wide: boolean; highlighted?:boolean }) {
   return <Svg width="100%" height="100%" viewBox="0 0 128 128" pointerEvents="none">
     {wide ? <Path d="M0.5 10V0.5H10 M15 0.5H113 M118 .5H127.5V10 M127.5 15V113 M127.5 118V127.5H118 M113 127.5H15 M10 127.5H.5V118 M.5 113V15"
-      stroke="#888" strokeWidth={0.65} fill="none" /> : <>
-      <Rect x={0.75} y={0.75} width={126.5} height={126.5} fill="none" stroke={DesignPaint.ink} strokeWidth={1.5} />
+      stroke={highlighted?'#f6d879':'#888'} strokeWidth={highlighted?1.5:0.65} fill="none" /> : <>
+      <Rect x={0.75} y={0.75} width={126.5} height={126.5} fill="none" stroke={highlighted?'#f6d879':DesignPaint.ink} strokeWidth={1.5} />
       <Path d="M18.5 8.5H9.5V17.5 M110.5 8.5H119.5V17.5 M9.5 109.5V118.5H18.5 M110.5 118.5H119.5V109.5"
         fill="none" stroke={DesignPaint.ink} strokeWidth={1.4} />
     </>}
@@ -74,10 +74,10 @@ export function DiaryLockIcon({ scale }: { scale: number }) {
   );
 }
 
-export function DiarySubmitFrame({ wide }: { wide: boolean }) {
+export function DiarySubmitFrame({ wide, highlighted=false }: { wide: boolean; highlighted?:boolean }) {
   return <Svg width="100%" height="100%" viewBox="0 0 344 58" preserveAspectRatio="none" pointerEvents="none">
     <Path d="M2 24L21 4.5H324L342 24V37L324 55.5H21L2 37Z" fill={DesignPaint.diarySubmit}
-      stroke={DesignPaint.ink} strokeWidth={wide ? 1 : 2} />
+      stroke={highlighted?'#f6d879':DesignPaint.ink} strokeWidth={highlighted?2:wide ? 1 : 2} />
     <Path d="M12 1.5H2V11.5 M332 1.5H342V11.5 M2 45.5V55.5H12 M332 55.5H342V45.5"
       fill="none" stroke={DesignPaint.ink} strokeWidth={2} />
   </Svg>;

@@ -10,9 +10,10 @@ type Props = {
   onDiary: () => void;
   onHome: () => void;
   onGroup: () => void;
+  highlight?: 'diary' | 'home' | 'group';
 };
 
-export function UniverseBottomNav({ activeScreen, onDiary, onHome, onGroup }: Props) {
+export function UniverseBottomNav({ activeScreen, onDiary, onHome, onGroup, highlight }: Props) {
   const { t } = useLanguage();
   const { navLeft, navWidth, navBottom, navLayout } = useResponsiveLayout();
   const [pressed, setPressed] = useState<string | null>(null);
@@ -22,7 +23,7 @@ export function UniverseBottomNav({ activeScreen, onDiary, onHome, onGroup }: Pr
     <View
       pointerEvents="box-none"
       style={[styles.container, { left: navLeft, width: navWidth, height: navLayout.height + navBottom }]}>
-      <BottomNavFrame layout={navLayout} pressed={pressed} />
+      <BottomNavFrame layout={navLayout} pressed={pressed} highlighted={highlight} />
       {navLayout.items.map(item => (
         <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={t(item.label)}
           aria-current={activeScreen === item.id ? 'page' : undefined}

@@ -1,6 +1,7 @@
 export type Language = 'ko' | 'en';
 
 export const ENGLISH: Readonly<Record<string, string>> = {
+  "튜토리얼 다시 하기": "Replay tutorial",
   "메뉴": "Menu",
   "상점": "Shop",
   "상점 상품 목록": "Shop products",

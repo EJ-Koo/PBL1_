@@ -952,7 +952,8 @@ export type ConstellationRequest = {
  * 별자리 보기에 들어가기 직전의 화면 각도·거리. 나올 때 그대로 되돌린다.
  * 화면(컴포넌트)이 다시 만들어져도 남도록 모듈 변수로 둔다(targetRotX 등과 같은 방식).
  */
-let constellationSavedView: UniverseControls | null = null;
+// Keep each universe independent, including a tutorial opened over the real one.
+const constellationSavedViews = new Map<string, UniverseControls>();
 /**
  * 별자리 밖 행성을 어둡게 하는 값(uDim). 셰이더는 선형 색에서 곱한 뒤 sRGB로 바꾸므로,
  * 눈에 보이는 밝기(dimOthers, 0~1)를 선형 값으로 바꿔 준다(0.3 → 약 0.07배).
@@ -1063,15 +1064,16 @@ export function UniverseScene({
       fittedCameraZ.current = null;
       let i = 0;
       for (const [id, pos] of rt.positions) sendHome(id, pos, i++);
-      if (constellationSavedView) {
-        setView(controls.current, constellationSavedView);
-        constellationSavedView = null;
+      const savedView = constellationSavedViews.get(sceneKey);
+      if (savedView) {
+        setView(controls.current, savedView);
+        constellationSavedViews.delete(sceneKey);
       }
       return;
     }
 
     // 들어가기 전 화면을 한 번만 기억하고, 우주 회전을 가장 가까운 '정면'(360도의 배수)으로 돌린다 → 별자리가 화면과 나란하다
-    if (!constellationSavedView) constellationSavedView = { ...controls.current };
+    if (!constellationSavedViews.has(sceneKey)) constellationSavedViews.set(sceneKey, { ...controls.current });
 
     const center = framing?.center ?? [0, 0, 0];
     const centerVec = new Vector3(...center);

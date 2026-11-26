@@ -1,4 +1,5 @@
 import { useLanguage } from '@/lib/language';
+import type { ReactNode } from 'react';
 import { ScrollView } from '@/components/app-scroll-view';
 import { GroupProfileControl } from './group-profile-control';
 import { Text } from '@/components/app-text';
@@ -30,6 +31,7 @@ type Props = {
   onSelectGroup: (group: GroupData) => void;
   onAddGroup: () => void;
   onJoinByCode: () => void;
+  profileControl?: ReactNode;
 };
 
 // 카드 고정 높이(fffju는 멤버 출석 수에 따라 가변이었으나, 서버에 교차 출석 데이터가 없어 고정).
@@ -50,7 +52,7 @@ function GroupPreview({ stars }: { stars: DiaryEntry[] }) {
   );
 }
 
-export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup, onJoinByCode }: Props) {
+export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup, onJoinByCode, profileControl }: Props) {
   const { t } = useLanguage();
   const { headerTop, bottomSpace, pageLeft, pageWidth, pagePadding, pageGap, innerWidth, groupCardWidth } = useResponsiveLayout();
   const fontScale = useFontScale();
@@ -65,7 +67,7 @@ export function GroupSpaceScreen({ scale, groups, onSelectGroup, onAddGroup, onJ
           paddingTop: headerTop, paddingBottom: 24 * scale }}>
         <View style={{ width: innerWidth, marginBottom: 24 * scale }}>
           <View style={{ height: 63 * scale }}>
-            <GroupHeaderFrame scale={scale} width={innerWidth} /><GroupProfileControl scale={scale} />
+            <GroupHeaderFrame scale={scale} width={innerWidth} />{profileControl ?? <GroupProfileControl scale={scale} />}
             <Text numberOfLines={1} adjustsFontSizeToFit accessibilityRole="header" style={[styles.positioned, styles.text, {
               left: 18 * scale, top: 14 * scale, maxWidth: innerWidth - 92 * scale, fontFamily: DesignFonts.bold, fontSize: 28 * scale, lineHeight: 36 * scale,
             }]}>OUR SPACE</Text>

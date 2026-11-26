@@ -1,4 +1,5 @@
 import { GroupExperience } from '@/components/group-experience';
+import { TutorialHost } from '@/components/tutorial-host';
 import { DiaryUniverse } from '@/components/diary-universe';
 import { JoinGroupDialog } from '@/components/ui/join-group-dialog';
 import { NEW_STAR_HIGHLIGHT_MS, type NewStarHighlight } from '@/lib/new-star-highlight';
@@ -68,6 +69,7 @@ import { useShop } from '@/store/shop-context';
 type Screen = 'home' | 'diary' | 'group';
 
 export default function HomeScreen() {
+  const [tutorialRequest,setTutorialRequest] = useState(0);
   const { isLoggedIn, isRestoring, dataLoading, loadError, retryLoad, accessToken, entries, groups, createGroup, joinGroup, leaveGroup, logout, refreshGroups } = useDiary();
   const { coins, activeEffects, refresh: refreshShop } = useShop();
   const { frameWidth } = useDesignFrame();
@@ -447,6 +449,7 @@ export default function HomeScreen() {
               onSearch: () => setSearchPopup({ mode: 'keyword', key: Date.now() }),
               onCalendar: () => setSearchPopup({ mode: 'calendar', key: Date.now() }),
               onLogout: handleLogout,
+              onTutorial: () => { dispatchHomeOverlay({type:'reset'}); setTutorialRequest(value => value + 1); },
               sensitivity,
               onSensitivity: (value) => setSensitivity(setRotateSensitivity(value)),
             }}
@@ -550,6 +553,9 @@ export default function HomeScreen() {
 
       {/* ===== 공통: 하단 네비게이션 (fffju 반응형 — 전체 뷰포트) ===== */}
       {rewardEvent && <QuestRewardAnimation key={rewardEvent.id} event={rewardEvent} onDone={clearReward} />}
+      <TutorialHost key={authSession.getRevision()} userId={authSession.getSnapshot().session?.user_id ?? null} ready={!isRestoring && isLoggedIn}
+        autoEligible={!dataLoading && screen === 'home' && !routeGroupId && !routeTab && !homeOverlay && !searchPopup && !createGroupVisible && !joinVisible && !rewardEvent}
+        request={tutorialRequest} />
       <UniverseBottomNav
         activeScreen={screen}
         onDiary={() => navigateTab('diary')}

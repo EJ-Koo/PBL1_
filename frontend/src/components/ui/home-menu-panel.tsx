@@ -23,6 +23,7 @@ type Props = {
   onSearch: () => void;
   onCalendar: () => void;
   onLogout: () => void;
+  onTutorial?: () => void;
   sensitivity: number;
   onSensitivity: (value: number) => void;
 };
@@ -41,7 +42,7 @@ function MenuAccordion({ scale, title, expanded, onToggle, children }: {
   </View>;
 }
 
-export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, sensitivity, onSensitivity }: Props) {
+export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, onTutorial, sensitivity, onSensitivity }: Props) {
   const { t, language, setLanguage } = useLanguage();
   const fontScale = useFontScale();
   const [expanded, setExpanded] = useState<Partial<Record<AccordionId, boolean>>>({});
@@ -130,6 +131,11 @@ export function HomeMenuPanel({ scale, onClose, onSearch, onCalendar, onLogout, 
 
         {divider}
         {heading('계정관리')}
+        {onTutorial && <Pressable accessibilityRole="button" accessibilityLabel={t('튜토리얼 다시 하기')}
+          onPress={() => { onClose(); onTutorial(); }}
+          style={({ pressed }) => ({ minHeight: 44, paddingHorizontal: 16 * scale, paddingVertical: 10 * scale, opacity: pressed ? 0.6 : 1 })}>
+          <Text style={[styles.label, type(17, 26)]}>{t('튜토리얼 다시 하기')}  ›</Text>
+        </Pressable>}
         <MenuAccordion scale={scale} title={t('로그아웃')} expanded={!!expanded.logout} onToggle={() => toggle('logout')}>
           <Text style={[styles.label, type(14, 22)]}>{t('로그아웃하면 로그인 화면으로 돌아가요.')}</Text>
           <Pressable accessibilityRole="button" accessibilityLabel={t('로그아웃')} onPress={() => { onClose(); onLogout(); }}

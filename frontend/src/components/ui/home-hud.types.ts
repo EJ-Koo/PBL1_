@@ -11,5 +11,6 @@ export type HomeHudProps = {
   checkCount: number;
   onStats: () => void;
   onQuest: () => void;
+  highlight?: 'menu' | 'quest';
   menuProps: Omit<ComponentProps<typeof HomeMenuPanel>, 'scale' | 'onClose'>;
 };

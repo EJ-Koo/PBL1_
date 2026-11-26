@@ -26,6 +26,8 @@ type Props = {
   onSelectPrivate: () => void;
   onToggleGroup: (id: string) => void;
   onBack: () => void;
+  onOpenHistory?: () => void;
+  highlight?: 'text' | 'photos' | 'topics' | 'audience' | 'submit';
   onSubmit: () => void;
   topics?: { id: string; label: string }[];
   selectedTopic?: string | null;
@@ -38,7 +40,7 @@ type Props = {
 export function DiaryWriteScreen({
   diaryText, onChangeText, dateLabel, photoCountLabel, photos, photoBusy, saving,
   onAddPhotos, onRemovePhoto, groups, selectedGroupIds, onSelectPrivate, onToggleGroup,
-  onBack, onSubmit, topics, selectedTopic, onToggleTopic, hasBottomNav, rememberSelections, onToggleRemember,
+  onBack, onOpenHistory, highlight, onSubmit, topics, selectedTopic, onToggleTopic, hasBottomNav, rememberSelections, onToggleRemember,
 }: Props) {
   const insets = useSafeAreaInsets();
   const [preview, setPreview] = useState<Photo | null>(null);
@@ -64,7 +66,7 @@ export function DiaryWriteScreen({
         <View style={[styles.header, { width: pageWidth * 0.912, minHeight: Math.max(44, (wide ? 48 : 40) * scale), paddingHorizontal: (wide ? 22 : 16) * scale }]}>
           <DiaryBackFrame scale={scale} wide={wide} />
           <Pressable accessibilityRole="button" accessibilityLabel="지난 기록 열기"
-            onPress={() => { Keyboard.dismiss(); router.push('/archive'); }} style={styles.headerAction}>
+            onPress={() => { Keyboard.dismiss(); if (onOpenHistory) onOpenHistory(); else router.push('/archive'); }} style={styles.headerAction}>
             <Text style={[styles.muted, type(wide ? 17 : 14, 22)]}>‹  지난 기록</Text>
           </Pressable>
           {wide && <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.center]}>
@@ -95,7 +97,7 @@ export function DiaryWriteScreen({
               const selected = selectedTopic === topic.id;
               return <Pressable key={topic.id} accessibilityRole="button" accessibilityLabel={topic.label}
                 accessibilityState={{ selected }} disabled={saving} onPress={() => onToggleTopic?.(topic.id)}
-                style={[styles.pill, { minHeight: 40 }, selected && styles.selected]}>
+                style={[styles.pill, { minHeight: 40 }, selected && styles.selected, highlight === 'topics' && styles.highlight]}>
                 <Text style={[styles.text, type(13, 19)]}>{selected ? '✓ ' : ''}{topic.label}</Text>
               </Pressable>;
             })}
@@ -107,7 +109,7 @@ export function DiaryWriteScreen({
 
           <View style={{ flexDirection: wide ? 'row' : 'column', gap: wide ? columnGap : 27 * scale, marginTop: (wide ? 36 : 5) * scale }}>
             <View style={wide ? { flex: 1, minWidth: 0, minHeight: 285 * scale } : { height: Math.min(bodyWidth * 233 / 344, 340 * scale) }}>
-              <DiaryInputFrame scale={scale} wide={wide} />
+              <DiaryInputFrame scale={scale} wide={wide} highlighted={highlight==='text'} />
               <TextInput accessibilityLabel="일기 내용" multiline
                 style={[StyleSheet.absoluteFill, styles.text, styles.input, type(wide ? 17 : 16, 24),
                   { paddingHorizontal: (wide ? 28 : 18) * scale, paddingVertical: (wide ? 26 : 32) * scale }]}
@@ -124,7 +126,7 @@ export function DiaryWriteScreen({
               <PhotoScrollStrip height={photoSize} gap={photoGap} scale={scale}>
                 <Pressable accessibilityRole="button" accessibilityLabel="일기 사진 추가" onPress={onAddPhotos}
                   disabled={addDisabled} style={[tile, addDisabled && styles.dimmed]}>
-                  <DiaryPhotoAddFrame wide={wide} />
+                  <DiaryPhotoAddFrame wide={wide} highlighted={highlight==='photos'} />
                   <Text numberOfLines={1} style={[styles.photoCaption, styles.text, type(16, 22)]}>{photoBusy ? '불러오는 중' : '사진 추가'}</Text>
                 </Pressable>
                 {photos.length === 0 ? <View style={tile}><DiaryPhotoEmptyFrame /></View> : photos.map((photo, index) => (
@@ -144,14 +146,14 @@ export function DiaryWriteScreen({
                 <Pressable accessibilityRole="button" accessibilityLabel="비공개, 나의 우주에만 별 띄우기"
                   onPress={() => { Keyboard.dismiss(); onSelectPrivate(); }} disabled={saving}
                   accessibilityState={{ selected: selectedGroupIds.length === 0 }}
-                  style={[styles.pill, { minWidth: 114 * scale }, !selectedGroupIds.length && styles.selected]}>
+                  style={[styles.pill, { minWidth: 114 * scale }, !selectedGroupIds.length && styles.selected, highlight==='audience'&&groups.length===0&&styles.highlight]}>
                   <DiaryLockIcon scale={scale} /><Text style={[styles.text, type(14, 20)]}>비공개</Text>
                 </Pressable>
                 {groups.map(group => {
                   const selected = selectedGroupIds.includes(group.id);
                   return <Pressable key={group.id} accessibilityRole="button" accessibilityLabel={`${group.name}에 일기 공유`}
                     onPress={() => { Keyboard.dismiss(); onToggleGroup(group.id); }} disabled={saving}
-                    accessibilityState={{ selected }} style={[styles.pill, { minWidth: 98 * scale }, selected && styles.selected]}>
+                    accessibilityState={{ selected }} style={[styles.pill, { minWidth: 98 * scale }, selected && styles.selected, highlight==='audience'&&styles.highlight]}>
                     <Text style={[styles.text, { flexShrink: 1 }, type(14, 20)]}>{selected ? '✓ ' : ''}{group.name}</Text>
                   </Pressable>;
                 })}
@@ -159,7 +161,7 @@ export function DiaryWriteScreen({
 
               <Pressable accessibilityRole="button" onPress={onSubmit} disabled={saving || photoBusy} accessibilityLabel="오늘의 별 띄우기"
                 style={{ height: Math.max(44, (wide ? 56 : 58) * scale), marginTop: (wide ? 16 : 22) * scale }}>
-                <DiarySubmitFrame wide={wide} />
+                <DiarySubmitFrame wide={wide} highlighted={highlight==='submit'} />
                 <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.center]}>
                   <Text style={[styles.text, type(wide ? 16 : 14, 22)]}>{saving ? '저장 중…' : '오늘의 별 띄우기'}</Text>
                 </View>
@@ -181,6 +183,7 @@ export function DiaryWriteScreen({
 }
 
 const styles = StyleSheet.create({
+  highlight: { borderColor: '#f6d879' },
   screen: { flex: 1, backgroundColor: DesignPaint.background },
   text: { color: DesignPaint.ink, fontFamily: DesignFonts.regular, includeFontPadding: false },
   muted: { color: '#bdbdbd', includeFontPadding: false },

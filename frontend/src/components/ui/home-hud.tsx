@@ -9,7 +9,7 @@ import type { HomeHudProps as Props } from './home-hud.types';
 import { DesignFonts, DesignPaint } from '@/constants/ui-design';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 
-export function HomeHud({ scale: contentScale, starCount, coinCount, checkCount, onStats, onQuest, menuVisible, onToggleMenu, onCloseMenu, menuProps }: Props) {
+export function HomeHud({ scale: contentScale, starCount, coinCount, checkCount, onStats, onQuest, menuVisible, onToggleMenu, onCloseMenu, menuProps, highlight }: Props) {
   const { t } = useLanguage();
   const { chromeLeft, chromeWidth, headerTop, wide, hudScale: scale } = useResponsiveLayout();
   const showLabels = wide && chromeWidth >= 700 * scale;
@@ -28,7 +28,7 @@ export function HomeHud({ scale: contentScale, starCount, coinCount, checkCount,
       <View
         pointerEvents="box-none"
         style={[styles.container, { left: chromeLeft, top: headerTop, width: chromeWidth, height: 75 * scale }]}>
-        <HomeHudFrame scale={scale} width={chromeWidth} wide={wide} />
+        <HomeHudFrame scale={scale} width={chromeWidth} wide={wide} highlightMenu={highlight==='menu'} />
         <TouchableOpacity
           accessibilityLabel={t("메뉴")}
           hitSlop={{ top: 6, bottom: 6 }}
@@ -65,7 +65,7 @@ export function HomeHud({ scale: contentScale, starCount, coinCount, checkCount,
             onQuest();
           }}
           style={[styles.button, { right: 13 * scale, top: 9 * scale, width: 77 * scale, height: Math.max(44, 38 * scale) }]}>
-          <QuestFrame scale={scale} />
+          <QuestFrame scale={scale} highlighted={highlight==='quest'} />
           <Text style={[styles.quest, { top: 8 * scale, width: 77 * scale, fontSize: 16 * scale, lineHeight: 22 * scale }]}>Quest</Text>
         </TouchableOpacity>
       </View>
