@@ -12,9 +12,12 @@
 ```powershell
 $schema = Invoke-RestMethod 'https://api.star2day.com/openapi.json'
 $null -ne $schema.components.schemas.GroupStarEntry.properties.topic
+$null -ne $schema.components.schemas.GroupStarEntry.properties.author_id
 ```
 
 5. 웹에서 새로고침 → 그룹 진입 → 별자리 보기 → 주제 다시 불러오기로 확인합니다. `topic: null`인 과거 일기는 여전히 제외되며, 실제 선택 주제나 기존 AI 주제 저장소에 근거 없는 분류를 만들지 않습니다.
+
+멤버별 일기 모아보기까지 반영했다면 위 확인 명령은 두 줄 모두 `True`여야 합니다. 멤버 목록의 ‘작성한 글 보기’로 해당 멤버의 그룹 공유 글만 확인합니다. 작성자 ID는 기존 그룹 공유 응답에 추가하는 값이며 DB 구조 변경이나 별도 SQL은 필요하지 않습니다.
 
 ## 예전 행성이 회색인 경우
 

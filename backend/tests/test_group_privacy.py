@@ -127,7 +127,9 @@ def test_group_stars_preserves_each_authors_saved_diary_topic(monkeypatch, topic
     monkeypatch.setattr(groups, 'applied_effects', lambda *args: {})
     monkeypatch.setattr(groups, 'applied_surfaces', lambda *args: {})
     monkeypatch.setattr(groups.ai_client, 'planet_visuals', lambda *args: None)
-    assert groups.group_stars('g1', 'viewer')[0].topic == topic
+    result = groups.group_stars('g1', 'viewer')[0]
+    assert result.topic == topic
+    assert result.author_id == 'another-author'
 
 
 def test_missing_group_topic_column_falls_back_without_exposing_private_diaries(monkeypatch):
@@ -193,3 +195,15 @@ def test_group_legacy_topics_are_scoped_to_authors_and_private_rows_are_excluded
     assert {entry.diary_id: entry.topic for entry in result} == {
         'a': 'other', 'b': 'rest_daily', 'saved': 'travel'}
     assert sorted(calls) == [('author-a', ['a']), ('author-b', ['b'])]
+    assert {entry.diary_id: entry.author_id for entry in result} == {
+        'a': 'author-a', 'b': 'author-b', 'saved': 'author-a'}
+
+
+def test_non_member_cannot_obtain_group_authors_or_diary_records(monkeypatch):
+    def denied(*args):
+        raise HTTPException(status_code=403, detail='Not a member')
+    monkeypatch.setattr(groups, '_assert_member', denied)
+    monkeypatch.setattr(groups, 'supabase', None)
+    with pytest.raises(HTTPException) as error:
+        groups.group_stars('g1', 'outsider')
+    assert error.value.status_code == 403

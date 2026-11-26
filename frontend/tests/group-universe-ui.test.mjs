@@ -71,6 +71,45 @@ test('members use the same panel frame, code, avatars and geometry without any s
   assert.ok(all.some(node=>node.props.children==='코드: TUTORIAL'));
 });
 
+test('each member record action carries the stable user id and old-server failures disable it',()=>{
+  let selected;
+  const props={left:0,top:100,width:236,height:488,scale:1,code:'CODE',members:[
+    {user_id:'a',nickname:'same',bio:'',avatar_url:null},{user_id:'b',nickname:'same',bio:'',avatar_url:null}],onReadMember:member=>{selected=member.user_id;}};
+  const all=nodes(GroupMembersPanel(props));
+  all.find(node=>node.props.testID==='group-member-records-b').props.onPress();assert.equal(selected,'b');
+  const unavailable=nodes(GroupMembersPanel({...props,recordsUnavailable:true}));
+  assert.ok(unavailable.filter(node=>node.props.testID?.startsWith('group-member-records-')).every(node=>node.props.disabled));
+});
+
+test('member records show newest shared diaries first with direct reading and constellation actions',()=>{
+  const {GroupMemberRecordsPanel}=compile('../src/components/ui/group-member-records-panel.tsx',name=>{
+    if(name==='@/lib/special-planet')return {DIARY_TOPICS:[{id:'travel',label:'여행'}]};
+    return uiRequire(name);
+  });
+  let opened,shape=0;
+  const entries=[{id:'old',createdAt:0,topic:'travel',text:'old diary'},{id:'new',createdAt:100,topic:'travel',text:'new diary'}];
+  const all=nodes(GroupMemberRecordsPanel({entries,name:'same',left:10,bottom:140,width:320,maxHeight:300,scale:1,onOpen:id=>{opened=id;},onConstellation:()=>shape++}));
+  const records=all.filter(node=>node.props.testID?.startsWith('member-record-'));
+  assert.deepEqual(records.map(node=>node.props.testID),['member-record-new','member-record-old']);
+  records[0].props.onPress();assert.equal(opened,'new');
+  all.find(node=>node.props.children?.props?.children==='주제별 별자리 보기').props.onPress();assert.equal(shape,1);
+  assert.deepEqual(entries.map(entry=>entry.id),['old','new']);
+});
+
+test('unknown topic metadata is not shown as a real zero count or locked constellation',()=>{
+  const {ConstellationPanel}=compile('../src/components/ui/constellation-panel.tsx',name=>{
+    if(name==='react-native-svg')return {__esModule:true,default:'Svg',Circle:'Circle',Line:'Line',Path:'Path'};
+    if(name==='@/lib/constellation')return {TOPIC_CONCEPTS:{travel:{color:'#fff'}},PERSONAL_STAGES:[]};
+    if(name==='@/constants/ui-design')return {DesignFonts:{regular:'font',bold:'font-bold'},DesignPaint:{ink:'#fff'},grayAlpha:()=>'',whiteAlpha:()=>''};
+    if(name==='react-native')return {...uiRequire(name),TouchableOpacity:'TouchableOpacity'};
+    return uiRequire(name);
+  });
+  const all=nodes(ConstellationPanel({scale:1,countsAvailable:false,statuses:[{topic:'travel',label:'여행',title:'여행의 기억',count:0,levels:[],next:null}],topic:'travel',templateId:null,members:[],collapsed:false,onToggleCollapsed(){},onSelectTopic(){},onSelectTemplate(){},onOpenEntry(){},emptyTopicText:'주제 정보를 불러오지 못했어요'}));
+  assert.ok(all.some(node=>node.props.accessibilityLabel==='여행 주제 정보 확인 필요'));
+  assert.ok(!all.some(node=>node.props.testID==='constellation-level-scroll'));
+  assert.ok(!all.some(node=>node.props.accessibilityLabel==='여행 일기 0개'));
+});
+
 test('practice diary popup overrides API heart while normal group popup retains it',()=>{
   const popupLayout=compile('../src/lib/star-popup-layout.ts',pureRequire);
   const {StarDiaryPopup}=compile('../src/components/ui/star-diary-popup.tsx',name=>{

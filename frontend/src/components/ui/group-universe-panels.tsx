@@ -7,10 +7,11 @@ import {useLanguage} from '@/lib/language';
 import {Avatar} from './group-profile-control';
 import {GroupChatChevron,GroupPanelFrame} from './group-universe-decoration';
 
-export function GroupMembersPanel({left,top,width,height,scale:s,code,members,error,onRetry,children}: {
+export function GroupMembersPanel({left,top,width,height,scale:s,code,members,error,onRetry,children,onReadMember,recordsUnavailable=false}: {
   left:number;top:number;width:number;height:number;scale:number;code:string;
   members:{user_id:string;nickname:string;bio:string;avatar_url:string|null}[];
   error?:string|null;onRetry?:()=>void;children?:ReactNode;
+  onReadMember?:(member:{user_id:string;nickname:string})=>void;recordsUnavailable?:boolean;
 }) {
   const {t}=useLanguage();
   return <View accessibilityViewIsModal testID="group-members-panel" style={{position:'absolute',zIndex:6,left,top,width,height}}>
@@ -25,8 +26,16 @@ export function GroupMembersPanel({left,top,width,height,scale:s,code,members,er
           <View style={{flex:1,minWidth:0,gap:7}}>
             <Text style={{color:'#fff',fontSize:Math.max(16,16*s),lineHeight:Math.max(24,24*s)}}>{member.nickname}</Text>
             <Text style={{color:'#f0f0f4',fontSize:Math.max(13,13*s),lineHeight:Math.max(20,20*s)}}>{member.bio||t('한줄소개')}</Text>
+            {onReadMember&&<Pressable accessibilityRole="button" accessibilityLabel={t('{name}님이 작성한 글 보기',{name:member.nickname})}
+              testID={`group-member-records-${member.user_id}`} disabled={recordsUnavailable} accessibilityState={{disabled:recordsUnavailable}}
+              onPress={()=>onReadMember(member)} style={{alignSelf:'flex-start',minHeight:44,justifyContent:'center',paddingHorizontal:10,borderWidth:1,borderColor:'#ffffff80',borderRadius:6,opacity:recordsUnavailable?.45:1}}>
+              <Text style={{color:'#fff',fontSize:Math.max(12,12*s),lineHeight:18*s}}>{t('작성한 글 보기')}</Text>
+            </Pressable>}
           </View>
         </View>)}
+        {recordsUnavailable&&<Pressable accessibilityRole="button" onPress={onRetry} style={{minHeight:44,paddingVertical:8}}>
+          <Text style={{color:'#ffe2d5',fontSize:12,lineHeight:19}}>{t('작성자 정보를 불러오지 못했어요. 다시 불러오기')}</Text>
+        </Pressable>}
         {error&&<Pressable accessibilityRole="button" onPress={onRetry}><Text style={{color:'#ffe2d5',fontSize:11,lineHeight:18,paddingVertical:8}}>{t('추가 정보를 불러오지 못했어요. 다시 시도')}</Text></Pressable>}
       </ScrollView>
       {children}

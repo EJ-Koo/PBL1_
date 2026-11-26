@@ -38,6 +38,7 @@ class Group(BaseModel):
 # 그룹 공유 우주: 멤버 전체가 이 그룹에 태그한 일기의 별 1개. 작성자 닉네임 포함.
 class GroupStarEntry(BaseModel):
     diary_id: str
+    author_id: str | None = None
     content: str
     created_at: str
     nickname: str | None = None

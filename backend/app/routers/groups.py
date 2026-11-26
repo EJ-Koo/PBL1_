@@ -260,6 +260,7 @@ def group_stars(group_id: str, user_id: str = Depends(get_current_user_id)):
         out.append(
             GroupStarEntry(
                 diary_id=str(r["diary_id"]),
+                author_id=d.get("user_id"),
                 content=d.get("content") or "",
                 created_at=d.get("created_at"),
                 nickname=nick.get(d.get("user_id")),

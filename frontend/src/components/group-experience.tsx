@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 
 import { ScrollView } from '@/components/app-scroll-view';
@@ -7,6 +7,8 @@ import { DiaryUniverse } from '@/components/diary-universe';
 import { GroupChatDock } from '@/components/group-chat-dock';
 import { GroupQuestDrawer } from '@/components/group-quest-drawer';
 import { GroupMembersPanel } from '@/components/ui/group-universe-panels';
+import { GroupMemberRecordsPanel } from '@/components/ui/group-member-records-panel';
+import { groupMemberEntries, memberUnreadIds } from '@/lib/group-member-records';
 import { GroupUniverseHeader } from '@/components/ui/group-universe-header';
 import { groupUniverseLayout } from '@/lib/group-universe-layout';
 import { SpaceButton } from '@/components/ui/space-ui';
@@ -47,8 +49,12 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   const { width, height } = useWindowDimensions();
   const layout = useResponsiveLayout();
   const s = layout.scale;
-  const constellation = useGroupConstellation(entries);
-  const topicHealth = groupTopicHealth(entries);
+  const [memberFilter,setMemberFilter]=useState<{id:string;name:string}|null>(null);
+  const [centeredDiaryId,setCenteredDiaryId]=useState<string|null>(null);
+  const visibleEntries=useMemo(()=>groupMemberEntries(entries,memberFilter?.id??null),[entries,memberFilter]);
+  const constellation = useGroupConstellation(visibleEntries,memberFilter?'member':'group');
+  const topicHealth = groupTopicHealth(visibleEntries);
+  const authorInfoMissing=entries.some(entry=>entry.authorAvailable===false);
   const [chatExpanded, setChatExpanded] = useState(initialChat);
   const chatOpen=chatExpanded&&!selection.id;
   const [checkingPush,setCheckingPush]=useState(false);
@@ -96,7 +102,7 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
     }
   }, [accessToken, group.id, revision, forgetUnread, t]);
 
-  const unreadIds = data?.unread_diary_ids ?? [];
+  const unreadIds = memberUnreadIds(visibleEntries,data?.unread_diary_ids??[]);
   const clearHighlights = async () => {
     if (!accessToken || clearHighlightsLock.current || unreadIds.length === 0) return;
     clearHighlightsLock.current = true;
@@ -160,8 +166,9 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   const fontScale = useFontScale();
   const geometry = groupUniverseLayout(layout,fontScale,height,chatOpen);
   const {panelTop,panelWidth,chatWidth,chatLeft,chatBottom,panelHeight,questPanelWidth,toggleBottom,infoBottom,infoWidth,infoLeft}=geometry;
+  const recordsTop=panelTop+(memberFilter?64*s:0);
   const constellationInsets = {
-    top: Math.min(.4, (panelTop + 8) / height),
+    top: Math.min(.4, (recordsTop + 8) / height),
     bottom: Math.min(.6, (layout.wide ? toggleBottom + 44 : infoBottom + constellation.panelHeight + 12) / height),
     left: layout.wide ? Math.min(.5,(infoLeft + infoWidth + 16) / width) : .04,
     right: .04,
@@ -169,44 +176,67 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   const constellationRequest: ConstellationRequest | null = constellation.enabled && constellation.template && constellation.members.length === constellation.template.points.length
     ? { template:constellation.template,memberIds:constellation.members.map(e=>e.id),color:TOPIC_CONCEPTS[constellation.topic].color,insets:constellationInsets } : null;
   const selectDiary = (id: string | null) => {
+    setCenteredDiaryId(null);
     if (id) {setPanel(null);setChatExpanded(false);constellation.setEnabled(false);}
     selection.onChange(id);
+  };
+  const changeMember=(member:{user_id:string;nickname:string}|null)=>{
+    selection.onChange(null);setCenteredDiaryId(null);setPanel(null);setChatExpanded(false);constellation.setEnabled(false);
+    setMemberFilter(member?{id:member.user_id,name:member.nickname}:null);
+  };
+  const openRecord=(id:string)=>{
+    selection.onChange(id);setCenteredDiaryId(id);setPanel(null);setChatExpanded(false);constellation.setEnabled(false);
+  };
+  const showConstellation=(enabled:boolean)=>{
+    selection.onChange(null);setCenteredDiaryId(null);setPanel(null);setChatExpanded(false);constellation.setEnabled(enabled);
   };
 
 
   return <View style={styles.screen} testID="group-experience">
     {/* [2026-11-19] 홈 우주처럼 배경 사진(night-sky.png)을 빼고 단색(#000)+3D 배경 별 한 겹만 보이게 함 */}
-    <DiaryUniverse groupId={group.id} sceneKey={`${revision}:group-${group.id}`} entries={entries} backgroundStarScale={1}
+    <DiaryUniverse groupId={group.id} sceneKey={`${revision}:group-${group.id}${memberFilter?`-author-${memberFilter.id}`:''}`} entries={visibleEntries} backgroundStarScale={1}
+      popupAnchorMode={centeredDiaryId===selection.id&&centeredDiaryId!==null?'center':'planet'}
       selection={{id:selection.id,onChange:selectDiary}} unreadIds={unreadIds} onDiaryRead={read}
       constellation={constellationRequest} frontViewRequest={constellation.frontViewRequest}
       topicFilter={constellation.enabled && topicHealth.classified > 0 ? constellation.topic : null}
-      popupInsets={{ top: panelTop + 4 * s, bottom: constellation.enabled ? infoBottom + constellation.panelHeight + 12 : geometry.popupBottom }} />
-    {(loading || error || entries.length === 0) && <View pointerEvents={error ? 'auto' : 'none'} style={styles.empty}>
+      popupInsets={{ top: recordsTop + 4 * s, bottom: constellation.enabled ? infoBottom + constellation.panelHeight + 12 : geometry.popupBottom }} />
+    {(loading || error || (!memberFilter&&entries.length === 0)) && <View pointerEvents={error ? 'auto' : 'none'} style={styles.empty}>
       <Text style={styles.text}>{error ?? t(loading ? '그룹의 별을 불러오는 중…' : '아직 이 그룹에 공유된 별이 없어요.')}</Text>
       {error && <SpaceButton label={t('다시 불러오기')} onPress={onReload} />}
     </View>}
 
-    <GroupUniverseHeader name={group.name} layout={layout} geometry={geometry} onBack={onBack}
+    <GroupUniverseHeader name={group.name} layout={layout} geometry={geometry} onBack={memberFilter?()=>changeMember(null):onBack}
       onReadAll={()=>void clearHighlights()} onMembers={()=>togglePanel('members')}
       unread={unreadIds.length} busy={clearingHighlights} membersOpen={panel==='members'}/>
 
+    {memberFilter&&!panel&&<View testID="group-member-filter" style={{position:'absolute',top:panelTop,left:layout.chromeLeft+18*s,width:layout.chromeWidth-36*s,minHeight:52*s,flexDirection:'row',alignItems:'center',gap:8*s}}>
+      <Text numberOfLines={2} style={{flex:1,color:'#fff',fontSize:Math.max(13,14*s),lineHeight:21*s}}>{t('{name}님의 별 · {count}개',{name:memberFilter.name,count:visibleEntries.length})}</Text>
+      <Pressable accessibilityRole="button" onPress={()=>changeMember(null)} style={{minHeight:44,justifyContent:'center',paddingHorizontal:10,borderWidth:1,borderColor:'#ffffff80',borderRadius:6,backgroundColor:'rgba(8,9,16,0.8)'}}>
+        <Text style={{color:'#fff',fontSize:12*s,lineHeight:18*s}}>{t('그룹 전체 보기')}</Text>
+      </Pressable>
+    </View>}
+
     <View pointerEvents="box-none" style={{position:'absolute',bottom:toggleBottom,left:layout.chromeLeft,width:layout.chromeWidth,alignItems:'center'}}>
-      <ConstellationModeToggle scale={s} active={constellation.enabled} universeLabel="그룹 우주"
-        onChange={enabled=>{selection.onChange(null);setPanel(null);setChatExpanded(false);constellation.setEnabled(enabled);}} />
+      <ConstellationModeToggle scale={s} active={constellation.enabled} universeLabel={memberFilter?t('멤버의 별'):t('그룹 우주')}
+        onChange={showConstellation} />
     </View>
     {constellation.enabled && !panel && <ScrollView testID="group-constellation-info" showsVerticalScrollIndicator
-      style={{position:'absolute',left:infoLeft,bottom:infoBottom,width:infoWidth,maxHeight:Math.min(height*.43,360*s)}}
+      style={{position:'absolute',left:infoLeft,bottom:infoBottom,width:infoWidth,maxHeight:Math.max(80,Math.min(height*.43,360*s,height-recordsTop-infoBottom-12))}}
       onLayout={event=>constellation.setPanelHeight(event.nativeEvent.layout.height)}>
       <ConstellationPanel scale={s} statuses={constellation.statuses} topic={constellation.topic}
+        countsAvailable={!(topicHealth.missing>0&&topicHealth.classified===0)}
         templateId={constellation.template?.id??null} members={constellation.members}
         emptyTopicText={topicHealth.emptyText}
-        intro={`주제를 고르면 해당 주제의 별만 밝게 보여요. 별자리 모양 카드를 누르면 연결선이 나타나요. ${topicHealth.message}`}
+        intro={`${memberFilter?t('{name}님이 이 그룹에 공유한 글만 모았어요.',{name:memberFilter.name}):''} 주제를 고르면 해당 주제의 별만 밝게 보여요. 별자리 모양 카드를 누르면 연결선이 나타나요. ${topicHealth.message}`}
         collapsed={constellation.collapsed} onToggleCollapsed={()=>constellation.setCollapsed(!constellation.collapsed)}
         onSelectTopic={topic=>{selection.onChange(null);constellation.selectTopic(topic);}}
         onSelectTemplate={template=>{selection.onChange(null);constellation.selectTemplate(template.id);}}
         onOpenEntry={selectDiary} onFrontView={constellation.front} />
-      {entries.length > topicHealth.classified && <SpaceButton label={loading ? '불러오는 중…' : '주제 다시 불러오기'} onPress={onReload} disabled={loading} scale={s} />}
+      {visibleEntries.length > topicHealth.classified && <SpaceButton label={loading ? '불러오는 중…' : '주제 다시 불러오기'} onPress={onReload} disabled={loading} scale={s} />}
     </ScrollView>}
+    {memberFilter&&!constellation.enabled&&!panel&&!selection.id&&!chatOpen&&!loading&&!error&&<GroupMemberRecordsPanel entries={visibleEntries} name={memberFilter.name}
+      left={infoLeft} bottom={infoBottom} width={infoWidth} maxHeight={Math.max(80,Math.min(height*.43,360*s,height-recordsTop-infoBottom-12))} scale={s}
+      onOpen={openRecord} onConstellation={()=>showConstellation(true)}/>}
 
     {readError && <Text accessibilityRole="alert" style={[styles.readError, { top: panelTop }]}>{readError}</Text>}
     <GroupChatDock key={group.id} groupId={group.id} bottom={chatBottom} left={chatLeft} width={chatWidth} scale={s}
@@ -215,7 +245,8 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
     {panel === 'members' && <>
       <Pressable style={styles.backdrop} accessibilityRole="button" accessibilityLabel={t('그룹 패널 닫기')} onPress={() => setPanel(null)} />
       <GroupMembersPanel left={layout.chromeLeft+layout.chromeWidth-panelWidth-10*s} top={panelTop}
-        width={panelWidth} height={panelHeight} scale={s} code={group.invite_code} members={members} error={socialError} onRetry={refresh}>
+        width={panelWidth} height={panelHeight} scale={s} code={group.invite_code} members={members} error={socialError} onRetry={()=>{refresh();onReload();}}
+        onReadMember={changeMember} recordsUnavailable={authorInfoMissing}>
             <View style={styles.panelActions}>
               <SpaceButton label={t(pushBusy ? '연결 중…' : pushEnabled ? '그룹 알림 끄기' : '그룹 알림 받기')}
                 onPress={() => void push()} disabled={pushBusy||checkingPush} scale={s} style={styles.notification} />

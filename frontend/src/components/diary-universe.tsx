@@ -13,7 +13,7 @@ import { getStarPopupLayout, starPopupMinimumHeight, starPopupWidth, type StarPo
 import { useDiary, toEntry, type DiaryEntry } from '@/store/diary-context';
 
 /** fffju's anchored UI, test's exact-ID permission checks, and a shared camera per login. */
-export function DiaryUniverse({ entries, sceneKey, groupId, selection, newStar, onNewStarFound, backgroundStarScale = 1, constellation, frontViewRequest, popupInsets, unreadIds, onDiaryRead, topicFilter }: {
+export function DiaryUniverse({ entries, sceneKey, groupId, selection, newStar, onNewStarFound, backgroundStarScale = 1, constellation, frontViewRequest, popupInsets, unreadIds, onDiaryRead, topicFilter, popupAnchorMode='planet' }: {
   unreadIds?: readonly string[]; onDiaryRead?: (id:string)=>Promise<void>;
   entries: DiaryEntry[]; sceneKey: string; groupId?: string;
   selection?: { id: string | null; onChange: (id: string | null) => void };
@@ -21,6 +21,8 @@ export function DiaryUniverse({ entries, sceneKey, groupId, selection, newStar, 
   /** [2026-11-15] 별자리 보기(홈 우주에서만). 없으면 예전과 같다. */
   constellation?: ConstellationRequest | null; frontViewRequest?: number;
   topicFilter?: DiaryEntry['topic'];
+  /** List selection opens the same verified diary popup without moving the camera. */
+  popupAnchorMode?: 'planet' | 'center';
   /** Insets inside this canvas when it sits below a separate page header. */
   popupInsets?: { top: number; bottom: number };
 }) {
@@ -59,7 +61,12 @@ export function DiaryUniverse({ entries, sceneKey, groupId, selection, newStar, 
     ? verified?.diary ? { ...entry, ...toEntry(verified.diary, 0), planet: entry.planet, effect: entry.effect }
       : { ...entry, text: '', photos: [] }
     : entry;
-  const readable = !!anchor && anchor.id === selectedId && anchor.visible && !!getStarPopupLayout(anchor, {
+  const topInset=popupInsets?.top??headerTop+84*scale;
+  const bottomInset=popupInsets?.bottom??(groupId?20:bottomSpace);
+  const popupAnchor:StarPopupAnchor|null=popupAnchorMode==='center'&&entry
+    ? {id:entry.id,x:size.width/2,y:topInset+Math.max(0,size.height-topInset-bottomInset)/2,radius:0,visible:size.width>0&&size.height>topInset+bottomInset}
+    : anchor;
+  const readable = !!popupAnchor && popupAnchor.id === selectedId && popupAnchor.visible && !!getStarPopupLayout(popupAnchor, {
     ...size, minBodyHeight:starPopupMinimumHeight(starPopupWidth(size.width,groupId?'group':'personal'),!!groupId,!!groupId||!!entry&&isOwnEntry(entry.id),fontScale), topInset: popupInsets?.top ?? headerTop + 84 * scale, bottomInset: popupInsets?.bottom ?? (groupId ? 20 : bottomSpace),
   }, groupId ? 'group' : 'personal');
   useEffect(() => {
@@ -75,7 +82,7 @@ export function DiaryUniverse({ entries, sceneKey, groupId, selection, newStar, 
     <UniverseCanvas entries={entries} sceneKey={sceneKey} onStarPress={select} newStar={newStar}
       selectedEntryId={entry?.id} onStarPositionChange={setAnchor} onBackgroundPress={close} backgroundStarScale={backgroundStarScale} unreadIds={unreadIds}
       constellation={constellation} frontViewRequest={frontViewRequest} topicFilter={topicFilter} />
-    {resolved && anchor?.id === resolved.id && <StarDiaryPopup key={resolved.id} entry={resolved} anchor={anchor}
+    {resolved && popupAnchor?.id === resolved.id && <StarDiaryPopup key={resolved.id} entry={resolved} anchor={popupAnchor}
       groupId={groupId} author={author} viewport={{ ...size, topInset: popupInsets?.top ?? headerTop + 84 * scale, bottomInset: popupInsets?.bottom ?? (groupId ? 20 : bottomSpace) }}
       owned={owned} editable={owned && isEditableToday(resolved.id)} loading={!!groupId && !verified} error={verified?.error}
       onRetry={() => setAttempt(value => value + 1)} onClose={close}

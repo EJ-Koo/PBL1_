@@ -1,6 +1,18 @@
 export type Language = 'ko' | 'en';
 
 export const ENGLISH: Readonly<Record<string, string>> = {
+  '작성한 글 보기': 'View diaries',
+  '{name}님이 작성한 글 보기': 'View diaries by {name}',
+  '작성자 정보를 불러오지 못했어요. 다시 불러오기': 'Author details could not be loaded. Reload',
+  '{name}님의 공유 일기': 'Diaries shared by {name}',
+  '이 그룹에 공유한 글 {count}개': '{count} diaries shared with this group',
+  '주제별 별자리 보기': 'View constellations by topic',
+  '주제 없음': 'No topic',
+  '이 멤버가 이 그룹에 공유한 일기가 없어요.': 'This member has not shared any diaries with this group.',
+  '{name}님의 별 · {count}개': "{name}'s stars · {count}",
+  '그룹 전체 보기': 'View whole group',
+  '멤버의 별': "Member's stars",
+  '{name}님이 이 그룹에 공유한 글만 모았어요.': 'Showing only diaries {name} shared with this group.',
   "튜토리얼 다시 하기": "Replay tutorial",
   "메뉴": "Menu",
   "상점": "Shop",

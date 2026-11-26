@@ -1,6 +1,7 @@
 import { randomUUID } from 'expo-crypto';
 import { GroupCreation } from '@/lib/group-creation';
 import { GroupCache } from '@/lib/group-cache';
+import { groupStarAuthor } from '@/lib/group-member-records';
 import { publishQuest } from '@/lib/quest-events';
 import { authSession, signOut } from '@/lib/auth-session';
 import { apiGetProfile, apiSaveProfile, apiUploadAvatar, type ApiProfile, type ProfileDraft } from '@/lib/profile-api';
@@ -58,6 +59,7 @@ export type DiaryEntry = {
   topic: DiaryTopic | null;
   /** False for group stars returned by an older API that omits topic. */
   topicAvailable?: boolean;
+  authorAvailable?: boolean;
 };
 
 export type LoginResult = { ok: true } | { ok: false; error: string };
@@ -183,7 +185,7 @@ function groupStarToEntry(g: ApiGroupStar): DiaryEntry {
   const planet = g.planet ?? fallbackVisual(g.color);
   return {
     id: g.diary_id,
-    authorId: '',
+    ...groupStarAuthor(g),
     text: g.content,
     photoUri: null,
     photos: [],

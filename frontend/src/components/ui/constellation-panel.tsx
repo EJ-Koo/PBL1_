@@ -284,6 +284,7 @@ function PersonalBox({
 export type ConstellationMember = { id: string; createdAt: number; color: string };
 
 type PanelProps = {
+  countsAvailable?: boolean;
   intro?: string;
   emptyTopicText?: string;
   scale: number;
@@ -314,6 +315,7 @@ function formatDate(ms: number) {
 
 /** 아래쪽 별자리 정보 패널 */
 export function ConstellationPanel({
+  countsAvailable = true,
   scale,
   statuses,
   topic,
@@ -347,7 +349,7 @@ export function ConstellationPanel({
     !!personal && (personalOpen || personal.state === 'pending' || (isPersonalCurrent && personal.state === 'ready'));
   const personalPreview = personal?.template ?? null;
 
-  const subtitle = current
+  const subtitle = !countsAvailable ? emptyTopicText : current
     ? `${current.name} · Level ${current.level}`
     : status
       ? status.count > 0
@@ -418,7 +420,7 @@ export function ConstellationPanel({
                   onPress={() => onSelectTopic(s.topic)}
                   accessibilityRole="button"
                   accessibilityState={{ selected }}
-                  accessibilityLabel={`${s.label} 일기 ${s.count}개`}
+                  accessibilityLabel={countsAvailable ? `${s.label} 일기 ${s.count}개` : `${s.label} 주제 정보 확인 필요`}
                   testID={`constellation-topic-${s.topic}`}
                   style={[
                     styles.chip,
@@ -432,7 +434,7 @@ export function ConstellationPanel({
                       selected && { color: DesignPaint.menuText, fontFamily: DesignFonts.bold },
                       !selected && s.count === 0 && { color: whiteAlpha(0.45) },
                     ]}>
-                    {s.label} {s.count}
+                    {s.label} {countsAvailable ? s.count : '—'}
                   </Text>
                 </TouchableOpacity>
               );
@@ -440,7 +442,7 @@ export function ConstellationPanel({
           </ScrollView>
 
           {/* 레벨 카드 */}
-          {status && (
+          {status && countsAvailable && (
             <ScrollView horizontal showsHorizontalScrollIndicator testID="constellation-level-scroll" style={{marginTop:f(10),flexGrow:0}} contentContainerStyle={[styles.levelRow,{gap:f(8)}]}>
               {status.levels.map((l) => {
                 const selected = l.unlocked && l.template.id === current?.id;
@@ -576,7 +578,7 @@ export function ConstellationPanel({
           )}
 
           {/* 진행 상황 + 이 별자리의 기록 */}
-          {status && (
+          {status && countsAvailable && (
             <Text style={[styles.progress, { fontSize: f(12), lineHeight: f(17), marginTop: f(8) }]}>
               {status.label} 일기 {status.count}개
               {status.next
