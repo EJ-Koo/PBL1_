@@ -13,6 +13,28 @@ const {TUTORIAL_STEPS:steps,createTutorialState:create,reduceTutorial:reduce,tut
 const at=id=>({...create(),step:steps.findIndex(step=>step.id===id)});
 const event=(state,name,id)=>reduce(state,{type:'event',event:name,id,stepId:steps[state.step].id});
 
+for(const chapter of ['main','group','settings'])test(`chapter ${chapter} starts independently and stops at its own boundary`,()=>{
+  let state=create(chapter);
+  const config=exports.TUTORIAL_CHAPTERS.find(item=>item.id===chapter);
+  assert.equal(exports.tutorialStep(state).id,config.start);
+  if(chapter==='group')assert.ok(state.personal?.text);
+  let finished=false;
+  for(let guard=0;guard<60;guard++){
+    const step=exports.tutorialStep(state);
+    if(step.event==='finish'){finished=true;break;}
+    if(step.requires==='text')state=reduce(state,{type:'text',value:'연습 기록'});
+    if(step.requires==='topic')state=reduce(state,{type:'topic',value:'travel'});
+    if(step.id==='group-share')state=reduce(state,{type:'share',value:true});
+    if(step.event==='chat-send')state=reduce(state,{type:'chat',value:'안녕'});
+    const id=step.event==='read'?(step.scene==='home'?state.personal.id:state.unread[0]):undefined;
+    const next=reduce(state,{type:'event',event:step.event,id,stepId:step.id});
+    assert.equal(next.step,state.step+1,step.id);state=next;
+  }
+  assert.equal(finished,true);
+  assert.equal(exports.tutorialChapterProgress(state).chapter.id,chapter);
+  assert.equal(create(chapter).messages.length,0);
+});
+
 test('the complete practice journey requires real actions and keeps all writes inside sandbox state',()=>{
   const actualAccount={diaries:[],groups:[],coins:123,profile:{nickname:'실제 이름'}};
   const before=JSON.stringify(actualAccount);

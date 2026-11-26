@@ -12,6 +12,7 @@ import { groupUniverseLayout } from '@/lib/group-universe-layout';
 import { SpaceButton } from '@/components/ui/space-ui';
 import { useGroupSocial } from '@/hooks/use-group-social';
 import { useGroupConstellation } from '@/hooks/use-group-constellation';
+import { groupTopicHealth } from '@/lib/group-topic-health';
 import { ConstellationModeToggle, ConstellationPanel } from '@/components/ui/constellation-panel';
 import { TOPIC_CONCEPTS } from '@/lib/constellation';
 import type { ConstellationRequest } from '@/components/universe-scene';
@@ -47,8 +48,7 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   const layout = useResponsiveLayout();
   const s = layout.scale;
   const constellation = useGroupConstellation(entries);
-  const classifiedStars = entries.filter(entry => entry.topic !== null).length;
-  const missingTopicResponse = entries.some(entry => entry.topicAvailable === false);
+  const topicHealth = groupTopicHealth(entries);
   const [chatExpanded, setChatExpanded] = useState(initialChat);
   const chatOpen=chatExpanded&&!selection.id;
   const [checkingPush,setCheckingPush]=useState(false);
@@ -153,7 +153,7 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
  };
 
   const togglePanel = (next: 'members' | 'quest') => {
-    if (panel !== next) {selection.onChange(null);setChatExpanded(false);constellation.setCollapsed(true);}
+    if (panel !== next) {selection.onChange(null);setChatExpanded(false);constellation.setEnabled(false);}
     setPanel(old => old === next ? null : next);
   };
   const members = data?.members ?? group.members.map(item => ({ user_id: item.user_id, nickname: item.nickname ?? t('멤버'), bio: '', avatar_url: null }));
@@ -169,7 +169,7 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
   const constellationRequest: ConstellationRequest | null = constellation.enabled && constellation.template && constellation.members.length === constellation.template.points.length
     ? { template:constellation.template,memberIds:constellation.members.map(e=>e.id),color:TOPIC_CONCEPTS[constellation.topic].color,insets:constellationInsets } : null;
   const selectDiary = (id: string | null) => {
-    if (id) {setPanel(null);setChatExpanded(false);constellation.setCollapsed(true);}
+    if (id) {setPanel(null);setChatExpanded(false);constellation.setEnabled(false);}
     selection.onChange(id);
   };
 
@@ -179,6 +179,7 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
     <DiaryUniverse groupId={group.id} sceneKey={`${revision}:group-${group.id}`} entries={entries} backgroundStarScale={1}
       selection={{id:selection.id,onChange:selectDiary}} unreadIds={unreadIds} onDiaryRead={read}
       constellation={constellationRequest} frontViewRequest={constellation.frontViewRequest}
+      topicFilter={constellation.enabled && topicHealth.classified > 0 ? constellation.topic : null}
       popupInsets={{ top: panelTop + 4 * s, bottom: constellation.enabled ? infoBottom + constellation.panelHeight + 12 : geometry.popupBottom }} />
     {(loading || error || entries.length === 0) && <View pointerEvents={error ? 'auto' : 'none'} style={styles.empty}>
       <Text style={styles.text}>{error ?? t(loading ? '그룹의 별을 불러오는 중…' : '아직 이 그룹에 공유된 별이 없어요.')}</Text>
@@ -198,18 +199,18 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
       onLayout={event=>constellation.setPanelHeight(event.nativeEvent.layout.height)}>
       <ConstellationPanel scale={s} statuses={constellation.statuses} topic={constellation.topic}
         templateId={constellation.template?.id??null} members={constellation.members}
-        emptyTopicText={entries.length ? '이 주제로 분류된 공유 일기가 없어요' : '아직 공유된 별이 없어요'}
-        intro={`공유된 별 ${entries.length}개 · 주제 확인 ${classifiedStars}개. 멤버가 고른 주제별로 별을 모아 15·30·60개로 별자리를 만들어요.${missingTopicResponse ? ' 주제 정보를 가져오지 못했어요. 다시 불러와주세요.' : classifiedStars < entries.length ? ` 주제가 없는 별 ${entries.length - classifiedStars}개는 집계에서 제외돼요.` : ''}`}
+        emptyTopicText={topicHealth.emptyText}
+        intro={`주제를 고르면 해당 주제의 별만 밝게 보여요. 별자리 모양 카드를 누르면 연결선이 나타나요. ${topicHealth.message}`}
         collapsed={constellation.collapsed} onToggleCollapsed={()=>constellation.setCollapsed(!constellation.collapsed)}
         onSelectTopic={topic=>{selection.onChange(null);constellation.selectTopic(topic);}}
         onSelectTemplate={template=>{selection.onChange(null);constellation.selectTemplate(template.id);}}
         onOpenEntry={selectDiary} onFrontView={constellation.front} />
-      {entries.length > classifiedStars && <SpaceButton label={loading ? '불러오는 중…' : '주제 다시 불러오기'} onPress={onReload} disabled={loading} scale={s} />}
+      {entries.length > topicHealth.classified && <SpaceButton label={loading ? '불러오는 중…' : '주제 다시 불러오기'} onPress={onReload} disabled={loading} scale={s} />}
     </ScrollView>}
 
     {readError && <Text accessibilityRole="alert" style={[styles.readError, { top: panelTop }]}>{readError}</Text>}
     <GroupChatDock key={group.id} groupId={group.id} bottom={chatBottom} left={chatLeft} width={chatWidth} scale={s}
-      unread={data?.chat_unread_count ?? 0} onRead={refresh} initialExpanded={initialChat} expanded={chatOpen} onExpandedChange={expanded=>{if(expanded){selection.onChange(null);setPanel(null);constellation.setCollapsed(true);}setChatExpanded(expanded);}} />
+      unread={data?.chat_unread_count ?? 0} onRead={refresh} initialExpanded={initialChat} expanded={chatOpen} onExpandedChange={expanded=>{if(expanded){selection.onChange(null);setPanel(null);constellation.setEnabled(false);}setChatExpanded(expanded);}} />
 
     {panel === 'members' && <>
       <Pressable style={styles.backdrop} accessibilityRole="button" accessibilityLabel={t('그룹 패널 닫기')} onPress={() => setPanel(null)} />

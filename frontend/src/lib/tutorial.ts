@@ -17,7 +17,7 @@ export const TUTORIAL_STEPS: readonly Step[] = [
   {id:'main-quest',scene:'home',title:'오늘의 퀘스트도 확인해볼까요?',body:'상단 오른쪽 Quest를 눌러주세요.',event:'quest'},
   {id:'main-quest-info',scene:'home',title:'기록하는 습관을 만드는 작은 임무',body:'실제 우주에서는 일기를 쓰면 오늘의 퀘스트 진행률과 보상이 반영돼요.',event:'next'},
   {id:'constellation',scene:'home',title:'별들을 이어볼까요?',body:'별자리 보기를 눌러주세요. 방금 고른 주제의 예시 별 4개를 더해, 내가 쓴 별과 함께 별자리를 만들어요.',event:'constellation'},
-  {id:'constellation-info',scene:'home',title:'같은 주제의 기록이 별자리가 돼요',body:'개인 별자리는 같은 주제의 별 5·10·20개부터 볼 수 있어요. 주제와 단계별로 다른 모양을 만나보세요.',event:'next'},
+  {id:'constellation-info',scene:'home',title:'같은 주제의 기록이 별자리가 돼요',body:'주제를 누르면 그 주제의 별이 밝아져요. 별자리 모양 카드를 눌러 연결선을 확인해보세요. 개인 별자리는 같은 주제의 별 5·10·20개부터 볼 수 있어요.',event:'next'},
   {id:'group-intro',scene:'home',title:'친구들이 그룹에 초대했어요',body:'친구들이 ‘용사’ 그룹에 초대했어요. 함께 만드는 우주로 가볼까요?',event:'next'},
   {id:'open-groups',scene:'home',title:'그룹으로 이동해요',body:'강조된 하단 오른쪽 그룹 버튼을 눌러주세요.',event:'groups'},
   {id:'open-group',scene:'groups',title:'용사 그룹을 열어주세요',body:'용사 카드를 눌러 들어가세요. 실제 그룹을 만들거나 참여하지 않아요.',event:'group'},
@@ -40,6 +40,29 @@ export const TUTORIAL_STEPS: readonly Step[] = [
   {id:'settings-info',scene:'settings',title:'글자 크기와 조작 민감도',body:'버튼으로 크기와 민감도를 연습해보세요. 연습 값은 실제 설정에 저장하지 않아요. 실제 메뉴 → 사용자 설정에서 바꿀 수 있어요.',event:'next'},
   {id:'finish',scene:'home',title:'이제 나만의 별일을 기록해보세요',body:'연습을 마쳤어요! 연습 글·사진·그룹·채팅은 모두 사라지고 원래 우주로 돌아가요. 메뉴에서 언제든 다시 시작할 수 있어요.',event:'finish'},
 ];
+
+export const TUTORIAL_CHAPTERS = [
+  {id:'main',title:'나의 우주',body:'일기 쓰기, 퀘스트와 별자리 보기를 배워요.',start:'welcome',end:'constellation-info'},
+  {id:'group',title:'함께하는 우주',body:'그룹 공유, 읽음 표시, 퀘스트와 그룹톡을 배워요.',start:'group-intro',end:'chat-welcome'},
+  {id:'settings',title:'나에게 맞추기',body:'프로필, 글자 크기와 조작 민감도를 살펴봐요.',start:'profile-open',end:'finish'},
+] as const;
+export type TutorialChapterId = typeof TUTORIAL_CHAPTERS[number]['id'];
+export type TutorialChapter = 'all' | TutorialChapterId;
+export function tutorialChapterProgress(state: TutorialState) {
+  const chapter=TUTORIAL_CHAPTERS.find(item=>state.chapter==='all'
+    ? state.step<=TUTORIAL_STEPS.findIndex(step=>step.id===item.end)
+    : item.id===state.chapter)??TUTORIAL_CHAPTERS[2];
+  const start=TUTORIAL_STEPS.findIndex(step=>step.id===chapter.start);
+  const end=TUTORIAL_STEPS.findIndex(step=>step.id===chapter.end);
+  return {chapter,index:TUTORIAL_CHAPTERS.indexOf(chapter),step:Math.min(end-start+1,state.step-start+1),total:end-start+1};
+}
+export function tutorialStep(state: TutorialState): Step {
+  const {chapter}=tutorialChapterProgress(state);
+  if(state.chapter!=='all'&&state.step>TUTORIAL_STEPS.findIndex(step=>step.id===chapter.end)) {
+    return {id:'chapter-complete',scene:'home',title:`‘${chapter.title}’ 챕터를 마쳤어요`,body:'다른 챕터를 선택해 연습하거나 원래 우주로 돌아갈 수 있어요.',event:'finish'};
+  }
+  return TUTORIAL_STEPS[state.step];
+}
 
 export const TUTORIAL_GROUP_ID = 'tutorial-group';
 export const TUTORIAL_GROUP_NAME = '용사';
@@ -81,18 +104,21 @@ const TOPIC_STORIES:Record<DiaryTopic,readonly string[]> = {
 export const personalPracticeStars = (topic:DiaryTopic) => TOPIC_STORIES[topic].map((text,i)=>practiceEntry(`tutorial-example-${i}`,text,topic,i+1));
 export const groupPracticeStars = () => Array.from({length:15},(_,i)=>practiceEntry(`tutorial-group-example-${i}`,STORIES[i%STORIES.length],'other',i+1,`tutorial-member-${i%2+1}`));
 export type TutorialState = {
+  chapter: TutorialChapter;
   step: number; text: string; topic: DiaryTopic | null; photos: {id:string;uri:string}[];
   shared: boolean; personal: DiaryEntry | null; groupEntry: DiaryEntry | null;
-  unread: string[]; selected: string | null; chat: string; messages: {id:string;name:string;body:string}[];
+  unread: string[]; selected: string | null; chat: string; messages: {id:string;name:string;body:string;createdAt:string}[];
 };
-export function createTutorialState(): TutorialState {
-  return {step:0,text:'',topic:null,photos:[],shared:false,personal:null,groupEntry:null,
+export function createTutorialState(chapter: TutorialChapter = 'all'): TutorialState {
+  const config=TUTORIAL_CHAPTERS.find(item=>item.id===chapter);
+  const personal=chapter==='group'||chapter==='settings'?practiceEntry('tutorial-diary','오늘 친구와 산책하며 즐겁게 이야기했다.\n함께하는 시간이 고마웠다.','relationship',0):null;
+  return {chapter,step:config?TUTORIAL_STEPS.findIndex(step=>step.id===config.start):0,text:personal?.text??'',topic:personal?.topic??null,photos:[],shared:false,personal,groupEntry:null,
     unread:groupPracticeStars().map(entry=>entry.id),selected:null,chat:'',messages:[]};
 }
 export type TutorialAction = {type:'text';value:string}|{type:'topic';value:DiaryTopic}|{type:'photos';value:TutorialState['photos']}|
   {type:'chat';value:string}|{type:'share';value:boolean}|{type:'event';event:string;id?:string;stepId?:string};
 export function tutorialCanAdvance(state:TutorialState) {
-  const step=TUTORIAL_STEPS[state.step];
+  const step=tutorialStep(state);
   return step.requires==='text'?!!state.text.trim():step.requires==='topic'?state.topic!==null:true;
 }
 export function reduceTutorial(state:TutorialState,action:TutorialAction):TutorialState {
@@ -100,8 +126,8 @@ export function reduceTutorial(state:TutorialState,action:TutorialAction):Tutori
   if(action.type==='topic')return {...state,topic:action.value};
   if(action.type==='photos')return {...state,photos:action.value.slice(0,5)};
   if(action.type==='chat')return {...state,chat:action.value};
-  if(action.type==='share')return TUTORIAL_STEPS[state.step].scene==='group-write'?{...state,shared:action.value}:state;
-  const step=TUTORIAL_STEPS[state.step];
+  if(action.type==='share')return tutorialStep(state).scene==='group-write'?{...state,shared:action.value}:state;
+  const step=tutorialStep(state);
   if(action.stepId && action.stepId!==step.id)return state;
   if(action.event!==step.event||!tutorialCanAdvance(state)||step.event==='finish')return state;
   let next:TutorialState={...state,step:state.step+1,selected:null};
@@ -121,9 +147,9 @@ export function reduceTutorial(state:TutorialState,action:TutorialAction):Tutori
   if(action.event==='read-all')next.unread=[];
   if(action.event==='chat-send') {
     if(!state.chat.trim())return state;
-    next={...next,chat:'',messages:[{id:'tutorial-chat-me',name:'나',body:state.chat.trim()},
-      {id:'tutorial-chat-1',name:'멤버 1',body:'오늘의 별일에 온 걸 환영해!'},
-      {id:'tutorial-chat-2',name:'멤버 2',body:'우리 함께 멋진 우주를 만들어보자!'}]};
+    next={...next,chat:'',messages:[{id:'tutorial-chat-me',name:'나',body:state.chat.trim(),createdAt:'2026-01-01T12:00:00+09:00'},
+      {id:'tutorial-chat-1',name:'멤버 1',body:'오늘의 별일에 온 걸 환영해!',createdAt:'2026-01-01T12:00:15+09:00'},
+      {id:'tutorial-chat-2',name:'멤버 2',body:'우리 함께 멋진 우주를 만들어보자!',createdAt:'2026-01-01T12:00:30+09:00'}]};
   }
   return next;
 }

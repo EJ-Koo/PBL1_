@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import { reduceHomeOverlay } from '../src/lib/home-overlay.ts';
 
 test('opening menu, quest or shop dismisses a selected diary', () => {
-  for (const panel of ['menu','quest','shop']) {
+  for (const panel of ['menu','quest','shop','search','constellation']) {
     assert.deepEqual(reduceHomeOverlay({kind:'diary',id:'one'}, {type:'open',panel}), {kind:panel});
   }
 });
 test('every pair of panels replaces the previous panel; diary selection also replaces panels', () => {
-  for (const previous of ['menu','quest','shop']) {
-    for (const panel of ['menu','quest','shop']) assert.deepEqual(reduceHomeOverlay({kind:previous},{type:'open',panel}), {kind:panel});
+  for (const previous of ['menu','quest','shop','search','constellation']) {
+    for (const panel of ['menu','quest','shop','search','constellation']) assert.deepEqual(reduceHomeOverlay({kind:previous},{type:'open',panel}), {kind:panel});
     assert.deepEqual(reduceHomeOverlay({kind:previous},{type:'select-diary',id:'two'}),{kind:'diary',id:'two'});
   }
 });

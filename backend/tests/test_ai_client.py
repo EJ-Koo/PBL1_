@@ -122,3 +122,30 @@ def test_update_and_forget_ignore_errors(monkeypatch):
     monkeypatch.setattr(ai_client.httpx, "post", boom)
     ai_client.update_diary_layout("u", "d", "x")
     ai_client.forget_diary("u", "d")
+
+
+def test_visual_batches_keep_successes_when_another_batch_fails(monkeypatch):
+    _use_ai_service(monkeypatch)
+    monkeypatch.setattr(ai_client, "_VISUAL_CACHE", {})
+    monkeypatch.setattr(ai_client, "_VISUAL_BATCH", 1)
+    def post(path, payload):
+        if payload["texts"] == ["bad"]:
+            raise httpx.ConnectError("down")
+        return _FakeResponse({"results": [{"visual": {"state": "clear", "base_color": "#123456"}}]})
+    monkeypatch.setattr(ai_client, "_post", post)
+    result = ai_client.planet_visuals(["good", "bad", "good"])
+    assert result[0] == result[2]
+    assert result[0]["state"] == "clear"
+    assert result[1] is None
+    monkeypatch.setattr(ai_client, "_post", lambda *a: _FakeResponse({"results": [{"visual": {"state": "none"}}]}))
+    assert ai_client.planet_visuals(["good", "bad"])[1]["state"] == "none"
+
+
+def test_missing_visual_is_not_cached_and_can_be_retried(monkeypatch):
+    _use_ai_service(monkeypatch)
+    monkeypatch.setattr(ai_client, "_VISUAL_CACHE", {})
+    monkeypatch.setattr(ai_client, "_post", lambda *a: _FakeResponse({"results": [{"visual": None}]}))
+    assert ai_client.planet_visuals(["sample"]) == [None]
+    assert not ai_client._VISUAL_CACHE
+    monkeypatch.setattr(ai_client, "_post", lambda *a: _FakeResponse({"results": [{"visual": {"state": "muted"}}]}))
+    assert ai_client.planet_visuals(["sample"])[0]["state"] == "muted"

@@ -13,6 +13,7 @@ import { ConstellationModeToggle, ConstellationPanel } from '@/components/ui/con
 import { GroupQuestDrawer } from '@/components/group-quest-drawer';
 import { GroupUniverseHeader } from '@/components/ui/group-universe-header';
 import { GroupMembersPanel, GroupChatFrame } from '@/components/ui/group-universe-panels';
+import { GroupChatMessage } from '@/components/ui/group-chat-message';
 import { GroupSendIcon } from '@/components/ui/group-universe-decoration';
 import { StarDiaryPopup } from '@/components/ui/star-diary-popup';
 import type { StarPopupAnchor } from '@/lib/star-popup-layout';
@@ -21,7 +22,7 @@ import { useFontScale } from '@/hooks/use-font-scale';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { allTopicStatus, groupTopicStatuses, selectMembers, TOPIC_CONCEPTS } from '@/lib/constellation';
 import { DIARY_TOPICS, type DiaryTopic } from '@/lib/special-planet';
-import { createTutorialState, groupPracticeStars, personalPracticeStars, reduceTutorial, TUTORIAL_GROUP_ID, TUTORIAL_GROUP_NAME, TUTORIAL_MEMBERS, TUTORIAL_STEPS, tutorialCanAdvance } from '@/lib/tutorial';
+import { createTutorialState, groupPracticeStars, personalPracticeStars, reduceTutorial, TUTORIAL_GROUP_ID, TUTORIAL_GROUP_NAME, TUTORIAL_MEMBERS, TUTORIAL_STEPS, tutorialCanAdvance, tutorialStep, tutorialChapterProgress, type TutorialChapter } from '@/lib/tutorial';
 
 const noop = () => {};
 function Button({ label, onPress, active=false, disabled=false, compact=false }: {label:string;onPress:()=>void;active?:boolean;disabled?:boolean;compact?:boolean}) {
@@ -39,16 +40,17 @@ function Panel({title,children}:{title:string;children:ReactNode}) {
 
 /** Presentation-only sandbox. Server composers, social hooks, quest providers,
  * profile editors and API-backed reactions stay outside this component. */
-export function TutorialUniverse({sceneId,onExit}:{sceneId:string;onExit:(completed?:boolean)=>void}) {
-  const [state,dispatch]=useReducer(reduceTutorial,undefined,createTutorialState);
-  const step=TUTORIAL_STEPS[state.step];
+export function TutorialUniverse({sceneId,onExit,chapter='all',onChooseChapter}:{sceneId:string;onExit:(completed?:boolean)=>void;chapter?:TutorialChapter;onChooseChapter?:()=>void}) {
+  const [state,dispatch]=useReducer(reduceTutorial,chapter,createTutorialState);
+  const step=tutorialStep(state);
+  const progress=tutorialChapterProgress(state);
   const layout=useResponsiveLayout();
   const insets=useSafeAreaInsets();
   const {height,width}=useWindowDimensions();
   const [area,setArea]=useState({width,height});
   const [hiddenGuideStep,setHiddenGuideStep]=useState<string|null>(null);
   const guideOpen=hiddenGuideStep!==step.id;
-  const guideBarHeight=60+insets.bottom;
+  const guideBarHeight=72+insets.bottom;
   const photoSequence=useRef(0);
   const [fontPercent,setFontPercent]=useState(100);
   const [sensitivity,setSensitivity]=useState(1);
@@ -58,6 +60,7 @@ export function TutorialUniverse({sceneId,onExit}:{sceneId:string;onExit:(comple
   const [anchor,setAnchor]=useState<StarPopupAnchor|null>(null);
   const [closedPopup,setClosedPopup]=useState<string|null>(null);
   const [groupInfoHeight,setGroupInfoHeight]=useState(0);
+  const [shapeChoice,setShapeChoice]=useState<{step:string;topic:DiaryTopic;templateId:string|null}|null>(null);
   const fontScale=useFontScale();
   const personalTopic=state.personal?.topic??'other';
   const examples=useMemo(()=>personalPracticeStars(personalTopic),[personalTopic]);
@@ -87,10 +90,10 @@ export function TutorialUniverse({sceneId,onExit}:{sceneId:string;onExit:(comple
   const entries=group?groupEntries:personalEntries;
   const constellationOn=step.id==='constellation-info'||step.id==='group-constellation';
   const statuses=useMemo(()=>group?groupTopicStatuses(entries):allTopicStatus(entries),[group,entries]);
-  const activeTopic=group?'other':personalTopic;
+  const activeTopic=shapeChoice?.step===step.id?shapeChoice.topic:group?'other':personalTopic;
   const topicLabel=DIARY_TOPICS.find(item=>item.id===activeTopic)?.label??'기타';
   const status=statuses.find(item=>item.topic===activeTopic)!;
-  const template=status.levels[0].unlocked?status.levels[0].template:null;
+  const template=shapeChoice?.step===step.id?status.levels.find(item=>item.unlocked&&item.template.id===shapeChoice.templateId)?.template??null:null;
   const members=useMemo(()=>template?selectMembers(entries,activeTopic,template.requiredPlanets):[],[entries,activeTopic,template]);
   const constellation:ConstellationRequest|null=constellationOn&&template?{template,memberIds:members.map(entry=>entry.id),color:TOPIC_CONCEPTS[activeTopic].color,
     insets:group?{
@@ -143,7 +146,7 @@ export function TutorialUniverse({sceneId,onExit}:{sceneId:string;onExit:(comple
               <Button label="민감도 키우기" onPress={()=>setSensitivity(value=>Math.min(1.5,Math.round((value+.1)*10)/10))}/></View>
             <Text style={styles.muted}>연습 값이에요. 실제 설정은 유지돼요.</Text>
           </Panel>:<>
-            <UniverseCanvas entries={entries} sceneKey={`tutorial-${sceneId.replace(/:/g,'-')}:${group?'group':'home'}`}
+            <UniverseCanvas entries={entries} topicFilter={constellationOn?activeTopic:null} sceneKey={`tutorial-${sceneId.replace(/:/g,'-')}:${group?'group':'home'}`}
               selectedEntryId={state.selected??undefined} onStarPress={id=>emit('read',id)} onStarPositionChange={setAnchor}
               unreadIds={group?state.unread:step.id==='read-star'&&state.personal?[state.personal.id]:[]}
               constellation={constellation}/>
@@ -158,7 +161,9 @@ export function TutorialUniverse({sceneId,onExit}:{sceneId:string;onExit:(comple
               style={[styles.constellation,{bottom:group?geometry.infoBottom:footer,left:group?geometry.infoLeft:12,width:group?geometry.infoWidth:Math.min(410,area.width-24),maxHeight:Math.min(area.height*.43,360*layout.scale)},group&&{backgroundColor:'transparent',borderRadius:0}]}>
               <ScrollView><ConstellationPanel scale={Math.min(layout.scale,1)} intro={group?'용사 · 기타 예시 별 15개':`${topicLabel} · 내가 쓴 별 1개 + 예시 별 4개`}
                 statuses={statuses} topic={activeTopic} templateId={template?.id??null} members={members.map(entry=>({id:entry.id,createdAt:entry.createdAt,color:entry.color}))}
-                collapsed={false} onToggleCollapsed={noop} onSelectTopic={noop} onSelectTemplate={noop} onOpenEntry={noop}/></ScrollView>
+                collapsed={false} onToggleCollapsed={noop}
+                onSelectTopic={topic=>setShapeChoice({step:step.id,topic,templateId:null})}
+                onSelectTemplate={shape=>setShapeChoice({step:step.id,topic:shape.topic,templateId:shape.id})} onOpenEntry={noop}/></ScrollView>
             </View>:!group&&step.id==='constellation'&&<View style={[styles.shortcut,{bottom:footer}]}>
               <ConstellationModeToggle scale={layout.scale} active={false} highlightConstellation onChange={()=>emit('constellation')}/>
             </View>}
@@ -191,10 +196,8 @@ export function TutorialUniverse({sceneId,onExit}:{sceneId:string;onExit:(comple
             }
             {group&&<GroupChatFrame left={geometry.chatLeft} width={geometry.chatWidth} bottom={geometry.chatBottom} scale={layout.scale}
               expanded={chatExpanded} unread={0} onToggle={()=>emit('chat-open')} history={<ScrollView style={{height:geometry.chatHistoryHeight}} contentContainerStyle={{gap:16*layout.scale,padding:12*layout.scale}}>
-                {state.messages.length?state.messages.map(message=><View key={message.id} style={{flexDirection:'row',gap:18*layout.scale,alignItems:'center',minHeight:40}} accessibilityLabel={message.name}>
-                  <View style={{width:40*layout.scale,height:40*layout.scale,borderRadius:20*layout.scale,backgroundColor:'#d9d9d9'}}/>
-                  <Text style={{flex:1,minWidth:0,color:'#fff',fontSize:13*layout.scale,lineHeight:21*layout.scale,paddingRight:10}}>{message.body}</Text>
-                </View>):<Text style={{color:'#dddde8',fontSize:11,padding:10,textAlign:'center'}}>첫 이야기를 나눠보세요.</Text>}
+                {state.messages.length?state.messages.map((message,index)=><GroupChatMessage key={message.id} name={message.name} body={message.body}
+                  createdAt={message.createdAt} previousAt={state.messages[index-1]?.createdAt} scale={layout.scale}/>):<Text style={{color:'#dddde8',fontSize:11,padding:10,textAlign:'center'}}>첫 이야기를 나눠보세요.</Text>}
               </ScrollView>}>
                 <TextInput accessibilityLabel="연습 채팅 입력" placeholder="입력하세요" placeholderTextColor="#bbb" value={state.chat}
                   editable={step.id==='chat-send'} onChangeText={value=>dispatch({type:'chat',value})} maxLength={2000}
@@ -207,7 +210,7 @@ export function TutorialUniverse({sceneId,onExit}:{sceneId:string;onExit:(comple
           <UniverseBottomNav activeScreen={group||step.scene==='groups'?'group':'home'} highlight={navId??undefined} onDiary={()=>emit('write')} onHome={noop} onGroup={()=>emit('groups')}/>
         </>}
       </View>
-      {!guideOpen&&<View testID="tutorial-guide-controls" pointerEvents="box-none" style={[styles.guideControls,{bottom:insets.bottom+4}]}>
+      {!guideOpen&&<View testID="tutorial-guide-controls" pointerEvents="box-none" style={[styles.guideControls,{bottom:insets.bottom+16}]}>
         <Button compact label="설명 보기" onPress={()=>{Keyboard.dismiss();setHiddenGuideStep(null);}}/>
         {hasNext&&<Button compact label={step.event==='finish'?'완료':'다음'} active disabled={!tutorialCanAdvance(state)} onPress={advance}/>}
         <Button compact label="종료하기" onPress={quit}/>
@@ -218,7 +221,7 @@ export function TutorialUniverse({sceneId,onExit}:{sceneId:string;onExit:(comple
       <View testID="tutorial-guide-dialog" accessibilityViewIsModal role="dialog" aria-modal
         accessibilityLabel={step.title} style={[styles.guide,{maxHeight:Math.max(120,height-insets.top-insets.bottom-48)}]}>
         <View style={styles.guideHeading}>
-          <Text style={styles.badge}>연습용 우주 · {state.step+1}/{TUTORIAL_STEPS.length}</Text>
+          <Text style={styles.badge}>{progress.index+1}. {progress.chapter.title} · {progress.step}/{progress.total}</Text>
           <Button label="종료하기" onPress={quit}/>
         </View>
         <ScrollView style={{flexGrow:0,flexShrink:1,maxHeight:Math.min(240,height*.32)}} keyboardShouldPersistTaps="handled" contentContainerStyle={{gap:12}} accessibilityLiveRegion="polite">
@@ -226,6 +229,7 @@ export function TutorialUniverse({sceneId,onExit}:{sceneId:string;onExit:(comple
           <Text style={styles.body}>{step.body}</Text>
         </ScrollView>
         <View style={styles.guideActions}>
+          {step.event==='finish'&&onChooseChapter&&<Button label="챕터 선택" onPress={onChooseChapter}/>}
           <Button label={step.event==='finish'?'나의 우주로 돌아가기':'다음'} active onPress={guideNext}/>
         </View>
       </View>

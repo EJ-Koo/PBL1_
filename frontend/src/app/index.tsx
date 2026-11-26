@@ -98,7 +98,11 @@ export default function HomeScreen() {
   const setShopVisible = (visible:boolean) => dispatchHomeOverlay(visible?{type:'open',panel:'shop'}:{type:'close',panel:'shop'});
   // [ADDED 2026-11-12] 검색 팝업: null=닫힘, keyword=키워드 검색, calendar=달력으로 열기.
   // 열 때마다 key 를 바꿔 새로 시작하고, 행성 상세에 갔다 와도 닫지 않아 검색어·결과가 남는다.
-  const [searchPopup, setSearchPopup] = useState<{ mode: 'keyword' | 'calendar'; key: number } | null>(null);
+  const [searchPopup, setSearchPopupData] = useState<{ mode: 'keyword' | 'calendar'; key: number } | null>(null);
+  const setSearchPopup = (value: {mode:'keyword'|'calendar';key:number}|null) => {
+    setSearchPopupData(value);
+    dispatchHomeOverlay(value?{type:'open',panel:'search'}:{type:'close',panel:'search'});
+  };
   const [createGroupVisible, setCreateGroupVisible] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [creatingGroup, setCreatingGroup] = useState(false);
@@ -118,7 +122,10 @@ export default function HomeScreen() {
   const [today, setToday] = useState(groupDayKey);
 
   // ---------------------------------------------------------------- 별자리 보기 [ADDED 2026-11-12]
-  const [constellationOn, setConstellationOn] = useState(false);
+  const constellationOn = homeOverlay?.kind === 'constellation';
+  const setConstellationOn = useCallback((visible:boolean) => {
+    dispatchHomeOverlay(visible?{type:'open',panel:'constellation'}:{type:'close',panel:'constellation'});
+  }, []);
   const [constellationTopic, setConstellationTopic] = useState<DiaryTopic | null>(null);
   const [constellationTemplateId, setConstellationTemplateId] = useState<string | null>(null);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
@@ -246,24 +253,20 @@ export default function HomeScreen() {
   const selectConstellationTopic = useCallback(
     (topic: DiaryTopic) => {
       setConstellationTopic(topic);
-      // 기본 선택은 해금된 가장 높은 단계(나만의 별자리가 완성돼 있으면 Level 4). 이전 단계는 레벨 카드에서 고를 수 있다.
-      const personal = personalStatuses[topic];
-      setConstellationTemplateId(
-        personal.state === 'ready'
-          ? personalTemplateId(topic)
-          : (topicStatuses.find((s) => s.topic === topic)?.highest?.id ?? null)
-      );
+      // Topic selection previews its stars; only a shape card draws connections.
+      setConstellationTemplateId(null);
     },
-    [topicStatuses, personalStatuses]
+    []
   );
   const viewPersonal = useCallback((pc: ApiPersonalConstellation) => {
     setPersonalDone(null);
     setConstellationTopic(pc.topic);
     setConstellationTemplateId(personalTemplateId(pc.topic));
     setConstellationOn(true);
-  }, []);
+  }, [setConstellationOn]);
   const setConstellationMode = useCallback(
     (on: boolean) => {
+      if (on) setConstellationTemplateId(null);
       if (on && !constellationTopic) {
         // 처음 열 때: 가장 높은 단계가 열린 주제(같으면 일기가 많은 주제)
         const best = [...topicStatuses].sort(
@@ -273,7 +276,7 @@ export default function HomeScreen() {
       }
       setConstellationOn(on);
     },
-    [constellationTopic, topicStatuses, selectConstellationTopic]
+    [constellationTopic, topicStatuses, selectConstellationTopic, setConstellationOn]
   );
 
   useEffect(() => {
@@ -439,6 +442,7 @@ export default function HomeScreen() {
             newStar={newStar ?? undefined}
             onNewStarFound={() => setNewStar(null)}
             constellation={constellationRequest}
+            topicFilter={constellationOn?constellationTopic:null}
             frontViewRequest={frontViewRequest}
             popupInsets={{ top: headerTop + responsive.hudHeight + 9 * rScale, bottom: constellationToggleBottom + constellationToggleHeight + 12 }}
           />
@@ -579,7 +583,7 @@ export default function HomeScreen() {
       {/* ===== 공통: 하단 네비게이션 (fffju 반응형 — 전체 뷰포트) ===== */}
       {rewardEvent && <QuestRewardAnimation key={rewardEvent.id} event={rewardEvent} onDone={clearReward} />}
       <TutorialHost key={authSession.getRevision()} userId={authSession.getSnapshot().session?.user_id ?? null} ready={!isRestoring && isLoggedIn}
-        autoEligible={!dataLoading && screen === 'home' && !routeGroupId && !routeTab && !homeOverlay && !searchPopup && !createGroupVisible && !joinVisible && !rewardEvent}
+        autoEligible={!dataLoading && screen === 'home' && !routeGroupId && !routeTab && !homeOverlay && !createGroupVisible && !joinVisible && !rewardEvent}
         request={tutorialRequest} />
       <UniverseBottomNav
         activeScreen={screen}
@@ -595,7 +599,7 @@ export default function HomeScreen() {
 
       {/* ===== 일기 검색 팝업 (메뉴의 검색·달력에서 열림) ===== */}
       <PopupWindow
-        visible={searchPopup !== null}
+        visible={homeOverlay?.kind === 'search' && searchPopup !== null}
         onClose={() => setSearchPopup(null)}
         title="일기 검색"
         appearance="search"

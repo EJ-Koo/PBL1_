@@ -58,7 +58,9 @@ def analyze_diary(content: str) -> dict | None:
 
 _VISUAL_CACHE: dict[str, dict] = {}
 _VISUAL_CACHE_MAX = 2000
-_VISUAL_BATCH = 64
+# Keep interactive universe requests small; a 64-diary CPU inference can exceed
+# the service timeout and make every older planet fall back to gray at once.
+_VISUAL_BATCH = 8
 
 
 def planet_visuals(contents: list[str]) -> list[dict | None] | None:
@@ -71,17 +73,22 @@ def planet_visuals(contents: list[str]) -> list[dict | None] | None:
         return None
     keys = [hashlib.sha256(c.encode("utf-8")).hexdigest() for c in contents]
     missing = sorted({(k, c) for k, c in zip(keys, contents) if k not in _VISUAL_CACHE})
-    try:
-        for i in range(0, len(missing), _VISUAL_BATCH):
-            chunk = missing[i:i + _VISUAL_BATCH]
+    for i in range(0, len(missing), _VISUAL_BATCH):
+        chunk = missing[i:i + _VISUAL_BATCH]
+        try:
             results = _post("/analyze/batch", {"texts": [c for _, c in chunk]}).json()["results"]
+            if len(results) != len(chunk):
+                raise ValueError("AI result count mismatch")
             for (k, _), r in zip(chunk, results):
+                visual = r.get("visual") if isinstance(r, dict) else None
+                if not isinstance(visual, dict) or visual.get("state") not in {"none", "muted", "soft", "clear"}:
+                    continue  # Missing analysis must be retried, never cached as a result.
                 if len(_VISUAL_CACHE) >= _VISUAL_CACHE_MAX:
                     _VISUAL_CACHE.pop(next(iter(_VISUAL_CACHE)))
-                _VISUAL_CACHE[k] = r["visual"]
-    except Exception as exc:
-        logger.warning("행성 외형 조회 실패, 별 색만 사용합니다: %s", exc)
-        return None
+                _VISUAL_CACHE[k] = visual
+        except Exception as exc:
+            # One failed batch must not erase existing or other successful visuals.
+            logger.warning("행성 외형 일부 조회 실패 (%s), 다음 조회에서 다시 시도합니다", type(exc).__name__)
     return [_VISUAL_CACHE.get(k) for k in keys]
 
 

@@ -1,12 +1,12 @@
 import { useLanguage } from '@/lib/language';
 import { ScrollView, type ScrollViewHandle } from '@/components/app-scroll-view';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Keyboard, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, AppState, Keyboard, Platform, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import { Text, TextInput } from '@/components/app-text';
 import { GroupSendIcon } from '@/components/ui/group-universe-decoration';
 import { GroupChatFrame } from '@/components/ui/group-universe-panels';
-import { Avatar } from '@/components/ui/group-profile-control';
+import { GroupChatMessage } from '@/components/ui/group-chat-message';
 import { authSession } from '@/lib/auth-session';
 import { chatMessages, markChatRead, sendChat, type ChatMessage } from '@/lib/group-social-api';
 import { mergeChat } from '@/lib/group-chat';
@@ -91,11 +91,8 @@ export function GroupChatDock({ groupId, bottom, left, width, unread, onRead, in
         onContentSizeChange={()=>{if(nearBottom.current)scroll.current?.scrollToEnd({animated:false});}}>
         {more && <Pressable disabled={loading} onPress={()=>{nearBottom.current=false;setLoading(true);void load(messages[0]?.id);}}><Text style={styles.hint}>{t("이전 대화 더 보기")}</Text></Pressable>}
         {!messages.length && !error && <Text style={styles.hint}>{t(loading?'채팅을 불러오는 중…':'첫 이야기를 나눠보세요.')}</Text>}
-        {messages.map(message=><View key={message.id} style={[styles.message,{gap:18*scale}]}
-          accessibilityLabel={`${message.sender_id===profile?.user_id?t('나'):message.nickname}, ${new Date(message.created_at).toLocaleTimeString(language==='en'?'en-US':'ko-KR',{hour:'2-digit',minute:'2-digit'})}`}>
-          {message.avatar_url?<Avatar uri={message.avatar_url} size={40*scale}/>:<View style={{width:40*scale,height:40*scale,borderRadius:20*scale,backgroundColor:'#d9d9d9'}}/>}
-          <Text style={[styles.body,{fontSize:13*scale,lineHeight:21*scale}]} selectable>{message.body}</Text>
-        </View>)}
+        {messages.map((message,index)=><GroupChatMessage key={message.id} name={message.sender_id===profile?.user_id?t('나'):message.nickname??t('멤버')}
+          body={message.body} createdAt={message.created_at} previousAt={messages[index-1]?.created_at} avatar={message.avatar_url} scale={scale} language={language}/>)}
       </ScrollView>
       {hasNew && <Pressable onPress={()=>{nearBottom.current=true;scroll.current?.scrollToEnd({animated:true});if(messages.length)void read(messages.at(-1)!.id).catch(()=>{});setHasNew(false);}}><Text style={styles.hint}>{t("새 메시지 ↓")}</Text></Pressable>}
     </>} error={error&&<Pressable accessibilityRole="button" onPress={()=>void load()} style={styles.errorPanel}><Text style={styles.error}>{error} · {t('다시 시도')}</Text></Pressable>}>

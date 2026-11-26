@@ -1,4 +1,4 @@
-export type HomePanel = 'menu' | 'quest' | 'shop';
+export type HomePanel = 'menu' | 'quest' | 'shop' | 'constellation' | 'search';
 export type HomeOverlay = { kind: HomePanel } | { kind: 'diary'; id: string } | null;
 export type HomeOverlayAction =
   | { type: 'open'; panel: HomePanel }

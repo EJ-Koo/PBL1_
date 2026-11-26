@@ -71,6 +71,7 @@ import {
 import { controlsFor, frontView, limitDiaryZoom, rotateView, setView, zoomView, type UniverseControls } from '@/lib/universe-controls';
 import { getRotateSensitivity, loadSettings } from '@/lib/settings';
 import { newStarGlow, unreadStarGlow, type NewStarHighlight } from '@/lib/new-star-highlight';
+import { starFocusIds } from '@/lib/star-focus';
 import type { StarPopupAnchor } from '@/lib/star-popup-layout';
 import type { DiaryEntry } from '@/store/diary-context';
 
@@ -969,7 +970,7 @@ export function UniverseScene({
   constellation = null,
   frontViewRequest = 0,
   backgroundStarScale = 1,
-  selectedEntryId, onStarPositionChange, onBackgroundPress, newStar, unreadIds,
+  selectedEntryId, onStarPositionChange, onBackgroundPress, newStar, unreadIds, topicFilter,
 }: {
   entries: DiaryEntry[];
   onStarPress: (id: string) => void;
@@ -977,6 +978,7 @@ export function UniverseScene({
   sceneKey?: string;
   /** [2026-11-12] 별자리 보기. 행성의 원래 좌표는 바꾸지 않고 화면 위치만 잠시 옮긴다. */
   constellation?: ConstellationRequest | null;
+  topicFilter?: DiaryEntry['topic'];
   /** [2026-11-13] 값이 바뀔 때마다 별자리를 정면·처음 거리로 다시 본다('정면으로 보기' 버튼) */
   frontViewRequest?: number;
   backgroundStarScale?: number;
@@ -1024,7 +1026,7 @@ export function UniverseScene({
   useEffect(() => {
     runtimeRef.current.origin = (id) => origins.get(id);
   }, [origins]);
-  const memberSet = useMemo(() => new Set(constellation?.memberIds ?? []), [constellation]);
+  const focusedIds = useMemo(() => starFocusIds(entries,topicFilter,constellation?.memberIds),[entries,topicFilter,constellation]);
   const aspect = size.width / Math.max(size.height, 1);
   const shapeKey = constellation ? `${constellation.template.id}|${constellation.memberIds.join(',')}` : '';
   const insetKey = constellation
@@ -1269,7 +1271,7 @@ export function UniverseScene({
       // [2026-11-22] 꾸민 행성은 상점·꾸미기 미리보기와 같은 최고 단계로(기기별 상한까지, decoration-lod.ts).
       // 별자리 밖으로 어둡게 한 행성·전환 중에는 0(기존 별자리 가독성·성능 규칙 우선).
       const dimmedOf = (list: DiaryEntry[]) =>
-        constellation ? new Set(list.filter((e) => !memberSet.has(e.id)).map((e) => e.id)) : undefined;
+        focusedIds ? new Set(list.filter((e) => !focusedIds.has(e.id)).map((e) => e.id)) : undefined;
       EFFECT_TIERS.clear();
       if (specialEntries.length) {
         const tiers = decorationTiers(rank(specialEntries), {
@@ -1370,12 +1372,12 @@ export function UniverseScene({
               brightness={entry.brightness}
               quality={quality}
               selected={entry.id === selectedId}
-              unread={unreadIds?.includes(entry.id)}
-              newStar={entry.id === newStar?.id ? newStar : undefined}
+              unread={unreadIds?.includes(entry.id)&&(!focusedIds||focusedIds.has(entry.id))}
+              newStar={entry.id === newStar?.id&&(!focusedIds||focusedIds.has(entry.id)) ? newStar : undefined}
               special={effectToDraw(entry.effect)}
               surface={surfaceToDraw(entry.surface)}
               runtime={runtimeRef}
-              dim={constellation && !memberSet.has(entry.id) ? DIM_OTHERS_LINEAR : 0}
+              dim={focusedIds && !focusedIds.has(entry.id) ? DIM_OTHERS_LINEAR : 0}
               onPress={() => onStarPress(entry.id)}
               registerMesh={(mesh) => {
                 if (mesh) {
@@ -1406,13 +1408,14 @@ export function UniverseCanvas({
   constellation,
   frontViewRequest,
   backgroundStarScale = 1,
-  selectedEntryId, onStarPositionChange, onBackgroundPress, newStar, unreadIds,
+  selectedEntryId, onStarPositionChange, onBackgroundPress, newStar, unreadIds, topicFilter,
 }: {
   entries: DiaryEntry[];
   onStarPress: (id: string) => void;
   sceneKey?: string;
   /** [2026-11-12] 별자리 보기(홈 우주에서만 사용). 없으면 예전과 같다. */
   constellation?: ConstellationRequest | null;
+  topicFilter?: DiaryEntry['topic'];
   /** [2026-11-13] 바뀔 때마다 별자리를 정면으로 다시 본다 */
   frontViewRequest?: number;
   backgroundStarScale?: number;
@@ -1430,7 +1433,7 @@ export function UniverseCanvas({
       <Canvas style={{ flex: 1 }} camera={{ fov: CAMERA_FOV, position: [0, 0, 5] }}>
         <UniverseScene key={sceneKey} entries={entries} onStarPress={onStarPress} sceneKey={sceneKey} backgroundStarScale={backgroundStarScale}
           selectedEntryId={selectedEntryId} onStarPositionChange={onStarPositionChange} onBackgroundPress={onBackgroundPress} newStar={newStar} unreadIds={unreadIds}
-          constellation={constellation} frontViewRequest={frontViewRequest} />
+          constellation={constellation} frontViewRequest={frontViewRequest} topicFilter={topicFilter} />
       </Canvas>
     </View>
   );

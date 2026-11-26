@@ -40,6 +40,7 @@ function hostFixture(initialStorage=new Map(),getOverride){
     if(name==='@react-native-async-storage/async-storage')return {__esModule:true,default:storage};
     if(name==='@/lib/tutorial')return core;
     if(name==='./tutorial-universe')return {TutorialUniverse:'TutorialUniverse'};
+    if(name==='./tutorial-chapter-picker')return {TutorialChapterPicker:'TutorialChapterPicker'};
     throw Error(name);
   });
   const render=props=>{cursor=0;const tree=TutorialHost(props);effects.splice(0).forEach(fn=>fn());return tree;};
@@ -56,7 +57,10 @@ test('first visit auto-starts once; exit persists dismissal and manual replay st
   assert.equal(f.render(props).props.visible,false);
   assert.equal(f.storage.get(core.tutorialStorageKey('A')),'dismissed');
   f.render({...props,request:1});
-  const replay=f.render({...props,request:1});assert.equal(replay.props.visible,true);
+  const picker=f.render({...props,request:1});assert.equal(picker.props.visible,true);
+  assert.equal(picker.props.children.type,'TutorialChapterPicker');
+  picker.props.children.props.onChoose('group');
+  const replay=f.render({...props,request:1});assert.equal(replay.props.children.props.chapter,'group');
   assert.notEqual(replay.props.children.props.sceneId,firstId);
   replay.props.children.props.onExit(true);await settle();
   assert.equal(f.storage.get(core.tutorialStorageKey('A')),'completed');
@@ -102,8 +106,8 @@ for(const width of [390,1440])test(`every practice step at width ${width} expose
     if(name==='@/hooks/use-responsive-layout')return {useResponsiveLayout:()=>responsive.getResponsiveLayout(width,900,{top:0,bottom:0,left:0,right:0})};
     if(name==='@/lib/constellation')return {
       TOPIC_CONCEPTS:Object.fromEntries(['travel','relationship','study_achievement','rest_daily','challenge_activity','other'].map(topic=>[topic,{color:'#fff'}])),selectMembers:(entries,topic,count)=>entries.filter(e=>e.topic===topic).slice(0,count),
-      allTopicStatus:()=>['travel','relationship','study_achievement','rest_daily','challenge_activity','other'].map(topic=>({topic,levels:[{unlocked:true,template:{requiredPlanets:5}}]})),
-      groupTopicStatuses:()=>[{topic:'other',levels:[{unlocked:true,template:{requiredPlanets:15}}]}],
+      allTopicStatus:()=>['travel','relationship','study_achievement','rest_daily','challenge_activity','other'].map(topic=>({topic,levels:[{unlocked:true,template:{requiredPlanets:5,id:topic+'_one',topic}}]})),
+      groupTopicStatuses:()=>[{topic:'other',levels:[{unlocked:true,template:{requiredPlanets:15,id:'group_other_one',topic:'other'}}]}],
     };
     if(name==='@/lib/special-planet')return {DIARY_TOPICS:[{id:'other',label:'기타'}]};
     const components={
@@ -115,6 +119,7 @@ for(const width of [390,1440])test(`every practice step at width ${width} expose
       '@/components/ui/group-universe-header':['GroupUniverseHeader'],
       '@/components/ui/group-universe-panels':['GroupMembersPanel','GroupChatFrame'],
       '@/components/ui/group-universe-decoration':['GroupSendIcon'],
+      '@/components/ui/group-chat-message':['GroupChatMessage'],
       '@/components/ui/star-diary-popup':['StarDiaryPopup'],
     };
     if(components[name])return Object.fromEntries(components[name].map(name=>[name,name]));
@@ -136,7 +141,7 @@ for(const width of [390,1440])test(`every practice step at width ${width} expose
     assert.equal(overlay.props.style.justifyContent,'center');
     assert.equal(tree.props.children[0].type,'KeyboardAvoidingView','The scene occupies the full screen; the guide is not a header');
     const scene=all.find(node=>node.props.testID===`tutorial-step-${core.TUTORIAL_STEPS[step].id}`);
-    assert.ok(scene.props.style[1].marginBottom>=60,'A dedicated footer keeps tutorial controls clear of navigation and chat');
+    assert.ok(scene.props.style[1].marginBottom>=72,'A dedicated footer keeps tutorial controls clear of navigation and chat');
     assert.ok(!all.some(node=>['화면 보기','직접 해보기'].includes(node.props.label)));
     if(core.TUTORIAL_STEPS[step].event==='finish')exit.props.onPress();
     else {
@@ -181,7 +186,12 @@ for(const width of [390,1440])test(`every practice step at width ${width} expose
     if(core.TUTORIAL_STEPS[step].id==='constellation-info'){
       const panel=all.find(node=>node.type==='ConstellationPanel');
       assert.equal(panel.props.topic,width===390?'rest_daily':'travel');
-      assert.equal(panel.props.members.length,5);
+      assert.equal(panel.props.members.length,0,'A topic alone must not draw a constellation');
+      assert.equal(canvas.props.constellation,null);
+      panel.props.onSelectTemplate(panel.props.statuses.find(item=>item.topic===panel.props.topic).levels[0].template);
+      const selected=nodes(render());
+      assert.equal(selected.find(node=>node.type==='ConstellationPanel').props.members.length,5);
+      assert.equal(selected.find(node=>node.type==='UniverseCanvas').props.constellation.memberIds.length,5);
       assert.equal(canvas.props.entries.length,5);
     }
   }
