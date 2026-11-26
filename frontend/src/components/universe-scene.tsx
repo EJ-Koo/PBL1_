@@ -970,7 +970,7 @@ export function UniverseScene({
   constellation = null,
   frontViewRequest = 0,
   backgroundStarScale = 1,
-  selectedEntryId, onStarPositionChange, onBackgroundPress, newStar, unreadIds, topicFilter,
+  selectedEntryId, onStarPositionChange, onBackgroundPress, newStar, unreadIds, topicFilter, authorFilter,
 }: {
   entries: DiaryEntry[];
   onStarPress: (id: string) => void;
@@ -979,6 +979,7 @@ export function UniverseScene({
   /** [2026-11-12] 별자리 보기. 행성의 원래 좌표는 바꾸지 않고 화면 위치만 잠시 옮긴다. */
   constellation?: ConstellationRequest | null;
   topicFilter?: DiaryEntry['topic'];
+  authorFilter?: string | null;
   /** [2026-11-13] 값이 바뀔 때마다 별자리를 정면·처음 거리로 다시 본다('정면으로 보기' 버튼) */
   frontViewRequest?: number;
   backgroundStarScale?: number;
@@ -1026,7 +1027,7 @@ export function UniverseScene({
   useEffect(() => {
     runtimeRef.current.origin = (id) => origins.get(id);
   }, [origins]);
-  const focusedIds = useMemo(() => starFocusIds(entries,topicFilter,constellation?.memberIds),[entries,topicFilter,constellation]);
+  const focusedIds = useMemo(() => starFocusIds(entries,topicFilter,constellation?.memberIds,authorFilter),[entries,topicFilter,constellation,authorFilter]);
   const aspect = size.width / Math.max(size.height, 1);
   const shapeKey = constellation ? `${constellation.template.id}|${constellation.memberIds.join(',')}` : '';
   const insetKey = constellation
@@ -1408,7 +1409,7 @@ export function UniverseCanvas({
   constellation,
   frontViewRequest,
   backgroundStarScale = 1,
-  selectedEntryId, onStarPositionChange, onBackgroundPress, newStar, unreadIds, topicFilter,
+  selectedEntryId, onStarPositionChange, onBackgroundPress, newStar, unreadIds, topicFilter, authorFilter,
 }: {
   entries: DiaryEntry[];
   onStarPress: (id: string) => void;
@@ -1416,6 +1417,7 @@ export function UniverseCanvas({
   /** [2026-11-12] 별자리 보기(홈 우주에서만 사용). 없으면 예전과 같다. */
   constellation?: ConstellationRequest | null;
   topicFilter?: DiaryEntry['topic'];
+  authorFilter?: string | null;
   /** [2026-11-13] 바뀔 때마다 별자리를 정면으로 다시 본다 */
   frontViewRequest?: number;
   backgroundStarScale?: number;
@@ -1433,7 +1435,7 @@ export function UniverseCanvas({
       <Canvas style={{ flex: 1 }} camera={{ fov: CAMERA_FOV, position: [0, 0, 5] }}>
         <UniverseScene key={sceneKey} entries={entries} onStarPress={onStarPress} sceneKey={sceneKey} backgroundStarScale={backgroundStarScale}
           selectedEntryId={selectedEntryId} onStarPositionChange={onStarPositionChange} onBackgroundPress={onBackgroundPress} newStar={newStar} unreadIds={unreadIds}
-          constellation={constellation} frontViewRequest={frontViewRequest} topicFilter={topicFilter} />
+          constellation={constellation} frontViewRequest={frontViewRequest} topicFilter={topicFilter} authorFilter={authorFilter} />
       </Canvas>
     </View>
   );

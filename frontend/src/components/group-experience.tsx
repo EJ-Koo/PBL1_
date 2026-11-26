@@ -194,7 +194,7 @@ export function GroupExperience({ group, entries, loading, error, onReload, onBa
 
   return <View style={styles.screen} testID="group-experience">
     {/* [2026-11-19] 홈 우주처럼 배경 사진(night-sky.png)을 빼고 단색(#000)+3D 배경 별 한 겹만 보이게 함 */}
-    <DiaryUniverse groupId={group.id} sceneKey={`${revision}:group-${group.id}${memberFilter?`-author-${memberFilter.id}`:''}`} entries={visibleEntries} backgroundStarScale={1}
+    <DiaryUniverse groupId={group.id} sceneKey={`${revision}:group-${group.id}`} entries={entries} authorFilter={memberFilter?.id??null} backgroundStarScale={1}
       popupAnchorMode={centeredDiaryId===selection.id&&centeredDiaryId!==null?'center':'planet'}
       selection={{id:selection.id,onChange:selectDiary}} unreadIds={unreadIds} onDiaryRead={read}
       constellation={constellationRequest} frontViewRequest={constellation.frontViewRequest}

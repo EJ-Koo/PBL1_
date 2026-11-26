@@ -21,6 +21,17 @@ test('topic selection focuses matching planets; shape selection focuses only sha
   assert.equal(starFocusIds(entries,'relationship').size,0);
   assert.equal(JSON.stringify(entries),before);
 });
+
+test('member focus dims other authors including same-topic stars, then intersects topic and shape focus',()=>{
+  const entries=[{id:'a',authorId:'one',topic:'travel'},{id:'b',authorId:'two',topic:'travel'},{id:'c',authorId:'one',topic:'other'},{id:'d',authorId:'two',topic:'other'}];
+  const before=JSON.stringify(entries);
+  assert.deepEqual([...starFocusIds(entries,null,undefined,'one')],['a','c']);
+  assert.deepEqual([...starFocusIds(entries,'travel',undefined,'one')],['a']);
+  assert.deepEqual([...starFocusIds(entries,'travel',['a'],'one')],['a']);
+  assert.equal(starFocusIds(entries,null,undefined,null),null);
+  assert.equal(starFocusIds(entries,null,undefined,'missing').size,0);
+  assert.equal(entries.length,4);assert.equal(JSON.stringify(entries),before);
+});
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';

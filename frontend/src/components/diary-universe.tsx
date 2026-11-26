@@ -13,7 +13,7 @@ import { getStarPopupLayout, starPopupMinimumHeight, starPopupWidth, type StarPo
 import { useDiary, toEntry, type DiaryEntry } from '@/store/diary-context';
 
 /** fffju's anchored UI, test's exact-ID permission checks, and a shared camera per login. */
-export function DiaryUniverse({ entries, sceneKey, groupId, selection, newStar, onNewStarFound, backgroundStarScale = 1, constellation, frontViewRequest, popupInsets, unreadIds, onDiaryRead, topicFilter, popupAnchorMode='planet' }: {
+export function DiaryUniverse({ entries, sceneKey, groupId, selection, newStar, onNewStarFound, backgroundStarScale = 1, constellation, frontViewRequest, popupInsets, unreadIds, onDiaryRead, topicFilter, authorFilter, popupAnchorMode='planet' }: {
   unreadIds?: readonly string[]; onDiaryRead?: (id:string)=>Promise<void>;
   entries: DiaryEntry[]; sceneKey: string; groupId?: string;
   selection?: { id: string | null; onChange: (id: string | null) => void };
@@ -21,6 +21,7 @@ export function DiaryUniverse({ entries, sceneKey, groupId, selection, newStar, 
   /** [2026-11-15] 별자리 보기(홈 우주에서만). 없으면 예전과 같다. */
   constellation?: ConstellationRequest | null; frontViewRequest?: number;
   topicFilter?: DiaryEntry['topic'];
+  authorFilter?: string | null;
   /** List selection opens the same verified diary popup without moving the camera. */
   popupAnchorMode?: 'planet' | 'center';
   /** Insets inside this canvas when it sits below a separate page header. */
@@ -81,7 +82,7 @@ export function DiaryUniverse({ entries, sceneKey, groupId, selection, newStar, 
   return <View style={styles.fill} onLayout={event => setSize(event.nativeEvent.layout)}>
     <UniverseCanvas entries={entries} sceneKey={sceneKey} onStarPress={select} newStar={newStar}
       selectedEntryId={entry?.id} onStarPositionChange={setAnchor} onBackgroundPress={close} backgroundStarScale={backgroundStarScale} unreadIds={unreadIds}
-      constellation={constellation} frontViewRequest={frontViewRequest} topicFilter={topicFilter} />
+      constellation={constellation} frontViewRequest={frontViewRequest} topicFilter={topicFilter} authorFilter={authorFilter} />
     {resolved && popupAnchor?.id === resolved.id && <StarDiaryPopup key={resolved.id} entry={resolved} anchor={popupAnchor}
       groupId={groupId} author={author} viewport={{ ...size, topInset: popupInsets?.top ?? headerTop + 84 * scale, bottomInset: popupInsets?.bottom ?? (groupId ? 20 : bottomSpace) }}
       owned={owned} editable={owned && isEditableToday(resolved.id)} loading={!!groupId && !verified} error={verified?.error}

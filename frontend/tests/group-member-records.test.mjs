@@ -71,8 +71,10 @@ for(const width of [390,1440])test(`member diaries, constellation, read-all and 
   f.find('GroupUniverseHeader').props.onMembers();
   f.find('GroupMembersPanel').props.onReadMember({user_id:'a',nickname:'same'});
   let universe=f.find('DiaryUniverse');
-  assert.equal(universe.props.entries.length,15);assert.ok(universe.props.entries.every(e=>e.authorId==='a'));
-  assert.match(universe.props.sceneKey,/-author-a$/);
+  assert.equal(universe.props.entries.length,30,'Other authors remain in the universe');
+  assert.equal(universe.props.authorFilter,'a');
+  assert.equal(universe.props.sceneKey,'1:group-g','Changing member focus preserves the group camera');
+  assert.equal(f.find('GroupMemberRecordsPanel').props.entries.length,15);
   assert.equal(f.reads.length,0,'Opening a member filter never marks a diary read');
   f.find('GroupMemberRecordsPanel').props.onConstellation();
   const panel=f.find('ConstellationPanel');
@@ -89,7 +91,7 @@ for(const width of [390,1440])test(`member diaries, constellation, read-all and 
   for(let i=0;i<12;i++)await Promise.resolve();
   assert.equal(f.reads.length,15);assert.ok(f.reads.every(id=>Number(id)<15));
   f.find('GroupUniverseHeader').props.onBack();
-  universe=f.find('DiaryUniverse');assert.equal(universe.props.entries.length,30);assert.doesNotMatch(universe.props.sceneKey,/-author-/);
+  universe=f.find('DiaryUniverse');assert.equal(universe.props.entries.length,30);assert.equal(universe.props.authorFilter,null);
   f.find('ConstellationModeToggle').props.onChange(true);
   assert.equal(f.find('ConstellationPanel').props.statuses.find(item=>item.topic==='travel').levels[0].template.requiredPlanets,15,'Whole-group thresholds stay unchanged');
 });
