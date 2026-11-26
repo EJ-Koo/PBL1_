@@ -66,6 +66,8 @@ import { useDiary } from '@/store/diary-context';
 import { useShop } from '@/store/shop-context';
 
 type Screen = 'home' | 'diary' | 'group';
+// Web tab replacement can remount this screen before the new planet is rendered.
+let pendingHomeHighlight: { id: string; revision: number } | null = null;
 
 export default function HomeScreen() {
   const { isLoggedIn, isRestoring, dataLoading, loadError, retryLoad, accessToken, entries, groups, createGroup, joinGroup, leaveGroup, logout, refreshGroups } = useDiary();
@@ -315,6 +317,18 @@ export default function HomeScreen() {
   }, [routeGroupId,routeDiaryId,routeTab]));
 
   useEffect(() => {
+    const pending = pendingHomeHighlight;
+    if (screen !== 'home' || homeTabFromParams({ tab: routeTab, groupId: routeGroupId }) !== 'home' || !isLoggedIn || !pending) return;
+    if (pending.revision !== authSession.getRevision()) {
+      pendingHomeHighlight = null;
+      return;
+    }
+    if (!entries.some(entry => entry.id === pending.id)) return;
+    pendingHomeHighlight = null;
+    setNewStar({ id: pending.id, startedAt: Date.now() });
+  }, [screen, routeTab, routeGroupId, isLoggedIn, entries]);
+
+  useEffect(() => {
     if (!newStar) return;
     const timer = setTimeout(() => setNewStar(null), Math.max(0, newStar.startedAt + NEW_STAR_HIGHLIGHT_MS - Date.now()));
     return () => clearTimeout(timer);
@@ -338,6 +352,7 @@ export default function HomeScreen() {
   };
 
   const handleLogout = () => {
+    pendingHomeHighlight = null;
     setNewStar(null);
     logout();
     router.replace('/login');
@@ -497,7 +512,13 @@ export default function HomeScreen() {
 
       {/* ===== 왼쪽: 일기 작성 — 다른 탭에 갔다 와도 쓰던 내용이 남도록 화면을 숨기기만 한다 ===== */}
       <View style={[styles.fill, screen !== 'diary' && styles.hidden]}>
-        <DiaryComposer onBack={() => navigateTab('home')} onSaved={id => { if (id) setNewStar({ id, startedAt: Date.now() }); navigateTab('home'); }} />
+        <DiaryComposer onBack={() => navigateTab('home')} onSaved={id => {
+          if (id) {
+            if (Platform.OS === 'web') pendingHomeHighlight = { id, revision: authSession.getRevision() };
+            else setNewStar({ id, startedAt: Date.now() });
+          }
+          navigateTab('home');
+        }} />
       </View>
 
       {/* ===== 오른쪽: 그룹 우주 (반응형 그리드 — 전체 뷰포트, useResponsiveLayout 사용) ===== */}
