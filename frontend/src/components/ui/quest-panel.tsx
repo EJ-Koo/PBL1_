@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ScrollView } from '@/components/app-scroll-view';
 import { Text } from '@/components/app-text';
 import { DesignFonts } from '@/constants/ui-design';
@@ -20,6 +21,7 @@ type Props = {
 
 export function QuestPanel({ scale: layoutScale, onClose, onWriteDiary, meteorQuest, meteorBusy, meteorError, onRetryMeteors }: Props) {
   const { t } = useLanguage();
+  const [meteorExpanded, setMeteorExpanded] = useState(false);
   const { quest, loading, error, refresh, reset } = useQuest();
   const { height, chromeLeft, chromeWidth, headerTop, bottomSpace } = useResponsiveLayout();
   const compact = Platform.OS === 'android';
@@ -94,12 +96,14 @@ export function QuestPanel({ scale: layoutScale, onClose, onWriteDiary, meteorQu
           </View>}
 
           <View style={{ marginHorizontal: 12 * scale, marginTop: 15 * scale, marginBottom: 8 * scale }}><QuestDivider scale={scale} /></View>
-          <View style={{ marginBottom: 12 * scale, paddingHorizontal: 26 * scale, paddingTop: 19 * scale, paddingBottom: 22 * scale }}>
+          {meteorExpanded ? <View style={{ marginBottom: 12 * scale, paddingHorizontal: 26 * scale, paddingTop: 19 * scale, paddingBottom: 22 * scale }}>
             <QuestCardFrame scale={scale} highlighted />
-            <View style={[styles.headingRow, { gap: 8 * scale, alignItems: 'flex-start' }]}>
+            <Pressable accessibilityRole="button" accessibilityState={{ expanded: true }}
+              accessibilityLabel={t('운석 3개 치우기')} onPress={() => setMeteorExpanded(false)}
+              style={[styles.headingRow, { gap: 8 * scale, alignItems: 'flex-start', minHeight: 44 }]}>
               <Text style={[styles.bold, { flex: 1, fontSize: 21 * scale, lineHeight: 29 * scale }]}>{t('운석 3개 치우기')}</Text>
               <QuestRewardBadge scale={scale} reward={3} />
-            </View>
+            </Pressable>
             <Text style={[styles.muted, { fontSize: 15 * scale, lineHeight: 22 * scale, marginTop: 6 * scale }]}>
               {t('내 우주에 떠다니는 운석 누르기')}
             </Text>
@@ -115,7 +119,21 @@ export function QuestPanel({ scale: layoutScale, onClose, onWriteDiary, meteorQu
             {meteorError && <Text accessibilityRole="alert" style={[styles.text, { fontSize: 12 * scale, lineHeight: 19 * scale, marginBottom: 8 * scale }]}>{meteorError}</Text>}
             {meteorError && <QuestButton scale={scale} label={t('다시 불러오기')} disabled={meteorBusy} onPress={onRetryMeteors} />}
             {!meteorError && <QuestButton scale={scale} label={t(meteorsComplete ? '확인' : '내 우주로 돌아가기')} disabled={false} onPress={onClose} />}
-          </View>
+          </View> : <Pressable accessibilityRole="button" accessibilityState={{ expanded: false }}
+            onPress={() => setMeteorExpanded(true)}
+            style={({ pressed }) => ({
+              marginHorizontal: 5 * scale, marginBottom: 12 * scale, padding: 16 * scale,
+              gap: 8 * scale, opacity: pressed ? 0.75 : 1,
+            })}>
+            <QuestCardFrame scale={scale} />
+            <Text style={[styles.bold, { fontSize: 17 * scale, lineHeight: 25 * scale }]}>{t('운석 3개 치우기')}</Text>
+            {meteorQuest && <QuestProgress scale={scale} progress={meteorQuest.cleared.length} target={3} />}
+            <Text style={[styles.text, { fontSize: 13 * scale, lineHeight: 20 * scale }]}>
+              {meteorError ?? (meteorsComplete
+                ? t('완료 · {reward}코인 지급됨', { reward: 3 })
+                : t('내 우주에 떠다니는 운석 누르기'))}
+            </Text>
+          </Pressable>}
           <Text style={[styles.muted, { marginHorizontal: 14 * scale, marginBottom: 10 * scale, fontSize: 13 * scale, lineHeight: 20 * scale }]}>{t('다음 퀘스트')}</Text>
           <View style={{ gap: 12 * scale, marginHorizontal: 5 * scale }}>
             <UpcomingQuest scale={scale} title={t('친구 별에 좋아요 누르기')} target={2} />
