@@ -138,16 +138,20 @@ function createNewStarHaloTexture() {
 
 const NEW_STAR_HALO_TEXTURE = createNewStarHaloTexture();
 
-function NewStarHalo({ radius, startedAt, persistent = false }: { radius: number; startedAt: number; persistent?: boolean }) {
-  const sprite = useRef<Sprite>(null);
-  const material = useRef<SpriteMaterial>(null);
+function useReducedMotion() {
   const [reducedMotion, setReducedMotion] = useState(true);
   useEffect(() => {
     let alive = true;
     AccessibilityInfo.isReduceMotionEnabled().then((value) => { if (alive) setReducedMotion(value); }).catch(() => {});
     const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReducedMotion);
-    return () => { alive = false; subscription.remove(); };
+    return () => { alive = false; subscription?.remove(); };
   }, []);
+  return reducedMotion;
+}
+
+function NewStarHalo({ radius, startedAt, persistent = false, reducedMotion }: { radius: number; startedAt: number; persistent?: boolean; reducedMotion: boolean }) {
+  const sprite = useRef<Sprite>(null);
+  const material = useRef<SpriteMaterial>(null);
   useFrame(() => {
     const glow = persistent ? unreadStarGlow(Date.now() - startedAt, reducedMotion) : newStarGlow(Date.now() - startedAt, reducedMotion);
     sprite.current?.scale.setScalar(radius * 5.4 * glow.scale);
@@ -519,6 +523,8 @@ function Planet({
   registerMesh,
   dim = 0,
   runtime,
+  floating = false,
+  reducedMotion = true,
 }: {
   id: string;
   position: [number, number, number];
@@ -555,6 +561,8 @@ function Planet({
   dim?: number;
   /** [2026-11-12] 별자리 보기의 화면 위치. 여기에 이 행성 위치가 있으면 그 자리에 그리고, 없으면 원래 좌표(position). */
   runtime?: RuntimeRef;
+  floating?: boolean;
+  reducedMotion?: boolean;
 }) {
   const bodyRef = useRef<Group>(null);
   const bodyMat = useRef<ShaderMaterial>(null);
@@ -666,11 +674,15 @@ function Planet({
 
   // 매우 느린 자전: 한 바퀴 약 90~210초. 행성마다 속도가 다르다(감정과 무관한 고정 난수).
   const spinSpeed = 0.03 + r4 * 0.04;
+  // 일기별로 한 번 왕복하는 시간과 시작 위상을 달리하고, 밀집한 별 사이의 여백 안에서 움직인다.
+  const floatSpeed = (2 * Math.PI) / (4.5 + 2 * r1);
+  const floatPhase = 2 * Math.PI * r2;
+  const floatAmplitude = Math.min(radius * 0.18, 0.04);
+  const floatStrength = useRef(0);
   // 선택 강조(0~1): 약 0.3초에 걸쳐 서서히 켜지고 꺼진다
   const highlight = useRef(0);
   // 별자리 보기: 어둡게(서서히), 화면 위치(별자리 자리 ↔ 원래 좌표)
   const dimNow = useRef(0);
-  const moved = useRef(false);
   // [2026-11-21] 표면 단계(0~2, 부드럽게)와 표면 시계. 멀리(0)서는 시계를 멈춰 움직임이 없다.
   const surfaceTierNow = useRef(0);
   const surfaceClock = useRef(0);
@@ -690,15 +702,17 @@ function Planet({
     for (const m of [bodyMat.current, ringMat.current, atmoMat.current]) {
       if (m && m.uniforms.uDim) m.uniforms.uDim.value = dimNow.current;
     }
-    const live = runtime?.current.positions.get(id);
-    if (bodyRef.current) {
-      if (live) {
-        bodyRef.current.position.copy(live);
-        moved.current = true;
-      } else if (moved.current) {
-        // 원래 자리로 돌아왔다: 원래 좌표(서버 값) 그대로
-        bodyRef.current.position.set(position[0], position[1], position[2]);
-        moved.current = false;
+    if (runtime && bodyRef.current) {
+      const live = runtime.current.positions.get(id);
+      const center = bodyRef.current.position;
+      if (live) center.copy(live);
+      else center.fromArray(position);
+
+      // 일기를 열거나 별자리로 전환할 때도 현재 위치에서 부드럽게 가라앉는다.
+      const targetStrength = floating && !live ? 1 : 0;
+      floatStrength.current += (targetStrength - floatStrength.current) * Math.min(1, delta * 5);
+      if (!reducedMotion && floatStrength.current > 0.001) {
+        center.y += floatStrength.current * floatAmplitude * Math.sin(runtime.current.now * floatSpeed + floatPhase);
       }
     }
     const target = selected ? 1 : unread ? 0.55 + Math.sin(_.clock.elapsedTime * 2) * 0.18 : 0;
@@ -727,7 +741,7 @@ function Planet({
     // 자전축 기울기는 일기마다 고정된 값(감정과 무관). 북극 쪽을 카메라로 13~20도만 기울여
     // 층은 거의 가로로 흐르고, 고리는 정면에서 얇은 타원으로 보인다.
     <group ref={bodyRef} position={position} rotation={[0.22 + r5 * 0.13, 0, (r4 - 0.5) * 0.5]}>
-      {unread ? <NewStarHalo radius={radius} startedAt={0} persistent /> : newStar && <NewStarHalo radius={radius} startedAt={newStar.startedAt} />}
+      {unread ? <NewStarHalo radius={radius} startedAt={0} persistent reducedMotion={reducedMotion} /> : newStar && <NewStarHalo radius={radius} startedAt={newStar.startedAt} reducedMotion={reducedMotion} />}
       <group ref={spinRef}>
         <mesh
           ref={registerMesh}
@@ -966,6 +980,7 @@ const liftFor = (i: number) => 0.35 + (i % 5) * 0.3;
 export function UniverseScene({
   entries,
   onStarPress,
+  floatStars = false,
   sceneKey = 'home',
   constellation = null,
   frontViewRequest = 0,
@@ -976,6 +991,7 @@ export function UniverseScene({
   onStarPress: (id: string) => void;
   /** 화면 위치를 기억할 이름 (홈 'home', 그룹 우주는 그룹 id) */
   sceneKey?: string;
+  floatStars?: boolean;
   /** [2026-11-12] 별자리 보기. 행성의 원래 좌표는 바꾸지 않고 화면 위치만 잠시 옮긴다. */
   constellation?: ConstellationRequest | null;
   topicFilter?: DiaryEntry['topic'];
@@ -990,6 +1006,7 @@ export function UniverseScene({
   unreadIds?: readonly string[];
 }) {
   const controls = useRef(controlsFor(sceneKey));
+  const reducedMotion = useReducedMotion();
   const groupRef = useRef<Group>(null);
   // 화면이 다시 만들어졌을 때 첫 프레임은 저장된 각도·거리로 바로 맞춘다(서서히 돌아가며 초기화되는 것처럼 보이지 않게).
   const synced = useRef(false);
@@ -1378,6 +1395,8 @@ export function UniverseScene({
               special={effectToDraw(entry.effect)}
               surface={surfaceToDraw(entry.surface)}
               runtime={runtimeRef}
+              floating={floatStars && !reducedMotion && entry.id !== selectedEntryId}
+              reducedMotion={reducedMotion}
               dim={focusedIds && !focusedIds.has(entry.id) ? DIM_OTHERS_LINEAR : 0}
               onPress={() => onStarPress(entry.id)}
               registerMesh={(mesh) => {
@@ -1405,6 +1424,7 @@ export function UniverseScene({
 export function UniverseCanvas({
   entries,
   onStarPress,
+  floatStars,
   sceneKey,
   constellation,
   frontViewRequest,
@@ -1416,6 +1436,7 @@ export function UniverseCanvas({
   sceneKey?: string;
   /** [2026-11-12] 별자리 보기(홈 우주에서만 사용). 없으면 예전과 같다. */
   constellation?: ConstellationRequest | null;
+  floatStars?: boolean;
   topicFilter?: DiaryEntry['topic'];
   authorFilter?: string | null;
   /** [2026-11-13] 바뀔 때마다 별자리를 정면으로 다시 본다 */
@@ -1433,7 +1454,7 @@ export function UniverseCanvas({
     <View style={{ flex: 1 }} {...({ dataSet: { universeZoom: 'true', universeScene: sceneKey ?? 'home' } } as object)}>
       {/* 시야각 50도(기본 75도): 화면 가장자리 행성이 타원처럼 늘어나는 왜곡과 가까운 행성만 크게 보이는 차이를 줄인다 */}
       <Canvas style={{ flex: 1 }} camera={{ fov: CAMERA_FOV, position: [0, 0, 5] }}>
-        <UniverseScene key={sceneKey} entries={entries} onStarPress={onStarPress} sceneKey={sceneKey} backgroundStarScale={backgroundStarScale}
+        <UniverseScene key={sceneKey} entries={entries} onStarPress={onStarPress} sceneKey={sceneKey} backgroundStarScale={backgroundStarScale} floatStars={floatStars}
           selectedEntryId={selectedEntryId} onStarPositionChange={onStarPositionChange} onBackgroundPress={onBackgroundPress} newStar={newStar} unreadIds={unreadIds}
           constellation={constellation} frontViewRequest={frontViewRequest} topicFilter={topicFilter} authorFilter={authorFilter} />
       </Canvas>

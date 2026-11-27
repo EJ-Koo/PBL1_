@@ -13,9 +13,10 @@ import { getStarPopupLayout, starPopupMinimumHeight, starPopupWidth, type StarPo
 import { useDiary, toEntry, type DiaryEntry } from '@/store/diary-context';
 
 /** fffju's anchored UI, test's exact-ID permission checks, and a shared camera per login. */
-export function DiaryUniverse({ entries, sceneKey, groupId, selection, newStar, onNewStarFound, backgroundStarScale = 1, constellation, frontViewRequest, popupInsets, unreadIds, onDiaryRead, topicFilter, authorFilter, popupAnchorMode='planet' }: {
+export function DiaryUniverse({ entries, sceneKey, groupId, selection, newStar, onNewStarFound, backgroundStarScale = 1, floatStars, constellation, frontViewRequest, popupInsets, unreadIds, onDiaryRead, topicFilter, authorFilter, popupAnchorMode='planet' }: {
   unreadIds?: readonly string[]; onDiaryRead?: (id:string)=>Promise<void>;
   entries: DiaryEntry[]; sceneKey: string; groupId?: string;
+  floatStars?: boolean;
   selection?: { id: string | null; onChange: (id: string | null) => void };
   newStar?: NewStarHighlight; onNewStarFound?: () => void; backgroundStarScale?: number;
   /** [2026-11-15] 별자리 보기(홈 우주에서만). 없으면 예전과 같다. */
@@ -80,7 +81,7 @@ export function DiaryUniverse({ entries, sceneKey, groupId, selection, newStar, 
   } : undefined;
   const owned = !!entry && isOwnEntry(entry.id);
   return <View style={styles.fill} onLayout={event => setSize(event.nativeEvent.layout)}>
-    <UniverseCanvas entries={entries} sceneKey={sceneKey} onStarPress={select} newStar={newStar}
+    <UniverseCanvas entries={entries} sceneKey={sceneKey} onStarPress={select} newStar={newStar} floatStars={floatStars}
       selectedEntryId={entry?.id} onStarPositionChange={setAnchor} onBackgroundPress={close} backgroundStarScale={backgroundStarScale} unreadIds={unreadIds}
       constellation={constellation} frontViewRequest={frontViewRequest} topicFilter={topicFilter} authorFilter={authorFilter} />
     {resolved && popupAnchor?.id === resolved.id && <StarDiaryPopup key={resolved.id} entry={resolved} anchor={popupAnchor}

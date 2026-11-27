@@ -437,6 +437,7 @@ export default function HomeScreen() {
           <CometLayer effects={activeEffects} />
           <DiaryUniverse
             sceneKey={`${authSession.getRevision()}:home`}
+            floatStars={!constellationOn}
             selection={{id:homeOverlay?.kind==='diary'?homeOverlay.id:null,onChange:id=>dispatchHomeOverlay({type:'select-diary',id})}}
             entries={entries}
             newStar={newStar ?? undefined}
