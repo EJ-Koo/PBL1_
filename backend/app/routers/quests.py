@@ -3,7 +3,7 @@ from postgrest.exceptions import APIError
 
 from app.db import supabase
 from app.dependencies import get_current_user_id
-from app.schemas.quest import DailyQuestStatus
+from app.schemas.quest import DailyQuestStatus, MeteorQuestHit, MeteorQuestStatus
 
 router = APIRouter(prefix='/me/quests', tags=['quests'])
 
@@ -34,3 +34,28 @@ def sync_my_quest(user_id: str = Depends(get_current_user_id)):
 def reset_my_quest(user_id: str = Depends(get_current_user_id)):
     # DB 함수가 같은 트랜잭션 안에서 allow_test_reset을 검사합니다.
     return sync_daily_quest(user_id, reset=True)
+
+
+def sync_meteors(user_id: str, hit: MeteorQuestHit | None = None) -> MeteorQuestStatus:
+    params: dict[str, str | int] = {'p_user': user_id}
+    if hit:
+        params.update(p_day=hit.day.isoformat(), p_meteor=hit.meteor)
+    try:
+        result = supabase.rpc('sync_meteor_quest', params).execute().data
+        return MeteorQuestStatus.model_validate(result)
+    except APIError as error:
+        if error.code in ('PGRST202', 'PGRST205', '42883', '42P01'):
+            raise HTTPException(status_code=503, detail='운석 퀘스트를 준비하고 있어요.')
+        raise HTTPException(status_code=502, detail='운석 퀘스트를 저장하지 못했어요. 다시 시도해주세요.')
+    except Exception:
+        raise HTTPException(status_code=502, detail='운석 퀘스트 연결을 확인해주세요.')
+
+
+@router.get('/meteors', response_model=MeteorQuestStatus)
+def list_my_meteors(user_id: str = Depends(get_current_user_id)):
+    return sync_meteors(user_id)
+
+
+@router.post('/meteors', response_model=MeteorQuestStatus)
+def clear_my_meteor(hit: MeteorQuestHit, user_id: str = Depends(get_current_user_id)):
+    return sync_meteors(user_id, hit)

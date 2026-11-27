@@ -17,3 +17,14 @@ class DailyQuestStatus(BaseModel):
     reset_allowed: bool
     after_reset: bool
     next_reset_at: datetime
+
+
+class MeteorQuestHit(BaseModel):
+    day: date
+    meteor: Literal[1, 2, 3]
+
+
+class MeteorQuestStatus(BaseModel):
+    day: date
+    cleared: list[Literal[1, 2, 3]]
+    awarded: Literal[0, 3]

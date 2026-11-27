@@ -7,7 +7,7 @@ from postgrest.exceptions import APIError
 
 from app.routers import quests, diaries
 from app.schemas.diary import DiaryCreate
-from app.schemas.quest import DailyQuestStatus
+from app.schemas.quest import DailyQuestStatus, MeteorQuestHit
 
 
 def status(**changes):
@@ -50,6 +50,20 @@ def test_network_outage_is_recoverable(monkeypatch):
     monkeypatch.setattr(quests, 'supabase', fake)
     with pytest.raises(HTTPException) as exc: quests.sync_my_quest('owner-a')
     assert exc.value.status_code == 502
+
+
+def test_meteor_hit_uses_authenticated_owner_and_retains_quest_day(monkeypatch):
+    fake = Mock()
+    fake.rpc.return_value.execute.return_value.data = {
+        'day': '2026-11-27', 'cleared': [1, 2, 3], 'awarded': 3,
+    }
+    monkeypatch.setattr(quests, 'supabase', fake)
+    hit = MeteorQuestHit.model_validate({'day': '2026-11-27', 'meteor': 3, 'user_id': 'another-user'})
+    result = quests.clear_my_meteor(hit, user_id='owner-a')
+    fake.rpc.assert_called_once_with('sync_meteor_quest', {
+        'p_user': 'owner-a', 'p_day': '2026-11-27', 'p_meteor': 3,
+    })
+    assert result.cleared == [1, 2, 3] and result.awarded == 3
 
 
 @pytest.mark.parametrize('fail', [False, True])

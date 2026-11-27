@@ -19,3 +19,19 @@ async function request(token: string, action: 'sync' | 'reset'): Promise<DailyQu
 }
 export const apiSyncQuest = (token: string) => request(token, 'sync');
 export const apiResetQuest = (token: string) => request(token, 'reset');
+
+export type MeteorId = 1 | 2 | 3;
+export type MeteorQuest = { day: string; cleared: MeteorId[]; awarded: 0 | 3 };
+
+export async function apiMeteorQuest(token: string, hit?: { day: string; meteor: MeteorId }): Promise<MeteorQuest> {
+  const response = await apiFetch(`${API_BASE_URL}/me/quests/meteors`, {
+    method: hit ? 'POST' : 'GET',
+    headers: { Authorization: `Bearer ${token}`, ...(hit && { 'Content-Type': 'application/json' }) },
+    body: hit ? JSON.stringify(hit) : undefined,
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok || !data) {
+    throw new Error(typeof data?.detail === 'string' ? data.detail : '운석 퀘스트를 불러오지 못했어요.');
+  }
+  return data;
+}

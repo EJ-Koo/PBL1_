@@ -1,6 +1,8 @@
 import { GroupExperience } from '@/components/group-experience';
 import { TutorialHost } from '@/components/tutorial-host';
 import { DiaryUniverse } from '@/components/diary-universe';
+import { MeteorQuestField } from '@/components/meteor-quest-field';
+import { useMeteorQuest } from '@/hooks/use-meteor-quest';
 import { JoinGroupDialog } from '@/components/ui/join-group-dialog';
 import { NEW_STAR_HIGHLIGHT_MS, type NewStarHighlight } from '@/lib/new-star-highlight';
 import { authSession } from '@/lib/auth-session';
@@ -75,7 +77,8 @@ export default function HomeScreen() {
   const { isLoggedIn, isRestoring, dataLoading, loadError, retryLoad, accessToken, entries, groups, createGroup, joinGroup, leaveGroup, logout, refreshGroups } = useDiary();
   const { coins, activeEffects, refresh: refreshShop } = useShop();
   const { frameWidth } = useDesignFrame();
-  const { refresh: refreshQuest, rewardEvent, clearReward } = useQuest();
+  const { quest: diaryQuest, refresh: refreshQuest, rewardEvent, clearReward } = useQuest();
+  const { quest: meteorQuest, busy: meteorBusy, error: meteorError, request: requestMeteors } = useMeteorQuest(accessToken);
   // fffju 반응형 레이아웃: 전체 뷰포트로 그리는 화면(홈 HUD·하단바·그룹)은 이 scale을 쓴다.
   // 상점은 별도의 최대 프레임 폭을 사용한다.
   const responsive = useResponsiveLayout();
@@ -92,6 +95,14 @@ export default function HomeScreen() {
   const [newStar, setNewStar] = useState<NewStarHighlight | null>(null);
   const [homeOverlay, dispatchHomeOverlay] = useReducer(reduceHomeOverlay, null);
   const questVisible = homeOverlay?.kind === 'quest';
+  const questDay = diaryQuest?.day;
+  const staleMeteors = !!questDay && !!meteorQuest && questDay > meteorQuest.day;
+  useEffect(() => {
+    if (screen === 'home') void requestMeteors();
+  }, [screen, requestMeteors]);
+  useEffect(() => {
+    if (screen === 'home' && staleMeteors && !meteorBusy && !meteorError) void requestMeteors();
+  }, [screen, staleMeteors, meteorBusy, meteorError, requestMeteors]);
   const setQuestVisible = (visible:boolean) => dispatchHomeOverlay(visible?{type:'open',panel:'quest'}:{type:'close',panel:'quest'});
   // [MODIFIED 2026-11-10] 상점은 별도 화면이 아니라 아래에서 올라오는 팝업
   const shopVisible = homeOverlay?.kind === 'shop';
@@ -447,6 +458,12 @@ export default function HomeScreen() {
             frontViewRequest={frontViewRequest}
             popupInsets={{ top: headerTop + responsive.hudHeight + 9 * rScale, bottom: constellationToggleBottom + constellationToggleHeight + 12 }}
           />
+          {!homeOverlay && !staleMeteors && meteorQuest && meteorQuest.cleared.length < 3 && (
+              <MeteorQuestField quest={meteorQuest} busy={meteorBusy} error={meteorError}
+                top={headerTop + responsive.hudHeight + 12}
+                bottom={constellationToggleBottom + constellationToggleHeight + 12}
+                onHit={meteor => { void requestMeteors({ day: meteorQuest.day, meteor }); }} />
+            )}
 
           {entries.length === 0 && (
             <View style={styles.emptyState} pointerEvents="none">
@@ -577,6 +594,10 @@ export default function HomeScreen() {
       {/* ===== 퀘스트 (서버 진행률·보상 기록) ===== */}
       <Modal transparent visible={questVisible} animationType="fade" onRequestClose={() => setQuestVisible(false)}>
         <QuestPanel scale={rScale}
+          meteorQuest={staleMeteors ? null : meteorQuest}
+          meteorBusy={meteorBusy}
+          meteorError={meteorError}
+          onRetryMeteors={() => { void requestMeteors(); }}
           onWriteDiary={() => navigateTab('diary')}
           onClose={() => setQuestVisible(false)} />
       </Modal>

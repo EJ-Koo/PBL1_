@@ -4,6 +4,7 @@ import { DesignFonts } from '@/constants/ui-design';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useLanguage } from '@/lib/language';
 import { confirmChoice } from '@/lib/notice';
+import type { MeteorQuest } from '@/lib/quest-api';
 import { useQuest } from '@/store/quest-context';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
@@ -11,9 +12,13 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import { QuestCardFrame, QuestDivider, QuestPanelFrame } from './quest-decoration';
 import { SpaceIcon } from './space-ui';
 
-type Props = { scale: number; onClose: () => void; onWriteDiary: () => void };
+type Props = {
+  scale: number; onClose: () => void; onWriteDiary: () => void;
+  meteorQuest: MeteorQuest | null; meteorBusy: boolean; meteorError: string | null;
+  onRetryMeteors: () => void;
+};
 
-export function QuestPanel({ scale: layoutScale, onClose, onWriteDiary }: Props) {
+export function QuestPanel({ scale: layoutScale, onClose, onWriteDiary, meteorQuest, meteorBusy, meteorError, onRetryMeteors }: Props) {
   const { t } = useLanguage();
   const { quest, loading, error, refresh, reset } = useQuest();
   const { height, chromeLeft, chromeWidth, headerTop, bottomSpace } = useResponsiveLayout();
@@ -95,9 +100,19 @@ export function QuestPanel({ scale: layoutScale, onClose, onWriteDiary }: Props)
           </View>}
 
           <View style={{ marginHorizontal: 12 * scale, marginTop: 15 * scale, marginBottom: 8 * scale }}><QuestDivider scale={scale} /></View>
+          <View style={{ marginHorizontal: 5 * scale, marginBottom: 12 * scale, padding: 16 * scale, gap: 8 * scale }}>
+            <QuestCardFrame scale={scale} />
+            <Text style={[styles.bold, { fontSize: 17 * scale, lineHeight: 25 * scale }]}>{t('운석 3개 치우기')}</Text>
+            {meteorQuest && <QuestProgress scale={scale} progress={meteorQuest.cleared.length} target={3} />}
+            <Text accessibilityLiveRegion="polite" style={[styles.text, { fontSize: 13 * scale, lineHeight: 20 * scale }]}>
+              {meteorError ?? (meteorQuest?.cleared.length === 3
+                ? t('완료 · {reward}코인 지급됨', { reward: 3 })
+                : t('내 우주에 나타난 운석을 눌러 치워보세요. 보상은 3코인이에요.'))}
+            </Text>
+            {meteorError && <QuestButton scale={scale} label={t('다시 불러오기')} disabled={meteorBusy} onPress={onRetryMeteors} />}
+          </View>
           <Text style={[styles.muted, { marginHorizontal: 14 * scale, marginBottom: 10 * scale, fontSize: 13 * scale, lineHeight: 20 * scale }]}>{t('다음 퀘스트')}</Text>
           <View style={{ gap: 12 * scale, marginHorizontal: 5 * scale }}>
-            <UpcomingQuest scale={scale} title={t('운석 3개 치우기')} target={3} />
             <UpcomingQuest scale={scale} title={t('친구 별에 좋아요 누르기')} target={2} />
           </View>
 

@@ -233,6 +233,8 @@ export const ENGLISH: Readonly<Record<string, string>> = {
   "한국 시간 기준 매일 자정에 새 퀘스트로 바뀝니다.": "A new quest starts daily at midnight in Korea.",
   "다음 퀘스트": "Next quest",
   "운석 3개 치우기": "Clear 3 meteors",
+  "운석 치우기": "Clear meteor",
+  "내 우주에 나타난 운석을 눌러 치워보세요. 보상은 3코인이에요.": "Tap the meteors in My Universe to clear them and earn 3 coins.",
   "친구 별에 좋아요 누르기": "Like a friend's star",
   "준비 중": "Coming soon",
   "퀘스트 초기화": "Reset quest",
