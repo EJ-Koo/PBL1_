@@ -21,7 +21,7 @@ type Props = {
 
 export function QuestPanel({ scale: layoutScale, onClose, onWriteDiary, meteorQuest, meteorBusy, meteorError, onRetryMeteors }: Props) {
   const { t } = useLanguage();
-  const [meteorExpanded, setMeteorExpanded] = useState(false);
+  const [expandedQuest, setExpandedQuest] = useState<'diary' | 'meteor' | null>(null);
   const { quest, loading, error, refresh, reset } = useQuest();
   const { height, chromeLeft, chromeWidth, headerTop, bottomSpace } = useResponsiveLayout();
   const compact = Platform.OS === 'android';
@@ -74,12 +74,14 @@ export function QuestPanel({ scale: layoutScale, onClose, onWriteDiary, meteorQu
             <QuestButton scale={scale} label={t('다시 불러오기')} disabled={loading} onPress={() => { void refresh(); }} />
           </View>}
 
-          {quest && <View style={{ paddingHorizontal: 26 * scale, paddingTop: 19 * scale, paddingBottom: 22 * scale }}>
+          {quest && (expandedQuest === 'diary' ? <View style={{ paddingHorizontal: 26 * scale, paddingTop: 19 * scale, paddingBottom: 22 * scale }}>
             <QuestCardFrame scale={scale} highlighted />
-            <View style={[styles.headingRow, { gap: 8 * scale, alignItems: 'flex-start' }]}>
+            <Pressable accessibilityRole="button" accessibilityState={{ expanded: true }}
+              accessibilityLabel={t('오늘의 별 띄우기')} onPress={() => setExpandedQuest(null)}
+              style={[styles.headingRow, { gap: 8 * scale, alignItems: 'flex-start', minHeight: 44 }]}>
               <Text style={[styles.bold, { flex: 1, fontSize: 21 * scale, lineHeight: 29 * scale }]}>{t('오늘의 별 띄우기')}</Text>
               <QuestRewardBadge scale={scale} reward={quest.reward} />
-            </View>
+            </Pressable>
             <Text style={[styles.muted, { fontSize: 15 * scale, lineHeight: 22 * scale, marginTop: 6 * scale }]}>
               {t(quest.after_reset ? '초기화 이후 새 일기 쓰기' : '일기 한 편 남기기')}
             </Text>
@@ -93,13 +95,25 @@ export function QuestPanel({ scale: layoutScale, onClose, onWriteDiary, meteorQu
               </Text>
             </View>}
             <QuestButton scale={scale} label={t(todayComplete ? '확인' : '일기 쓰러 가기')} disabled={loading} onPress={todayComplete ? onClose : onWriteDiary} />
-          </View>}
+          </View> : <Pressable accessibilityRole="button" accessibilityState={{ expanded: false }}
+            onPress={() => setExpandedQuest('diary')}
+            style={({ pressed }) => ({
+              marginHorizontal: 5 * scale, padding: 16 * scale, gap: 8 * scale, opacity: pressed ? 0.75 : 1,
+            })}>
+            <QuestCardFrame scale={scale} />
+            <Text style={[styles.bold, { fontSize: 17 * scale, lineHeight: 25 * scale }]}>{t('오늘의 별 띄우기')}</Text>
+            <QuestProgress scale={scale} progress={quest.progress} target={quest.target} />
+            <Text style={[styles.text, { fontSize: 13 * scale, lineHeight: 20 * scale }]}>
+              {todayComplete ? t('완료 · {reward}코인 지급됨', { reward: quest.reward })
+                : t(quest.after_reset ? '초기화 이후 새 일기 쓰기' : '일기 한 편 남기기')}
+            </Text>
+          </Pressable>)}
 
           <View style={{ marginHorizontal: 12 * scale, marginTop: 15 * scale, marginBottom: 8 * scale }}><QuestDivider scale={scale} /></View>
-          {meteorExpanded ? <View style={{ marginBottom: 12 * scale, paddingHorizontal: 26 * scale, paddingTop: 19 * scale, paddingBottom: 22 * scale }}>
+          {expandedQuest === 'meteor' ? <View style={{ marginBottom: 12 * scale, paddingHorizontal: 26 * scale, paddingTop: 19 * scale, paddingBottom: 22 * scale }}>
             <QuestCardFrame scale={scale} highlighted />
             <Pressable accessibilityRole="button" accessibilityState={{ expanded: true }}
-              accessibilityLabel={t('운석 3개 치우기')} onPress={() => setMeteorExpanded(false)}
+              accessibilityLabel={t('운석 3개 치우기')} onPress={() => setExpandedQuest(null)}
               style={[styles.headingRow, { gap: 8 * scale, alignItems: 'flex-start', minHeight: 44 }]}>
               <Text style={[styles.bold, { flex: 1, fontSize: 21 * scale, lineHeight: 29 * scale }]}>{t('운석 3개 치우기')}</Text>
               <QuestRewardBadge scale={scale} reward={3} />
@@ -120,7 +134,7 @@ export function QuestPanel({ scale: layoutScale, onClose, onWriteDiary, meteorQu
             {meteorError && <QuestButton scale={scale} label={t('다시 불러오기')} disabled={meteorBusy} onPress={onRetryMeteors} />}
             {!meteorError && <QuestButton scale={scale} label={t(meteorsComplete ? '확인' : '내 우주로 돌아가기')} disabled={false} onPress={onClose} />}
           </View> : <Pressable accessibilityRole="button" accessibilityState={{ expanded: false }}
-            onPress={() => setMeteorExpanded(true)}
+            onPress={() => setExpandedQuest('meteor')}
             style={({ pressed }) => ({
               marginHorizontal: 5 * scale, marginBottom: 12 * scale, padding: 16 * scale,
               gap: 8 * scale, opacity: pressed ? 0.75 : 1,
