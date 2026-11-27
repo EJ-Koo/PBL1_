@@ -79,6 +79,7 @@ export default function HomeScreen() {
   const { frameWidth } = useDesignFrame();
   const { quest: diaryQuest, refresh: refreshQuest, rewardEvent, clearReward } = useQuest();
   const { quest: meteorQuest, busy: meteorBusy, error: meteorError, request: requestMeteors } = useMeteorQuest(accessToken);
+  const [confirmedQuests, setConfirmedQuests] = useState<Partial<Record<'diary' | 'meteor', string>>>({});
   // fffju 반응형 레이아웃: 전체 뷰포트로 그리는 화면(홈 HUD·하단바·그룹)은 이 scale을 쓴다.
   // 상점은 별도의 최대 프레임 폭을 사용한다.
   const responsive = useResponsiveLayout();
@@ -98,8 +99,8 @@ export default function HomeScreen() {
   const questDay = diaryQuest?.day;
   const staleMeteors = !!questDay && !!meteorQuest && questDay > meteorQuest.day;
   useEffect(() => {
-    if (screen === 'home') void requestMeteors();
-  }, [screen, requestMeteors]);
+    if (screen === 'home' || questVisible) void requestMeteors();
+  }, [screen, questVisible, requestMeteors]);
   useEffect(() => {
     if (screen === 'home' && staleMeteors && !meteorBusy && !meteorError) void requestMeteors();
   }, [screen, staleMeteors, meteorBusy, meteorError, requestMeteors]);
@@ -462,7 +463,7 @@ export default function HomeScreen() {
               <MeteorQuestField quest={meteorQuest} busy={meteorBusy} error={meteorError}
                 top={headerTop + responsive.hudHeight + 12}
                 bottom={constellationToggleBottom + constellationToggleHeight + 12}
-                onHit={meteor => { void requestMeteors({ day: meteorQuest.day, meteor }); }} />
+                onHit={meteor => { void requestMeteors({ day: meteorQuest.day, cycle: meteorQuest.cycle, meteor }); }} />
             )}
 
           {entries.length === 0 && (
@@ -594,6 +595,8 @@ export default function HomeScreen() {
       {/* ===== 퀘스트 (서버 진행률·보상 기록) ===== */}
       <Modal transparent visible={questVisible} animationType="fade" onRequestClose={() => setQuestVisible(false)}>
         <QuestPanel scale={rScale}
+          confirmedQuests={confirmedQuests}
+          onConfirmQuest={(kind, key) => setConfirmedQuests(current => ({ ...current, [kind]: key }))}
           meteorQuest={staleMeteors ? null : meteorQuest}
           meteorBusy={meteorBusy}
           meteorError={meteorError}

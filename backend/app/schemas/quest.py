@@ -22,9 +22,11 @@ class DailyQuestStatus(BaseModel):
 class MeteorQuestHit(BaseModel):
     day: date
     meteor: Literal[1, 2, 3]
+    cycle: int | None = Field(default=None, ge=0)
 
 
 class MeteorQuestStatus(BaseModel):
     day: date
+    cycle: int = Field(default=0, ge=0)
     cleared: list[Literal[1, 2, 3]]
     awarded: Literal[0, 3]

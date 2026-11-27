@@ -9,7 +9,7 @@ import { useShop } from './shop-context';
 export type QuestRewardEvent = { id: string; amount: number; revision: number };
 type Value = {
   quest: DailyQuest | null; loading: boolean; error: string | null;
-  refresh: () => Promise<void>; reset: () => Promise<void>;
+  refresh: () => Promise<void>; reset: () => Promise<boolean>;
   rewardEvent: QuestRewardEvent | null; clearReward: (id: string) => void;
 };
 const Context = createContext<Value | null>(null);
@@ -45,15 +45,17 @@ export function QuestProvider({ children }: { children: ReactNode }) {
     }
   }, [accessToken, isRestoring, revision, apply]);
   const reset = useCallback(async () => {
-    if (!accessToken || isRestoring) return;
+    if (!accessToken || isRestoring) return false;
     setRecord(prev => ({ ...prev, loading: true, error: null }));
     try {
       const result = await apiResetQuest(accessToken);
-      if (revision !== authSession.getRevision()) return;
+      if (revision !== authSession.getRevision()) return false;
       setReward(null); apply(result); void refreshShop();
+      return true;
     } catch (error) {
       if (revision === authSession.getRevision()) setRecord(prev => ({ ...prev, loading: false, error: error instanceof Error ? error.message : '초기화에 실패했어요.' }));
       if (error instanceof Error && 'status' in error && error.status === 403) void refresh();
+      return false;
     }
   }, [accessToken, isRestoring, revision, apply, refreshShop, refresh]);
   useEffect(() => {

@@ -10,12 +10,15 @@ router = APIRouter(prefix='/me/quests', tags=['quests'])
 
 def sync_daily_quest(user_id: str, reset: bool = False) -> DailyQuestStatus:
     try:
-        result = supabase.rpc('sync_daily_quest', {'p_user': user_id, 'p_reset': reset}).execute().data
+        function = 'reset_daily_quests' if reset else 'sync_daily_quest'
+        params = {'p_user': user_id} if reset else {'p_user': user_id, 'p_reset': False}
+        result = supabase.rpc(function, params).execute().data
     except APIError as error:
         if 'test_reset_disabled' in (error.message or ''):
             raise HTTPException(status_code=403, detail='개발용 퀘스트 초기화가 꺼져 있어요.')
         if error.code in ('PGRST202', 'PGRST205', '42883', '42P01'):
-            raise HTTPException(status_code=503, detail='퀘스트 SQL이 아직 적용되지 않았어요. 2026-11-15_daily_quest.sql을 적용해주세요.')
+            migration = '2026-11-27_reset_meteor_quest.sql' if reset else '2026-11-15_daily_quest.sql'
+            raise HTTPException(status_code=503, detail=f'퀘스트 SQL이 아직 적용되지 않았어요. {migration}을 적용해주세요.')
         raise HTTPException(status_code=502, detail='퀘스트를 처리하지 못했어요. 잠시 후 다시 시도해주세요.')
     except Exception:
         raise HTTPException(status_code=502, detail='퀘스트 서버 연결을 확인해주세요. 일기는 다시 작성하지 않아도 됩니다.')
@@ -40,6 +43,8 @@ def sync_meteors(user_id: str, hit: MeteorQuestHit | None = None) -> MeteorQuest
     params: dict[str, str | int] = {'p_user': user_id}
     if hit:
         params.update(p_day=hit.day.isoformat(), p_meteor=hit.meteor)
+        if hit.cycle is not None:
+            params['p_cycle'] = hit.cycle
     try:
         result = supabase.rpc('sync_meteor_quest', params).execute().data
         return MeteorQuestStatus.model_validate(result)

@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 
 import { authSession } from '@/lib/auth-session';
-import { apiMeteorQuest, type MeteorId, type MeteorQuest } from '@/lib/quest-api';
+import { apiMeteorQuest, type MeteorHit, type MeteorQuest } from '@/lib/quest-api';
 import { useShop } from '@/store/shop-context';
 
 export function useMeteorQuest(token: string | null | undefined) {
@@ -13,7 +13,7 @@ export function useMeteorQuest(token: string | null | undefined) {
   const requestLock = useRef<number | null>(null);
   const refreshedReward = useRef<string | null>(null);
 
-  const request = useCallback(async (hit?: { day: string; meteor: MeteorId }) => {
+  const request = useCallback(async (hit?: MeteorHit) => {
     if (!token || requestLock.current === revision) return;
     requestLock.current = revision;
     setState(prev => ({ revision, quest: prev.revision === revision ? prev.quest : null, busy: true, error: null }));
@@ -21,7 +21,7 @@ export function useMeteorQuest(token: string | null | undefined) {
       const quest = await apiMeteorQuest(token, hit);
       if (revision !== authSession.getRevision()) return;
       setState({ revision, quest, busy: false, error: null });
-      const rewardKey = `${revision}:${quest.day}`;
+      const rewardKey = `${revision}:${quest.day}:${quest.cycle}`;
       if (quest.cleared.length === 3 && refreshedReward.current !== rewardKey) {
         refreshedReward.current = rewardKey;
         void refreshShop();

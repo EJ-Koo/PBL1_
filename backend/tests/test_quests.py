@@ -30,7 +30,7 @@ def test_reset_does_not_accept_reward_amount_or_other_user(monkeypatch):
     fake.rpc.return_value.execute.return_value.data = status(cycle=1, progress=0, completed=False, awarded=0, after_reset=True)
     monkeypatch.setattr(quests, 'supabase', fake)
     result = quests.reset_my_quest(user_id='owner-a')
-    fake.rpc.assert_called_once_with('sync_daily_quest', {'p_user': 'owner-a', 'p_reset': True})
+    fake.rpc.assert_called_once_with('reset_daily_quests', {'p_user': 'owner-a'})
     assert result.cycle == 1 and result.awarded == 0 and result.coins == 1004
 
 
@@ -58,10 +58,10 @@ def test_meteor_hit_uses_authenticated_owner_and_retains_quest_day(monkeypatch):
         'day': '2026-11-27', 'cleared': [1, 2, 3], 'awarded': 3,
     }
     monkeypatch.setattr(quests, 'supabase', fake)
-    hit = MeteorQuestHit.model_validate({'day': '2026-11-27', 'meteor': 3, 'user_id': 'another-user'})
+    hit = MeteorQuestHit.model_validate({'day': '2026-11-27', 'meteor': 3, 'cycle': 2, 'user_id': 'another-user'})
     result = quests.clear_my_meteor(hit, user_id='owner-a')
     fake.rpc.assert_called_once_with('sync_meteor_quest', {
-        'p_user': 'owner-a', 'p_day': '2026-11-27', 'p_meteor': 3,
+        'p_user': 'owner-a', 'p_day': '2026-11-27', 'p_meteor': 3, 'p_cycle': 2,
     })
     assert result.cleared == [1, 2, 3] and result.awarded == 3
 

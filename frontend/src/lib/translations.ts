@@ -236,6 +236,8 @@ export const ENGLISH: Readonly<Record<string, string>> = {
   "운석 치우기": "Clear meteor",
   "내 우주에 떠다니는 운석 누르기": "Tap drifting meteors in My Universe",
   "내 우주로 돌아가기": "Return to My Universe",
+  "확인됨": "Acknowledged",
+  "일기와 코인은 유지돼요. 일기와 운석 퀘스트 진행률을 초기화하고, 완료하면 보상을 다시 받을 수 있어요.": "Your diaries and coins are kept. Both quest progress counters reset, and you can earn the rewards again.",
   "친구 별에 좋아요 누르기": "Like a friend's star",
   "준비 중": "Coming soon",
   "퀘스트 초기화": "Reset quest",

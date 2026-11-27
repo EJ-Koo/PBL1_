@@ -3,6 +3,7 @@ import { ScrollView } from '@/components/app-scroll-view';
 import { Text } from '@/components/app-text';
 import { DesignFonts } from '@/constants/ui-design';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
+import { authSession } from '@/lib/auth-session';
 import { useLanguage } from '@/lib/language';
 import { confirmChoice } from '@/lib/notice';
 import type { MeteorQuest } from '@/lib/quest-api';
@@ -17,9 +18,11 @@ type Props = {
   scale: number; onClose: () => void; onWriteDiary: () => void;
   meteorQuest: MeteorQuest | null; meteorBusy: boolean; meteorError: string | null;
   onRetryMeteors: () => void;
+  confirmedQuests: Partial<Record<'diary' | 'meteor', string>>;
+  onConfirmQuest: (kind: 'diary' | 'meteor', key: string) => void;
 };
 
-export function QuestPanel({ scale: layoutScale, onClose, onWriteDiary, meteorQuest, meteorBusy, meteorError, onRetryMeteors }: Props) {
+export function QuestPanel({ scale: layoutScale, onClose, onWriteDiary, meteorQuest, meteorBusy, meteorError, onRetryMeteors, confirmedQuests, onConfirmQuest }: Props) {
   const { t } = useLanguage();
   const [expandedQuest, setExpandedQuest] = useState<'diary' | 'meteor' | null>(null);
   const { quest, loading, error, refresh, reset } = useQuest();
@@ -37,11 +40,16 @@ export function QuestPanel({ scale: layoutScale, onClose, onWriteDiary, meteorQu
   );
   const todayComplete = quest?.completed ?? false;
   const meteorsComplete = meteorQuest?.cleared.length === 3;
+  const revision = authSession.getRevision();
+  const diaryKey = `${revision}:${quest?.day}:${quest?.cycle}`;
+  const meteorKey = `${revision}:${meteorQuest?.day}:${meteorQuest?.cycle}`;
+  const diaryConfirmed = todayComplete && confirmedQuests.diary === diaryKey;
+  const meteorConfirmed = meteorsComplete && confirmedQuests.meteor === meteorKey;
   const resetQuest = () => confirmChoice(
     t('퀘스트 초기화'),
-    t('일기와 코인은 유지됩니다. 초기화 후 새 일기를 작성하면 다시 {reward}코인을 받습니다.', { reward: quest?.reward ?? 5 }),
+    t('일기와 코인은 유지돼요. 일기와 운석 퀘스트 진행률을 초기화하고, 완료하면 보상을 다시 받을 수 있어요.'),
     t('초기화'),
-    () => { void reset(); },
+    async () => { if (await reset()) onRetryMeteors(); },
   );
 
   return (
@@ -94,7 +102,8 @@ export function QuestPanel({ scale: layoutScale, onClose, onWriteDiary, meteorQu
                 {t('완료 · {reward}코인 지급됨', { reward: quest.reward })}
               </Text>
             </View>}
-            <QuestButton scale={scale} label={t(todayComplete ? '확인' : '일기 쓰러 가기')} disabled={loading} onPress={todayComplete ? onClose : onWriteDiary} />
+            <QuestButton scale={scale} label={t(diaryConfirmed ? '확인됨' : todayComplete ? '확인' : '일기 쓰러 가기')}
+              disabled={loading || diaryConfirmed} onPress={todayComplete ? () => onConfirmQuest('diary', diaryKey) : onWriteDiary} />
           </View> : <Pressable accessibilityRole="button" accessibilityState={{ expanded: false }}
             onPress={() => setExpandedQuest('diary')}
             style={({ pressed }) => ({
@@ -132,7 +141,8 @@ export function QuestPanel({ scale: layoutScale, onClose, onWriteDiary, meteorQu
             </View>}
             {meteorError && <Text accessibilityRole="alert" style={[styles.text, { fontSize: 12 * scale, lineHeight: 19 * scale, marginBottom: 8 * scale }]}>{meteorError}</Text>}
             {meteorError && <QuestButton scale={scale} label={t('다시 불러오기')} disabled={meteorBusy} onPress={onRetryMeteors} />}
-            {!meteorError && <QuestButton scale={scale} label={t(meteorsComplete ? '확인' : '내 우주로 돌아가기')} disabled={false} onPress={onClose} />}
+            {!meteorError && <QuestButton scale={scale} label={t(meteorConfirmed ? '확인됨' : meteorsComplete ? '확인' : '내 우주로 돌아가기')}
+              disabled={meteorConfirmed} onPress={meteorsComplete ? () => onConfirmQuest('meteor', meteorKey) : onClose} />}
           </View> : <Pressable accessibilityRole="button" accessibilityState={{ expanded: false }}
             onPress={() => setExpandedQuest('meteor')}
             style={({ pressed }) => ({
@@ -153,8 +163,8 @@ export function QuestPanel({ scale: layoutScale, onClose, onWriteDiary, meteorQu
             <UpcomingQuest scale={scale} title={t('친구 별에 좋아요 누르기')} target={2} />
           </View>
 
-          {quest?.reset_allowed && <Pressable accessibilityRole="button" accessibilityState={{ disabled: loading }} disabled={loading} onPress={resetQuest}
-            style={({ pressed }) => ({ minHeight: 44, justifyContent: 'center', alignItems: 'center', marginTop: 12 * scale, opacity: loading ? 0.4 : pressed ? 0.6 : 1 })}>
+          {quest?.reset_allowed && <Pressable accessibilityRole="button" accessibilityState={{ disabled: loading || meteorBusy }} disabled={loading || meteorBusy} onPress={resetQuest}
+            style={({ pressed }) => ({ minHeight: 44, justifyContent: 'center', alignItems: 'center', marginTop: 12 * scale, opacity: loading || meteorBusy ? 0.4 : pressed ? 0.6 : 1 })}>
             <Text style={[styles.muted, { fontSize: 11 * scale, lineHeight: 18 * scale }]}>{t('개발용 퀘스트 초기화')}</Text>
           </Pressable>}
         </ScrollView>
