@@ -148,7 +148,7 @@ function UpcomingQuest({ scale, title, target }: { scale: number; title: string;
   const { t } = useLanguage();
   // These quests have no progress API yet. Keep their preview state explicit.
   return <View accessible accessibilityLabel={`${title}, ${t('준비 중')}`} style={{ minHeight: 69 * scale, paddingLeft: 24 * scale, paddingRight: 40 * scale, paddingVertical: 13 * scale }}>
-    <QuestCardFrame scale={scale} />
+    <QuestCardFrame scale={scale} locked />
     <View style={[styles.headingRow, { gap: 8 * scale }]}>
       <Text style={[styles.bold, { flex: 1, fontSize: 14 * scale, lineHeight: 23 * scale }]}>{title}</Text>
       <View style={[styles.badge, { borderRadius: 14 * scale, minHeight: 24 * scale, paddingHorizontal: 9 * scale }]}>

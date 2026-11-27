@@ -22,7 +22,7 @@ export function QuestPanelFrame({ width: w, height: h, scale: s }: { width: numb
   </View>;
 }
 
-export function QuestCardFrame({ scale: s, highlighted = false }: { scale: number; highlighted?: boolean }) {
+export function QuestCardFrame({ scale: s, highlighted = false, locked = false }: { scale: number; highlighted?: boolean; locked?: boolean }) {
   const [{ width: w, height: h }, setSize] = useState({ width: 0, height: 0 });
   const cut = (highlighted ? 26 : 10) * s;
   const outline = `M${cut} ${s}H${w - 11 * s}L${w - s} ${11 * s}V${h - cut}L${w - cut} ${h - s}H${12 * s}L${s} ${h - 12 * s}V${cut}Z`;
@@ -32,10 +32,10 @@ export function QuestCardFrame({ scale: s, highlighted = false }: { scale: numbe
       {highlighted ? <>
         <Path d={outline} fill="none" stroke="#e5e5f5" strokeOpacity={0.04} strokeWidth={10 * s} />
         <Path d={outline} fill="none" stroke="#e5e5f5" strokeOpacity={0.09} strokeWidth={5 * s} />
-      </> : <Path d={`M${w - 34 * s} ${s}H${w - 11 * s}L${w - s} ${11 * s}V${h - cut}L${w - cut} ${h - s}H${w - 34 * s}Z`} fill="#36373f" />}
+      </> : locked && <Path d={`M${w - 34 * s} ${s}H${w - 11 * s}L${w - s} ${11 * s}V${h - cut}L${w - cut} ${h - s}H${w - 34 * s}Z`} fill="#36373f" />}
       <Path d={outline} fill="none" stroke={highlighted ? '#c8cbd6' : '#727783'} strokeWidth={(highlighted ? 1.35 : 0.9) * s} />
       {highlighted && <Path d={`M${2 * s} ${36 * s}V${cut}L${cut} ${2 * s}H${62 * s}`} fill="none" stroke="#f4f4ff" strokeWidth={2.5 * s} />}
-      {!highlighted && <Path d={`M${w - 22 * s} ${h / 2 - s}v${7 * s}h${9 * s}v${-7 * s}Z M${w - 20.5 * s} ${h / 2 - s}v${-3 * s}a${3 * s} ${3 * s} 0 0 1 ${6 * s} 0v${3 * s}`}
+      {locked && <Path d={`M${w - 22 * s} ${h / 2 - s}v${7 * s}h${9 * s}v${-7 * s}Z M${w - 20.5 * s} ${h / 2 - s}v${-3 * s}a${3 * s} ${3 * s} 0 0 1 ${6 * s} 0v${3 * s}`}
         fill="none" stroke="#9d9da4" strokeWidth={1.2 * s} />}
     </Svg>}
   </View>;
