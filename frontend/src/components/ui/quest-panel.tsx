@@ -34,6 +34,7 @@ export function QuestPanel({ scale: layoutScale, onClose, onWriteDiary, meteorQu
     Math.max(0, height - top - bottomSpace),
   );
   const todayComplete = quest?.completed ?? false;
+  const meteorsComplete = meteorQuest?.cleared.length === 3;
   const resetQuest = () => confirmChoice(
     t('퀘스트 초기화'),
     t('일기와 코인은 유지됩니다. 초기화 후 새 일기를 작성하면 다시 {reward}코인을 받습니다.', { reward: quest?.reward ?? 5 }),
@@ -75,14 +76,7 @@ export function QuestPanel({ scale: layoutScale, onClose, onWriteDiary, meteorQu
             <QuestCardFrame scale={scale} highlighted />
             <View style={[styles.headingRow, { gap: 8 * scale, alignItems: 'flex-start' }]}>
               <Text style={[styles.bold, { flex: 1, fontSize: 21 * scale, lineHeight: 29 * scale }]}>{t('오늘의 별 띄우기')}</Text>
-              <View accessibilityLabel={t('보상 {reward}코인', { reward: quest.reward })}
-                style={[styles.badge, { gap: 3 * scale, borderRadius: 14 * scale, minHeight: 25 * scale, paddingHorizontal: 8 * scale, marginTop: 6 * scale }]}>
-                <Svg width={17 * scale} height={17 * scale} viewBox="0 0 20 20" pointerEvents="none" accessible={false}>
-                  <Circle cx={10} cy={10} r={9.5} fill={colors.text} />
-                  <Path d="M10 3L15 10L10 17L5 10Z" fill={colors.badge} />
-                </Svg>
-                <Text style={[styles.text, { fontSize: 15 * scale, lineHeight: 21 * scale }]}>{quest.reward}</Text>
-              </View>
+              <QuestRewardBadge scale={scale} reward={quest.reward} />
             </View>
             <Text style={[styles.muted, { fontSize: 15 * scale, lineHeight: 22 * scale, marginTop: 6 * scale }]}>
               {t(quest.after_reset ? '초기화 이후 새 일기 쓰기' : '일기 한 편 남기기')}
@@ -100,16 +94,27 @@ export function QuestPanel({ scale: layoutScale, onClose, onWriteDiary, meteorQu
           </View>}
 
           <View style={{ marginHorizontal: 12 * scale, marginTop: 15 * scale, marginBottom: 8 * scale }}><QuestDivider scale={scale} /></View>
-          <View style={{ marginHorizontal: 5 * scale, marginBottom: 12 * scale, padding: 16 * scale, gap: 8 * scale }}>
-            <QuestCardFrame scale={scale} />
-            <Text style={[styles.bold, { fontSize: 17 * scale, lineHeight: 25 * scale }]}>{t('운석 3개 치우기')}</Text>
-            {meteorQuest && <QuestProgress scale={scale} progress={meteorQuest.cleared.length} target={3} />}
-            <Text accessibilityLiveRegion="polite" style={[styles.text, { fontSize: 13 * scale, lineHeight: 20 * scale }]}>
-              {meteorError ?? (meteorQuest?.cleared.length === 3
-                ? t('완료 · {reward}코인 지급됨', { reward: 3 })
-                : t('내 우주에 나타난 운석을 눌러 치워보세요. 보상은 3코인이에요.'))}
+          <View style={{ marginBottom: 12 * scale, paddingHorizontal: 26 * scale, paddingTop: 19 * scale, paddingBottom: 22 * scale }}>
+            <QuestCardFrame scale={scale} highlighted />
+            <View style={[styles.headingRow, { gap: 8 * scale, alignItems: 'flex-start' }]}>
+              <Text style={[styles.bold, { flex: 1, fontSize: 21 * scale, lineHeight: 29 * scale }]}>{t('운석 3개 치우기')}</Text>
+              <QuestRewardBadge scale={scale} reward={3} />
+            </View>
+            <Text style={[styles.muted, { fontSize: 15 * scale, lineHeight: 22 * scale, marginTop: 6 * scale }]}>
+              {t('내 우주에 떠다니는 운석 누르기')}
             </Text>
+            {meteorQuest && <View style={{ marginTop: 4 * scale, marginBottom: 17 * scale }}>
+              <QuestProgress scale={scale} progress={meteorQuest.cleared.length} target={3} />
+            </View>}
+            {meteorsComplete && <View accessibilityLiveRegion="polite" style={[styles.heading, { gap: 5 * scale, marginBottom: 10 * scale }]}>
+              <SpaceIcon kind="check" size={16 * scale} color={colors.text} />
+              <Text style={[styles.text, { flex: 1, fontSize: 11 * scale, lineHeight: 18 * scale }]}>
+                {t('완료 · {reward}코인 지급됨', { reward: 3 })}
+              </Text>
+            </View>}
+            {meteorError && <Text accessibilityRole="alert" style={[styles.text, { fontSize: 12 * scale, lineHeight: 19 * scale, marginBottom: 8 * scale }]}>{meteorError}</Text>}
             {meteorError && <QuestButton scale={scale} label={t('다시 불러오기')} disabled={meteorBusy} onPress={onRetryMeteors} />}
+            {!meteorError && <QuestButton scale={scale} label={t(meteorsComplete ? '확인' : '내 우주로 돌아가기')} disabled={false} onPress={onClose} />}
           </View>
           <Text style={[styles.muted, { marginHorizontal: 14 * scale, marginBottom: 10 * scale, fontSize: 13 * scale, lineHeight: 20 * scale }]}>{t('다음 퀘스트')}</Text>
           <View style={{ gap: 12 * scale, marginHorizontal: 5 * scale }}>
@@ -122,6 +127,20 @@ export function QuestPanel({ scale: layoutScale, onClose, onWriteDiary, meteorQu
           </Pressable>}
         </ScrollView>
       </View>
+    </View>
+  );
+}
+
+function QuestRewardBadge({ scale, reward }: { scale: number; reward: number }) {
+  const { t } = useLanguage();
+  return (
+    <View accessibilityLabel={t('보상 {reward}코인', { reward })}
+      style={[styles.badge, { gap: 3 * scale, borderRadius: 14 * scale, minHeight: 25 * scale, paddingHorizontal: 8 * scale, marginTop: 6 * scale }]}>
+      <Svg width={17 * scale} height={17 * scale} viewBox="0 0 20 20" pointerEvents="none" accessible={false}>
+        <Circle cx={10} cy={10} r={9.5} fill={colors.text} />
+        <Path d="M10 3L15 10L10 17L5 10Z" fill={colors.badge} />
+      </Svg>
+      <Text style={[styles.text, { fontSize: 15 * scale, lineHeight: 21 * scale }]}>{reward}</Text>
     </View>
   );
 }
